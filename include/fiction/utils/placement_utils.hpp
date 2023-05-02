@@ -68,6 +68,52 @@ template <typename Lyt, typename Ntk>
     return pi_map;
 }
 /**
+ * Reserve register output nodes in a layout in the same order as they appear in a network. This is a useful function to
+ * call first when a layout is to be created from a network. The register output nodes then exist in the layout but are
+ * not placed anywhere and also do not have names. They are just registered to preserve their order.
+ *
+ * This function can be seen as an equivalent to mockturtle::initialize_copy_network but for layouts.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @tparam Ntk Logic network type.
+ * @param lyt Gate-level layout where primary input nodes are to be reserved.
+ * @param ntk Network whose primary inputs are to be reserved in lyt.
+ * @return A mockturtle::node_map that maps from network nodes to layout nodes to be able to address the created nodes.
+ */
+template <typename Lyt, typename Ntk>
+mockturtle::node_map<mockturtle::node<Lyt>, Ntk> reserve_register_output_nodes(Lyt& lyt, const Ntk& ntk) noexcept
+{
+    static_assert(mockturtle::is_network_type_v<Ntk>, "Ntk is not a network type");
+    static_assert(mockturtle::has_foreach_ro_v<Ntk>, "Ntk does not implement the foreach_pi function");
+    static_assert(mockturtle::has_get_node_v<Ntk>, "Ntk does not implement the get_node function");
+    static_assert(mockturtle::has_make_signal_v<Ntk>, "Ntk does not implement the make_signal function");
+    static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout type");
+    static_assert(mockturtle::has_create_ro_v<Lyt>, "Lyt does not implement the create_pi function");
+
+    mockturtle::node_map<mockturtle::node<Lyt>, Ntk> ro_map{ntk};
+
+    ntk.foreach_ro(
+        [&lyt, &ntk, &ro_map](const auto& ro)
+        {
+            //std::cout<<"Ro wird erstellt"<<std::endl;
+            std::string ro_name{};
+
+            if constexpr (mockturtle::has_has_name_v<Ntk> && mockturtle::has_get_name_v<Ntk>)
+            {
+                if (const auto ro_signal = ntk.make_signal(ro); ntk.has_name(ro_signal))
+                {
+                    ro_name = ntk.get_name(ro_signal);
+                }
+            }
+
+            ro_map[ro] = lyt.get_node(lyt.create_ro(ro_name, {0, 0}));
+        });
+    // little hacky: move last created node to a dead tile to remove it from the layout again but preserve its existence
+    lyt.move_node(lyt.get_node({0, 0}), {});
+
+    return ro_map;
+}
+/**
  * Place 0-input gates.
  *
  * @tparam Lyt Gate-level layout type.

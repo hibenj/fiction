@@ -220,6 +220,19 @@ class gate_level_layout : public ClockedLayout
         return static_cast<signal>(t);
     }
 
+    signal create_ro(const std::string& name = {}, const tile& t = {})
+    {
+        const auto n = static_cast<node>(strg->nodes.size());
+        strg->nodes.emplace_back();     // empty node data
+        strg->nodes[n].data[1].h1 = 2;  // assign identity function
+        strg->inputs.emplace_back(n);
+        sequential_inf.registers.emplace_back();
+        strg->data.node_names[n] = name.empty() ? fmt::format("ro{}", num_pis()) : name;
+        assign_node(t, n);
+
+        return static_cast<signal>(t);
+    }
+
     signal create_po(const signal& s, [[maybe_unused]] const std::string& name = {}, const tile& t = {})
     {
         const auto n = static_cast<node>(strg->nodes.size());
@@ -227,6 +240,22 @@ class gate_level_layout : public ClockedLayout
         strg->nodes[n].data[1].h1 = 2;  // assign identity function
         strg->outputs.emplace_back(static_cast<signal>(t));
         strg->data.node_names[n] = name.empty() ? fmt::format("po{}", num_pos()) : name;
+        assign_node(t, n);
+
+        /* increase ref-count to child */
+        strg->nodes[get_node(s)].data[0].h1++;
+        strg->nodes[n].children.push_back(s);
+
+        return static_cast<signal>(t);
+    }
+
+    signal create_ri(const signal& s, [[maybe_unused]] const std::string& name = {}, const tile& t = {})
+    {
+        const auto n = static_cast<node>(strg->nodes.size());
+        strg->nodes.emplace_back();     // empty node data
+        strg->nodes[n].data[1].h1 = 2;  // assign identity function
+        strg->outputs.emplace_back(static_cast<signal>(t));
+        strg->data.node_names[n] = name.empty() ? fmt::format("ri{}", num_pos()) : name;
         assign_node(t, n);
 
         /* increase ref-count to child */
@@ -481,6 +510,11 @@ class gate_level_layout : public ClockedLayout
     [[nodiscard]] auto num_pis() const noexcept
     {
         return strg->inputs.size();
+    }
+
+    [[nodiscard]] auto num_ros() const noexcept
+    {
+        return sequential_inf.registers.size();
     }
 
     [[nodiscard]] auto num_cos() const noexcept
@@ -1485,6 +1519,15 @@ class gate_level_layout : public ClockedLayout
 
   private:
     storage strg;
+
+    struct sequential_information
+    {
+        uint32_t num_pis{ 0 };
+        uint32_t num_pos{ 0 };
+        std::vector<mockturtle::register_t> registers;
+    };
+
+    sequential_information sequential_inf;
 
     event_storage evnts;
 
