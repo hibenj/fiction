@@ -77,8 +77,21 @@ class fanout_substitution_impl
         auto substituted = init.first;
         auto old2new     = init.second;
 
-        ntk_topo.foreach_pi([this, &substituted, &old2new](const auto& pi)
-                            { generate_fanout_tree(substituted, pi, old2new); });
+        if constexpr (mockturtle::has_foreach_ro_v<NtkSrc> && mockturtle::has_create_ro_v<NtkDest>)
+        {
+            ntk_topo.foreach_ro([&](auto const& n) { old2new[n] = substituted.create_ro(); });
+        }
+
+        if (!ntk_topo.is_combinational())
+        {
+            ntk_topo.foreach_ci([this, &substituted, &old2new](const auto& pi)
+                                { generate_fanout_tree(substituted, pi, old2new); });
+        }
+        else
+        {
+            ntk_topo.foreach_pi([this, &substituted, &old2new](const auto& pi)
+                                { generate_fanout_tree(substituted, pi, old2new); });
+        }
 
 #if (PROGRESS_BARS)
         // initialize a progress bar
@@ -88,6 +101,13 @@ class fanout_substitution_impl
         ntk_topo.foreach_gate(
             [&, this](const auto& n, [[maybe_unused]] auto i)
             {
+                if constexpr (mockturtle::has_is_ro_v<NtkDest>)
+                {
+                    if (ntk_topo.is_ro(n))
+                    {
+                        return;
+                    }
+                }
                 // gather children, but substitute fanouts where applicable
                 std::vector<mockturtle::signal<mockturtle::topo_view<NtkDest>>> children{};
 
@@ -131,6 +151,21 @@ class fanout_substitution_impl
 
                 substituted.create_po(tgt_po);
             });
+
+        if constexpr (mockturtle::has_foreach_ri_v<NtkSrc> && mockturtle::has_create_ri_v<NtkDest>)
+        {
+            ntk_topo.foreach_ri(
+                [this, &old2new, &substituted](const auto& ri)
+                {
+                    const auto ri_node    = ntk_topo.get_node(ri);
+                    auto       tgt_signal = old2new[ri_node];
+                    auto       tgt_ri     = get_fanout(substituted, ri_node, tgt_signal);
+
+                    tgt_ri = ntk_topo.is_complemented(ri) ? substituted.create_not(tgt_signal) : tgt_ri;
+
+                    substituted.create_ri(tgt_ri);
+                });
+        }
 
         // restore signal names if applicable
         fiction::restore_names(ntk_topo, substituted, old2new);

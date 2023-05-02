@@ -799,6 +799,25 @@ mockturtle::names_view<Ntk> topolinano_network()
     return ntk;
 }
 
+template <typename Ntk>
+mockturtle::names_view<Ntk> seq_one()
+{
+    mockturtle::names_view<Ntk> ntk{};
+
+    const auto x1 = ntk.create_pi("a");
+
+    const auto r1_o = ntk.create_ro();
+
+    const auto xo1 = ntk.create_xor(x1, r1_o);
+
+    ntk.create_ri(xo1);
+
+    ntk.create_po(xo1, "cout");
+
+
+    return ntk;
+}
+
 }  // namespace blueprints
 
 #endif  // FICTION_NETWORK_BLUEPRINTS_HPP
