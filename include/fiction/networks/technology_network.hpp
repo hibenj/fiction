@@ -364,6 +364,37 @@ class technology_network : public mockturtle::klut_network
 
 #pragma endregion
 
+#pragma region Nodes and signals
+    uint32_t pi_index( node const& n ) const
+    {
+        //assert(is_pi(n));
+        uint32_t i = -1;
+        foreach_ci( [&]( const auto& x, auto index ) {
+                       if ( x == n )
+                       {
+                           i = index;
+                           return false;
+                       }
+                       return true;
+                   } );
+        return i;
+    }
+
+    uint32_t po_index( signal const& s ) const
+    {
+        uint32_t i = -1;
+        foreach_po( [&]( const auto& x, auto index ) {
+                       if ( x == s )
+                       {
+                           i = index;
+                           return false;
+                       }
+                       return true;
+                   } );
+        return i;
+    }
+#pragma endregion
+
   protected:
     /**
      * Adds some further Boolean functions to the truth table cache for fixed indexing.
