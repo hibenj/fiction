@@ -422,22 +422,6 @@ mockturtle::names_view<Ntk> test_fanout_nodes_coloring_null()
 }
 
 template <typename Ntk>
-mockturtle::names_view<Ntk> maj_one_buf()
-{
-    mockturtle::names_view<Ntk> ntk{};
-    const auto x1    = ntk.create_pi("a");
-    const auto x2    = ntk.create_pi("b");
-    const auto x3    = ntk.create_pi("c");
-    const auto x4    = ntk.create_pi("d");
-
-    const auto m1 = ntk.create_maj(x1, x2, x3);
-    const auto a1 = ntk.create_and(m1, x4);
-
-    ntk.create_po(a1, "f");
-
-    return ntk;
-}
-template <typename Ntk>
 mockturtle::names_view<Ntk> maj_random_1()
 {
     mockturtle::names_view<Ntk> ntk{};
@@ -463,9 +447,27 @@ mockturtle::names_view<Ntk> maj_random_1()
 }
 
 template <typename Ntk>
-Ntk TEST_maj_one_buf_final()
+mockturtle::names_view<Ntk> maj_one_buf()
 {
-    Ntk ntk{};
+    mockturtle::names_view<Ntk> ntk{};
+    const auto x1    = ntk.create_pi("a");
+    const auto x2    = ntk.create_pi("b");
+    const auto x3    = ntk.create_pi("c");
+    const auto x4    = ntk.create_pi("d");
+
+    const auto m1 = ntk.create_maj(x1, x2, x3);
+    const auto a1 = ntk.create_and(m1, x4);
+
+    ntk.create_po(a1, "f");
+
+    return ntk;
+}
+
+
+template <typename Ntk>
+mockturtle::names_view<Ntk> maj_one_buf_a()
+{
+    mockturtle::names_view<Ntk> ntk{};
 
     const auto x1    = ntk.create_pi("a");
     const auto x2    = ntk.create_pi("b");
@@ -486,9 +488,9 @@ Ntk TEST_maj_one_buf_final()
 }
 
 template <typename Ntk>
-Ntk TEST_maj_two_pluslogic_buf()
+mockturtle::names_view<Ntk> maj_two_buf_a()
 {
-    Ntk ntk{};
+    mockturtle::names_view<Ntk> ntk{};
     const auto x1    = ntk.create_pi("a");
     const auto x2    = ntk.create_pi("b");
     const auto x3    = ntk.create_pi("c");
@@ -508,9 +510,9 @@ Ntk TEST_maj_two_pluslogic_buf()
 }
 
 template <typename Ntk>
-Ntk TEST_maj_two_plus_buf()
+mockturtle::names_view<Ntk> maj_two_buf_b()
 {
-    Ntk ntk{};
+    mockturtle::names_view<Ntk> ntk{};
     const auto x1    = ntk.create_pi("a");
     const auto x2    = ntk.create_pi("b");
     const auto x3    = ntk.create_pi("c");
@@ -528,9 +530,9 @@ Ntk TEST_maj_two_plus_buf()
 }
 
 template <typename Ntk>
-Ntk TEST_maj_two_buf()
+mockturtle::names_view<Ntk> maj_two_buf()
 {
-    Ntk ntk{};
+    mockturtle::names_view<Ntk> ntk{};
     const auto x1    = ntk.create_pi("a");
     const auto x2    = ntk.create_pi("b");
     const auto x3    = ntk.create_pi("c");
@@ -547,9 +549,9 @@ Ntk TEST_maj_two_buf()
 }
 
 template <typename Ntk>
-Ntk TEST_maj_three_buf()
+mockturtle::names_view<Ntk> maj_three_buf()
 {
-    Ntk ntk{};
+    mockturtle::names_view<Ntk> ntk{};
     const auto x1    = ntk.create_pi("a");
     const auto x2    = ntk.create_pi("b");
     const auto x3    = ntk.create_pi("c");
@@ -568,9 +570,9 @@ Ntk TEST_maj_three_buf()
 }
 
 template <typename Ntk>
-Ntk TEST_maj_four_buf()
+mockturtle::names_view<Ntk> maj_four_buf()
 {
-    Ntk ntk{};
+    mockturtle::names_view<Ntk> ntk{};
     const auto x1    = ntk.create_pi("m1");
     const auto x2    = ntk.create_pi("m2");
     const auto x3    = ntk.create_pi("m3");
@@ -594,66 +596,10 @@ Ntk TEST_maj_four_buf()
     return ntk;
 }
 
-
 template <typename Ntk>
-Ntk TEST_maj_reroute()
+mockturtle::names_view<Ntk> maj_e_s_buf()
 {
-    Ntk ntk{};
-    const auto x1    = ntk.create_pi("a");
-    const auto x2    = ntk.create_pi("b");
-    const auto x3    = ntk.create_pi("c");
-    const auto x4    = ntk.create_pi("d");
-    const auto x5    = ntk.create_pi("e");
-
-    const auto a1 = ntk.create_and(x1, x2);
-    const auto o1 = ntk.create_or(x1, x2);
-    const auto a2 = ntk.create_and(a1, o1);
-
-    const auto m1 = ntk.create_maj(x3, x4, x5);
-
-    const auto a3 = ntk.create_and(m1, o1);
-
-    const auto a4 = ntk.create_and(a2, a3);
-
-    ntk.create_po(a4, "f");
-
-    return ntk;
-}
-
-template <typename Ntk>
-Ntk TEST_maj_reroute_aoig()
-{
-    Ntk ntk{};
-    const auto x1    = ntk.create_pi("a");
-    const auto x2    = ntk.create_pi("b");
-    const auto x3    = ntk.create_pi("c");
-    const auto x4    = ntk.create_pi("d");
-    const auto x5    = ntk.create_pi("e");
-
-    const auto a1 = ntk.create_and(x1, x2);
-    const auto o1 = ntk.create_or(x1, x2);
-    const auto a2 = ntk.create_and(a1, o1);
-
-    //const auto m1 = ntk.create_maj(x3, x4, x5);
-    const auto a3 = ntk.create_and(x3, x4);
-    const auto a4 = ntk.create_and(x3, x5);
-    const auto a5 = ntk.create_and(x4, x5);
-    const auto o2 = ntk.create_or(a3, a4);
-    const auto m1 = ntk.create_or(o2, a5);
-
-    const auto a6 = ntk.create_and(m1, o1);
-
-    const auto a7 = ntk.create_and(a2, a6);
-
-    ntk.create_po(a7, "f");
-
-    return ntk;
-}
-
-template <typename Ntk>
-Ntk TEST_maj_e_s_buf()
-{
-    Ntk ntk{};
+    mockturtle::names_view<Ntk> ntk{};
     const auto x1    = ntk.create_pi("a");
     const auto x2    = ntk.create_pi("b");
     const auto x3    = ntk.create_pi("c");
@@ -672,9 +618,9 @@ Ntk TEST_maj_e_s_buf()
 }
 
 template <typename Ntk>
-Ntk TEST_maj_maj_buf()
+mockturtle::names_view<Ntk> maj_mg_buf()
 {
-    Ntk ntk{};
+    mockturtle::names_view<Ntk> ntk{};
     const auto x1    = ntk.create_pi("a");
     const auto x2    = ntk.create_pi("b");
     const auto x3    = ntk.create_pi("c");
