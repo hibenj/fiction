@@ -104,90 +104,90 @@ mockturtle::signal<Lyt> wire_north(Lyt& lyt, const tile<Lyt>& src, const tile<Ly
 template <typename Lyt>
 mockturtle::signal<Lyt> buffer_south(Lyt& layout, const tile<Lyt>& src, unsigned char pre_clock)
 {
-    auto pre2_t = static_cast<tile<Lyt>>(wire_east(layout, src, {src.x + 2, src.y}));
-    layout.assign_clock_number({pre2_t.x, pre2_t.y, 0}, pre_clock + 1);
-    pre_clock = layout.get_clock_number({pre2_t});
+    auto pre_t = static_cast<tile<Lyt>>(wire_east(layout, src, {src.x + 2, src.y}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+    pre_clock = layout.get_clock_number({pre_t});
 
-    pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, pre2_t.y + 2}));
-    layout.assign_clock_number({pre2_t.x, pre2_t.y, 0}, pre_clock + 1);
-    pre_clock = layout.get_clock_number({pre2_t});
+    pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, pre_t.y + 2}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+    pre_clock = layout.get_clock_number({pre_t});
 
-    pre2_t = static_cast<tile<Lyt>>(wire_west(layout, pre2_t, {pre2_t.x - 2, pre2_t.y}));
-    layout.assign_clock_number({pre2_t.x, pre2_t.y, 0}, pre_clock + 1);
-    pre_clock = layout.get_clock_number({pre2_t});
+    pre_t = static_cast<tile<Lyt>>(wire_west(layout, pre_t, {pre_t.x - 2, pre_t.y}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+    pre_clock = layout.get_clock_number({pre_t});
 
-    pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, pre2_t.y + 2}));
-    layout.assign_clock_number({pre2_t.x, pre2_t.y, 0}, pre_clock + 1);
-    pre_clock = layout.get_clock_number({pre2_t});
+    pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, pre_t.y + 2}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+    pre_clock = layout.get_clock_number({pre_t});
 
-    pre2_t = static_cast<tile<Lyt>>(wire_east(layout, pre2_t, {pre2_t.x + 2, pre2_t.y}));
-    layout.assign_clock_number({pre2_t.x, pre2_t.y, 0}, pre_clock + 1);
-    pre_clock = layout.get_clock_number({pre2_t});
+    pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {pre_t.x + 2, pre_t.y}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+    pre_clock = layout.get_clock_number({pre_t});
 
-    pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, pre2_t.y + 2}));
-    layout.assign_clock_number({pre2_t.x, pre2_t.y, 0}, pre_clock + 1);
-    pre_clock = layout.get_clock_number({pre2_t});
+    pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, pre_t.y + 2}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+    pre_clock = layout.get_clock_number({pre_t});
 
-    pre2_t = static_cast<tile<Lyt>>(wire_west(layout, pre2_t, {pre2_t.x - 2, pre2_t.y}));
-    layout.assign_clock_number({pre2_t.x, pre2_t.y, 0}, pre_clock + 1);
+    pre_t = static_cast<tile<Lyt>>(wire_west(layout, pre_t, {pre_t.x - 2, pre_t.y}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
 
-    pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, pre2_t.y + 2}));
+    pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, pre_t.y + 2}));
 
-    return static_cast<mockturtle::signal<Lyt>>(pre2_t);
+    return static_cast<mockturtle::signal<Lyt>>(pre_t);
 }
 template <typename Lyt>
 mockturtle::signal<Lyt> buffer_east(Lyt& layout, const tile<Lyt>& src, unsigned char pre_clock)
 {
-    auto pre1_t = static_cast<tile<Lyt>>(wire_south(layout, src, {src.x, src.y + 2}));
-    layout.assign_clock_number({pre1_t.x, pre1_t.y, 0}, pre_clock + 1);
-    pre_clock = layout.get_clock_number({pre1_t});
+    auto pre_t = static_cast<tile<Lyt>>(wire_south(layout, src, {src.x, src.y + 2}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+    pre_clock = layout.get_clock_number({pre_t});
 
-    pre1_t = static_cast<tile<Lyt>>(wire_east(layout, pre1_t, {pre1_t.x + 2, pre1_t.y}));
-    layout.assign_clock_number({pre1_t.x, pre1_t.y, 0}, pre_clock + 1);
-    pre_clock = layout.get_clock_number({pre1_t});
+    pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {pre_t.x + 2, pre_t.y}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+    pre_clock = layout.get_clock_number({pre_t});
     // workaround for the case that the y-coordinate is 0
-    if (pre1_t.y == 1)
+    if (pre_t.y == 1)
     {
-        pre1_t = static_cast<tile<Lyt>>(wire_north(layout, pre1_t, {pre1_t.x, pre1_t.y - 1}));
-        layout.assign_clock_number({pre1_t.x, pre1_t.y, 0}, pre_clock + 1);
-        pre_clock = layout.get_clock_number({pre1_t});
+        pre_t = static_cast<tile<Lyt>>(wire_north(layout, pre_t, {pre_t.x, pre_t.y - 1}));
+        layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+        pre_clock = layout.get_clock_number({pre_t});
     }
     else
     {
-        pre1_t = static_cast<tile<Lyt>>(wire_north(layout, pre1_t, {pre1_t.x, pre1_t.y - 2}));
-        layout.assign_clock_number({pre1_t.x, pre1_t.y, 0}, pre_clock + 1);
-        pre_clock = layout.get_clock_number({pre1_t});
+        pre_t = static_cast<tile<Lyt>>(wire_north(layout, pre_t, {pre_t.x, pre_t.y - 2}));
+        layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+        pre_clock = layout.get_clock_number({pre_t});
     }
 
-    pre1_t = static_cast<tile<Lyt>>(wire_east(layout, pre1_t, {pre1_t.x + 2, pre1_t.y}));
-    layout.assign_clock_number({pre1_t.x, pre1_t.y, 0}, pre_clock + 1);
-    pre_clock = layout.get_clock_number({pre1_t});
+    pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {pre_t.x + 2, pre_t.y}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+    pre_clock = layout.get_clock_number({pre_t});
 
-    pre1_t = static_cast<tile<Lyt>>(wire_south(layout, pre1_t, {pre1_t.x, pre1_t.y + 2}));
-    layout.assign_clock_number({pre1_t.x, pre1_t.y, 0}, pre_clock + 1);
-    pre_clock = layout.get_clock_number({pre1_t});
+    pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, pre_t.y + 2}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+    pre_clock = layout.get_clock_number({pre_t});
 
-    pre1_t = static_cast<tile<Lyt>>(wire_east(layout, pre1_t, {pre1_t.x + 2, pre1_t.y}));
-    layout.assign_clock_number({pre1_t.x, pre1_t.y, 0}, pre_clock + 1);
-    pre_clock = layout.get_clock_number({pre1_t});
+    pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {pre_t.x + 2, pre_t.y}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+    pre_clock = layout.get_clock_number({pre_t});
 
-    if (pre1_t.y == 1)
+    if (pre_t.y == 1)
     {
-        pre1_t = static_cast<tile<Lyt>>(wire_north(layout, pre1_t, {pre1_t.x, pre1_t.y - 1}));
-        layout.assign_clock_number({pre1_t.x, pre1_t.y, 0}, pre_clock + 1);
-        pre_clock = layout.get_clock_number({pre1_t});
+        pre_t = static_cast<tile<Lyt>>(wire_north(layout, pre_t, {pre_t.x, pre_t.y - 1}));
+        layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+        pre_clock = layout.get_clock_number({pre_t});
     }
     else
     {
-        pre1_t = static_cast<tile<Lyt>>(wire_north(layout, pre1_t, {pre1_t.x, pre1_t.y - 2}));
-        layout.assign_clock_number({pre1_t.x, pre1_t.y, 0}, pre_clock + 1);
-        pre_clock = layout.get_clock_number({pre1_t});
+        pre_t = static_cast<tile<Lyt>>(wire_north(layout, pre_t, {pre_t.x, pre_t.y - 2}));
+        layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
+        pre_clock = layout.get_clock_number({pre_t});
     }
 
-    pre1_t = static_cast<tile<Lyt>>(wire_east(layout, pre1_t, {pre1_t.x + 2, pre1_t.y}));
-    layout.assign_clock_number({pre1_t.x, pre1_t.y, 0}, pre_clock + 1);
+    pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {pre_t.x + 2, pre_t.y}));
+    layout.assign_clock_number({pre_t.x, pre_t.y, 0}, pre_clock + 1);
 
-    return static_cast<mockturtle::signal<Lyt>>(pre1_t);
+    return static_cast<mockturtle::signal<Lyt>>(pre_t);
 }
 // provides the connect_and_place function for majority gates (having three predecessors)
 template <typename Lyt, typename Ntk>
@@ -212,7 +212,7 @@ mockturtle::signal<Lyt> connect_and_place(Lyt& lyt, const tile<Lyt>& t, const Nt
 }
 // check edges for buffering according to the delays resulting from majority gates
 template <typename Ntk>
-std::vector<int> majority_buffer(const Ntk& ntk, mockturtle::node<Ntk> n) noexcept
+std::vector<int> majority_buffer(const Ntk& ntk, const mockturtle::node<Ntk>& n) noexcept
 {
     const auto                  fc   = fanins(ntk, n);
     const auto                  size = fc.fanin_nodes.size();
@@ -226,15 +226,15 @@ std::vector<int> majority_buffer(const Ntk& ntk, mockturtle::node<Ntk> n) noexce
                               {
                                   if (!ntk.is_constant(e.source))
                                   {
-                                      auto node_paths = all_incoming_edge_paths(ntk, e.source);
+                                      auto incoming_paths = all_incoming_edge_paths(ntk, e.source);
 
-                                      for (std::size_t i = 0; i < node_paths.size(); ++i)
+                                      for (std::size_t i = 0; i < incoming_paths.size(); ++i)
                                       {
                                           int path_delay = 0;
-                                          for (int j = 0; j < node_paths[i].size(); ++j)
+                                          for (int j = 0; j < incoming_paths[i].size(); ++j)
                                           {
-                                              if (const auto ft = fanins(ntk, node_paths[i][j].target);
-                                                  ntk.is_maj(node_paths[i][j].target) && ft.fanin_nodes.size() > 2)
+                                              if (const auto ft = fanins(ntk, incoming_paths[i][j].target);
+                                                  ntk.is_maj(incoming_paths[i][j].target) && ft.fanin_nodes.size() > 2)
                                               {
                                                   ++path_delay;
                                               }
@@ -248,7 +248,7 @@ std::vector<int> majority_buffer(const Ntk& ntk, mockturtle::node<Ntk> n) noexce
                                   }
                               });
 
-        const int max = *std::max_element(delays.begin(), delays.end());
+        const int max = *std::max_element(delays.cbegin(), delays.cend());
         for (int& delay : delays)
         {
             delay = max - delay;
@@ -267,7 +267,7 @@ aspect_ratio<Lyt> determine_layout_size_majority(const coloring_container<Ntk>& 
 #endif
 
     uint64_t x = 0ull, y = ctn.color_ntk.num_pis() - 1;
-    uint64_t color_null_wired_south = 0ull;
+    uint64_t maj_colored_null = 0ull;
     ctn.color_ntk.foreach_node(
         [&](const auto& n, [[maybe_unused]] const auto i)
         {
@@ -282,7 +282,7 @@ aspect_ratio<Lyt> determine_layout_size_majority(const coloring_container<Ntk>& 
                         (ctn.color_ntk.is_maj(fos[1]) && ctn.color_ntk.color(fos[1]) == ctn.color_null &&
                          ctn.color_ntk.color(fos[0]) == ctn.color_east))
                     {
-                        ++color_null_wired_south;
+                        ++maj_colored_null;
                     }
                 }
                 if (ctn.color_ntk.is_pi(n))
@@ -371,14 +371,14 @@ aspect_ratio<Lyt> determine_layout_size_majority(const coloring_container<Ntk>& 
             bar(i);
 #endif
         });
-    y = y + color_null_wired_south;
+    y = y + maj_colored_null;
 
     return {x, y, 1};
 }
 // route the predecessors of majority gates
 template <typename Ntk, typename Lyt>
 int check_maj_color(Lyt layout, const coloring_container<Ntk>& ctn,
-                    mockturtle::node_map<mockturtle::signal<Lyt>, decltype(ctn.color_ntk)>& node2pos,
+                    const mockturtle::node_map<mockturtle::signal<Lyt>, decltype(ctn.color_ntk)>& node2pos,
                     tile<Lyt>& latest_pos, const mockturtle::node<Ntk> n, const mockturtle::node<Ntk> pre,
                     tile<Lyt>& pre_t)
 {
