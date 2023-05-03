@@ -3,10 +3,11 @@
 //
 #include <catch2/catch_test_macros.hpp>
 
-#include <fiction/utils/debug/network_writer.hpp>
+#include "fiction/technology/qca_one_library.hpp"
 #include "utils/blueprints/network_blueprints.hpp"
 
 #include <fiction/algorithms/physical_design/orthogonal_sequential_network.hpp>
+#include <fiction/utils/debug/network_writer.hpp>
 
 #include <iostream>
 
@@ -39,5 +40,4 @@ TEST_CASE("sequential dot", "[ortho_sequential]")
     std::cout << "Num Wires: " << stats.num_wires<< std::endl;
 
     gate_level_drvs(layout);
-
 }
