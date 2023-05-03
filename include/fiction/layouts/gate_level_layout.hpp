@@ -10,6 +10,7 @@
 #include "fiction/traits.hpp"
 #include "fiction/utils/mockturtle_utils.hpp"
 #include "fiction/utils/range.hpp"
+#include "mockturtle/networks/sequential.hpp"
 
 #include <kitty/constructors.hpp>
 #include <kitty/dynamic_truth_table.hpp>
@@ -213,9 +214,10 @@ class gate_level_layout : public ClockedLayout
         const auto n = static_cast<node>(strg->nodes.size());
         strg->nodes.emplace_back();     // empty node data
         strg->nodes[n].data[1].h1 = 2;  // assign identity function
-        strg->inputs.emplace_back(n);
+        strg->inputs.insert(strg->inputs.cbegin()+num_pis(), n);
         strg->data.node_names[n] = name.empty() ? fmt::format("pi{}", num_pis()) : name;
         assign_node(t, n);
+        ++sequential_inf.num_pis;
 
         return static_cast<signal>(t);
     }
@@ -238,13 +240,14 @@ class gate_level_layout : public ClockedLayout
         const auto n = static_cast<node>(strg->nodes.size());
         strg->nodes.emplace_back();     // empty node data
         strg->nodes[n].data[1].h1 = 2;  // assign identity function
-        strg->outputs.emplace_back(static_cast<signal>(t));
+        strg->outputs.insert(strg->outputs.cbegin()+num_pos(),static_cast<signal>(t));
         strg->data.node_names[n] = name.empty() ? fmt::format("po{}", num_pos()) : name;
         assign_node(t, n);
 
         /* increase ref-count to child */
         strg->nodes[get_node(s)].data[0].h1++;
         strg->nodes[n].children.push_back(s);
+        ++sequential_inf.num_pos;
 
         return static_cast<signal>(t);
     }
@@ -267,11 +270,17 @@ class gate_level_layout : public ClockedLayout
 
     [[nodiscard]] bool is_pi(const node n) const noexcept
     {
-        return std::find(strg->inputs.cbegin(), strg->inputs.cend(), n) != strg->inputs.cend();
+        return std::find(strg->inputs.cbegin(), strg->inputs.cbegin()+num_pis(), n) != strg->inputs.cbegin()+num_pis();
     }
+
+    [[nodiscard]] bool is_ro(const node n) const noexcept
+    {
+        return std::find(strg->inputs.cbegin()+num_pis(), strg->inputs.cend(), n) != strg->inputs.cend();
+    }
+
     [[nodiscard]] bool is_ci(const node n) const noexcept
     {
-        return is_pi(n);
+        return std::find(strg->inputs.cbegin(), strg->inputs.cend(), n) != strg->inputs.cend();
     }
     /**
      * Check whether tile `t` hosts a primary input.
@@ -286,13 +295,20 @@ class gate_level_layout : public ClockedLayout
 
     [[nodiscard]] bool is_po(const node n) const noexcept
     {
-        return std::find_if(strg->outputs.cbegin(), strg->outputs.cend(),
-                            [this, &n](const auto& p) { return this->get_node(p.index) == n; }) != strg->outputs.cend();
+        return std::find_if(strg->outputs.cbegin(), strg->outputs.cbegin()+num_pos(),
+                            [this, &n](const auto& p) { return this->get_node(p.index) == n; }) != strg->outputs.cbegin()+num_pos();
+    }
+
+    [[nodiscard]] bool is_ri(const node n) const noexcept
+    {
+        return std::find_if(strg->outputs.cbegin()+num_pos(), strg->outputs.cbegin()+num_pos()+num_ris(),
+                            [this, &n](const auto& p) { return this->get_node(p.index) == n; }) != strg->outputs.cbegin()+num_pos()+num_ris();
     }
 
     [[nodiscard]] bool is_co(const node n) const noexcept
     {
-        return is_po(n);
+        return std::find_if(strg->outputs.cbegin(), strg->outputs.cend(),
+                            [this, &n](const auto& p) { return this->get_node(p.index) == n; }) != strg->outputs.cend();
     }
     /**
      * Check whether tile `t` hosts a primary output.
@@ -504,12 +520,12 @@ class gate_level_layout : public ClockedLayout
 
     [[nodiscard]] auto num_cis() const noexcept
     {
-        return num_pis();
+        return strg->inputs.size();
     }
 
     [[nodiscard]] auto num_pis() const noexcept
     {
-        return strg->inputs.size();
+        return sequential_inf.num_pis;
     }
 
     [[nodiscard]] auto num_ros() const noexcept
@@ -519,12 +535,17 @@ class gate_level_layout : public ClockedLayout
 
     [[nodiscard]] auto num_cos() const noexcept
     {
-        return num_pos();
+        return strg->outputs.size();
     }
 
     [[nodiscard]] auto num_pos() const noexcept
     {
-        return strg->outputs.size();
+        return sequential_inf.num_pos;
+    }
+
+    [[nodiscard]] auto num_ris() const noexcept
+    {
+        return sequential_inf.registers.size();
     }
 
     [[nodiscard]] uint32_t num_latches() const
