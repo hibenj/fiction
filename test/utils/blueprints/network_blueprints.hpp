@@ -817,6 +817,53 @@ mockturtle::names_view<Ntk> seq_one()
 
     return ntk;
 }
+template <typename Ntk>
+mockturtle::names_view<Ntk> seq_two()
+{
+    mockturtle::names_view<Ntk> ntk{};
+
+    const auto x1 = ntk.create_pi("a");
+
+    const auto r1_o = ntk.create_ro();
+
+    const auto r2_o = ntk.create_ro();
+
+    const auto xo1 = ntk.create_xor(x1, r1_o);
+
+    const auto a1 = ntk.create_and(r1_o, r2_o);
+
+    ntk.create_po(a1, "cout");
+    ntk.create_ri(xo1);
+    ntk.create_ri(a1);
+
+    return ntk;
+}
+template <typename Ntk>
+mockturtle::names_view<Ntk> seq_three()
+{
+    mockturtle::names_view<Ntk> ntk{};
+
+    const auto x1 = ntk.create_pi("a");
+
+    const auto r1_o = ntk.create_ro();
+
+    const auto r2_o = ntk.create_ro();
+
+    const auto r3_o = ntk.create_ro();
+
+    const auto xo1 = ntk.create_xor(x1, r1_o);
+
+    const auto a1 = ntk.create_and(x1, r2_o);
+
+    const auto a2 = ntk.create_and(a1, r3_o);
+
+    ntk.create_po(a2, "cout");
+    ntk.create_ri(xo1);
+    ntk.create_ri(a1);
+    ntk.create_ri(a2);
+
+    return ntk;
+}
 
 }  // namespace blueprints
 
