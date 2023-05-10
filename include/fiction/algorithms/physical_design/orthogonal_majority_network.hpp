@@ -267,24 +267,11 @@ aspect_ratio<Lyt> determine_layout_size_majority(const coloring_container<Ntk>& 
 #endif
 
     uint64_t x = 0ull, y = ctn.color_ntk.num_pis() - 1;
-    uint64_t maj_colored_null = 0ull;
     ctn.color_ntk.foreach_node(
         [&](const auto& n, [[maybe_unused]] const auto i)
         {
             if (!ctn.color_ntk.is_constant(n))
             {
-                const auto fos = fanouts(ctn.color_ntk, n);
-                if (ctn.color_ntk.is_fanout(n) && fos.size() > 1)
-                {
-                    // for majority gates colored null
-                    if ((ctn.color_ntk.is_maj(fos[0]) && ctn.color_ntk.color(fos[0]) == ctn.color_null &&
-                         ctn.color_ntk.color(fos[1]) == ctn.color_east) ||
-                        (ctn.color_ntk.is_maj(fos[1]) && ctn.color_ntk.color(fos[1]) == ctn.color_null &&
-                         ctn.color_ntk.color(fos[0]) == ctn.color_east))
-                    {
-                        ++maj_colored_null;
-                    }
-                }
                 if (ctn.color_ntk.is_pi(n))
                 {
                     ctn.color_ntk.foreach_fanout(n,
@@ -306,12 +293,8 @@ aspect_ratio<Lyt> determine_layout_size_majority(const coloring_container<Ntk>& 
                             x = x + m * 4 + 1;
                         }
                     }
-                    if (const auto maj_clr = ctn.color_ntk.color(n); maj_clr == ctn.color_south)
-                    {
-                        y = y + 3;
-                    }
-                    x = x + 5;
-                    y = y + 5;
+                    x = x + 8;
+                    y = y + 11;
                 }
                 else if (const auto clr = ctn.color_ntk.color(n); clr == ctn.color_east)
                 {
@@ -371,7 +354,6 @@ aspect_ratio<Lyt> determine_layout_size_majority(const coloring_container<Ntk>& 
             bar(i);
 #endif
         });
-    y = y + maj_colored_null;
 
     return {x, y, 1};
 }
@@ -385,11 +367,18 @@ int check_maj_color(Lyt layout, const coloring_container<Ntk>& ctn,
     if (ctn.color_ntk.color(n) == ctn.color_east)
     {
         pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {latest_pos.x + 1, pre_t.y}));
+        pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, latest_pos.y + 1}));
+        ++latest_pos.x;
+        ++latest_pos.y;
+        ++latest_pos.y;
         return 0;
     }
     if (ctn.color_ntk.color(n) == ctn.color_south)
     {
         pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, latest_pos.y + 1}));
+        pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {latest_pos.x + 1, pre_t.y}));
+        ++latest_pos.x;
+        ++latest_pos.y;
         ++latest_pos.y;
         return 1;
     }
@@ -397,6 +386,9 @@ int check_maj_color(Lyt layout, const coloring_container<Ntk>& ctn,
     if (ctn.color_ntk.is_po(pre))
     {
         pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, latest_pos.y + 1}));
+        pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {latest_pos.x + 1, pre_t.y}));
+        ++latest_pos.x;
+        ++latest_pos.y;
         ++latest_pos.y;
         return 1;
     }
@@ -414,12 +406,19 @@ int check_maj_color(Lyt layout, const coloring_container<Ntk>& ctn,
         if (conflicting_colors_one == ctn.color_east)
         {
             pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, latest_pos.y + 1}));
+            pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {latest_pos.x + 1, pre_t.y}));
+            ++latest_pos.x;
+            ++latest_pos.y;
             ++latest_pos.y;
             return 1;
         }
         if (conflicting_colors_one == ctn.color_south)
         {
             pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {latest_pos.x + 1, pre_t.y}));
+            pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, latest_pos.y + 1}));
+            ++latest_pos.x;
+            ++latest_pos.y;
+            ++latest_pos.y;
             return 0;
         }
         assert(false);
@@ -567,22 +566,7 @@ void place_and_route_majority_gate(Lyt layout, const coloring_container<Ntk>& ct
                 {
                     pre3_t = static_cast<tile<Lyt>>(buffer_east(layout, pre3_t, pre_clock));
                 }
-
                 latest_pos.x = pre3_t.x + 1;
-
-                // CASE the other buffers also
-                if (maj_buf[1] > 0 || maj_buf[0] > 0)
-                {
-                    pre3_t = static_cast<tile<Lyt>>(wire_south(layout, pre3_t, {pre3_t.x, pre3_t.y + 2}));
-
-                    auto local_resolve_row = pre3_t.x + 1;
-                    if (maj_buf[1] == 0)
-                    {
-                        pre2_t = static_cast<tile<Lyt>>(wire_east(layout, pre2_t, {local_resolve_row + 1, pre2_t.y}));
-                        pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, pre2_t.y + 2}));
-                        ++latest_pos.x;
-                    }
-                }
             }
             else if (path_n == 2)
             {
@@ -594,13 +578,6 @@ void place_and_route_majority_gate(Lyt layout, const coloring_container<Ntk>& ct
                 {
                     pre2_t = static_cast<tile<Lyt>>(buffer_east(layout, pre2_t, pre_clock));
                 }
-                pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, pre2_t.y + 2}));
-
-                if (maj_buf[2] == 0)
-                {
-                    pre3_t = static_cast<tile<Lyt>>(wire_south(layout, pre3_t, {pre3_t.x, pre3_t.y + 2}));
-                }
-
                 latest_pos.x = pre2_t.x + 1;
             }
             else
@@ -612,8 +589,6 @@ void place_and_route_majority_gate(Lyt layout, const coloring_container<Ntk>& ct
                 {
                     pre1_t = static_cast<tile<Lyt>>(buffer_east(layout, pre1_t, pre_clock));
                 }
-                pre1_t = static_cast<tile<Lyt>>(wire_south(layout, pre1_t, {pre1_t.x, pre1_t.y + 2}));
-
                 latest_pos.x = pre1_t.x + 1;
 
                 // because buffer is 2 tiles wide in y-direction
