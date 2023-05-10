@@ -79,7 +79,7 @@ TEST_CASE("one_majority_gate", "[ortho-majority-gate]")
 {
     using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
 
-    auto test_nw = blueprints::maj_one_buf<mockturtle::names_view<technology_network>>();
+    auto test_nw = blueprints::maj_random_5<mockturtle::names_view<technology_network>>();
 
     orthogonal_physical_design_stats stats{};
 
@@ -87,5 +87,5 @@ TEST_CASE("one_majority_gate", "[ortho-majority-gate]")
 
     gate_level_drvs(layout);
 
-    fiction::debug::write_dot_layout(layout);
+    // fiction::debug::write_dot_layout(layout);
 }
