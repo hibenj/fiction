@@ -31,7 +31,6 @@ aspect_ratio<Lyt> determine_sequential_layout_size(const coloring_container<Ntk>
                                        ctn.color_ntk.num_registers() * 2) +
                  1,
              y = ctn.color_ntk.num_pis() + ctn.color_ntk.num_registers() * 3 - 1;
-    int test = ctn.color_ntk.num_registers();
     ctn.color_ntk.foreach_node(
         [&](const auto& n, [[maybe_unused]] const auto i)
         {
