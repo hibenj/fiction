@@ -581,6 +581,145 @@ mockturtle::names_view<Ntk> topolinano_network()
     return ntk;
 }
 
+template <typename Ntk>
+mockturtle::names_view<Ntk> seq_one()
+{
+    mockturtle::names_view<Ntk> ntk{};
+
+    const auto x1 = ntk.create_pi("a");
+
+    const auto r1_o = ntk.create_ro();
+
+    const auto xo1 = ntk.create_xor(x1, r1_o);
+
+    ntk.create_ri(xo1);
+
+    ntk.create_po(xo1, "cout");
+
+    return ntk;
+}
+
+template <typename Ntk>
+mockturtle::names_view<Ntk> seq_two()
+{
+    mockturtle::names_view<Ntk> ntk{};
+
+    const auto x1 = ntk.create_pi("a");
+
+    const auto r1_o = ntk.create_ro();
+
+    const auto r2_o = ntk.create_ro();
+
+    const auto xo1 = ntk.create_xor(x1, r1_o);
+
+    const auto a1 = ntk.create_and(r1_o, r2_o);
+
+    ntk.create_po(a1, "cout");
+    ntk.create_ri(xo1);
+    ntk.create_ri(a1);
+
+    return ntk;
+}
+
+template <typename Ntk>
+mockturtle::names_view<Ntk> seq_three()
+{
+    mockturtle::names_view<Ntk> ntk{};
+
+    const auto x1 = ntk.create_pi("a");
+
+    const auto r1_o = ntk.create_ro();
+
+    const auto r2_o = ntk.create_ro();
+
+    const auto r3_o = ntk.create_ro();
+
+    const auto xo1 = ntk.create_xor(x1, r1_o);
+
+    const auto a1 = ntk.create_and(x1, r2_o);
+
+    const auto a2 = ntk.create_and(a1, r3_o);
+
+    ntk.create_po(a2, "cout");
+    ntk.create_ri(xo1);
+    ntk.create_ri(a1);
+    ntk.create_ri(a2);
+
+    return ntk;
+}
+
+template <typename Ntk>
+mockturtle::names_view<Ntk> seq_four()
+{
+    mockturtle::names_view<Ntk> ntk{};
+
+    const auto x1 = ntk.create_pi("a");
+
+    const auto r1_o = ntk.create_ro();
+
+    const auto r2_o = ntk.create_ro();
+
+    const auto r3_o = ntk.create_ro();
+
+    const auto r4_o = ntk.create_ro();
+
+    const auto xo1 = ntk.create_xor(x1, r1_o);
+
+    const auto a1 = ntk.create_and(x1, r2_o);
+
+    const auto a2 = ntk.create_and(a1, r3_o);
+
+    const auto a3 = ntk.create_and(r4_o, a2);
+
+    ntk.create_po(a2, "cout");
+    ntk.create_ri(xo1);
+    ntk.create_ri(a1);
+    ntk.create_ri(a2);
+    ntk.create_ri(a3);
+
+    return ntk;
+}
+
+template <typename Ntk>
+mockturtle::names_view<Ntk> seq_five()
+{
+    mockturtle::names_view<Ntk> ntk{};
+
+    const auto x1 = ntk.create_pi("a");
+
+    const auto r1_o = ntk.create_ro();
+
+    const auto r2_o = ntk.create_ro();
+
+    const auto r3_o = ntk.create_ro();
+
+    const auto r4_o = ntk.create_ro();
+
+    const auto r5_o = ntk.create_ro();
+
+    const auto xo1 = ntk.create_xor(x1, r1_o);
+
+    const auto a1 = ntk.create_and(x1, r2_o);
+
+    const auto a2 = ntk.create_and(a1, r3_o);
+
+    const auto a3 = ntk.create_and(r4_o, a2);
+
+    const auto a4 = ntk.create_and(xo1, a3);
+
+    /*const auto bridge_out_neg_1 = ntk.create_not(r5_o);
+    const auto bridge_out_1 = ntk.create_not(bridge_out_neg_1);*/
+
+    ntk.create_po(r5_o, "r5_o");
+    ntk.create_ri(xo1);
+    ntk.create_ri(a1);
+    ntk.create_ri(a2);
+    ntk.create_ri(a3);
+    ntk.create_ri(a4);
+
+    return ntk;
+}
+
 }  // namespace blueprints
 
 #endif  // FICTION_NETWORK_BLUEPRINTS_HPP

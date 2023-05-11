@@ -5,6 +5,7 @@
 
 #include "fiction/technology/qca_one_library.hpp"
 #include "utils/blueprints/network_blueprints.hpp"
+#include "utils/blueprints/sequential_network_blueprints.hpp"
 
 #include <fiction/algorithms/physical_design/orthogonal_sequential_network.hpp>
 #include <fiction/utils/debug/network_writer.hpp>
@@ -18,7 +19,7 @@ TEST_CASE("sequential dot", "[ortho_sequential]")
     using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
     //cube::coord_t
 
-    auto mux21 = blueprints::seq_three<mockturtle::names_view<mockturtle::sequential<technology_network>>>();
+    auto mux21 = blueprints::i99t_b05<mockturtle::names_view<mockturtle::sequential<technology_network>>>();
     //mux21.set_network_name("mux21");
     orthogonal_physical_design_stats stats{};
 

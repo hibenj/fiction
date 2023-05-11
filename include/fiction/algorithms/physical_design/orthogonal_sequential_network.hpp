@@ -31,6 +31,7 @@ aspect_ratio<Lyt> determine_sequential_layout_size(const coloring_container<Ntk>
                                        ctn.color_ntk.num_registers() * 2) +
                  1,
              y = ctn.color_ntk.num_pis() + ctn.color_ntk.num_registers() * 3 - 1;
+    int test = ctn.color_ntk.num_registers();
     ctn.color_ntk.foreach_node(
         [&](const auto& n, [[maybe_unused]] const auto i)
         {
@@ -74,6 +75,13 @@ aspect_ratio<Lyt> determine_sequential_layout_size(const coloring_container<Ntk>
 
                 if (ctn.color_ntk.is_po(n))
                 {
+                    if (!is_eastern_po_orientation_available(ctn, n))
+                    {
+                        ++y;
+                    }
+                }
+                if (ctn.color_ntk.is_ri(n))
+                {
                     if (is_eastern_po_orientation_available(ctn, n))
                     {
                         ++x;
@@ -81,17 +89,7 @@ aspect_ratio<Lyt> determine_sequential_layout_size(const coloring_container<Ntk>
                     else
                     {
                         ++y;
-                    }
-                }
-                if (ctn.color_ntk.is_ri(n))
-                {
-                    if (is_eastern_po_orientation_available(ctn, n) && !ctn.color_ntk.is_po(n))
-                    {
                         ++x;
-                    }
-                    else
-                    {
-                        ++y;
                     }
                 }
             }
@@ -129,7 +127,7 @@ void wire_registers(Lyt layout, const coloring_container<Ntk>& ctn, tile<Lyt>& r
 
     const uint32_t reg_pos_x = 2 * num_ris;
 
-    if ((static_cast<tile<Lyt>>(node2pos[ctn.color_ntk.ro_at(reg_number)]).y - ri_tile.y) % 2 !=
+    if ((ri_tile.y - static_cast<tile<Lyt>>(node2pos[ctn.color_ntk.ro_at(reg_number)]).y) % 2 !=
         (reg_pos_x - ri_tile.x) % 2)
     {
         for (auto index = ri_tile.x - 1; index > reg_pos_x - 3 - 2 * (num_ris - reg_number - 1) + 1; --index)
@@ -255,7 +253,7 @@ class orthogonal_sequential_network_impl
                         // resolve conflicting PIs
                         ctn.color_ntk.foreach_fanout(
                             n,
-                            [&ctn, &n, &layout, &node2pos, &latest_pos, &num_ris](const auto& fon)
+                            [&ctn, &n, &layout, &node2pos, &latest_pos](const auto& fon)
                             {
                                 if (ctn.color_ntk.color(fon) == ctn.color_south)
                                 {
@@ -405,7 +403,7 @@ class orthogonal_sequential_network_impl
                         if (is_eastern_po_orientation_available(ctn, n))
                         {
                             po_tile = layout.east(static_cast<tile<Lyt>>(n_s));
-                            ++latest_pos.x;
+                            //++latest_pos.x;
                         }
                         else
                         {
@@ -460,13 +458,15 @@ class orthogonal_sequential_network_impl
 
                         const uint32_t reg_number = ctn.color_ntk.ro_index(ctn.color_ntk.ri_to_ro(n));
 
+                        const auto global_syc_const = floor((ctn.color_ntk.num_cis()) / 4);
+
                         bool south{false};
 
                         // determine PO orientation
                         if (is_eastern_po_orientation_available(ctn, n) && !ctn.color_ntk.is_po(n))
                         {
                             ri_tile = layout.east(static_cast<tile<Lyt>>(n_s));
-                            ++latest_pos.x;
+                            //++latest_pos.x;
                         }
                         else
                         {
@@ -480,7 +480,7 @@ class orthogonal_sequential_network_impl
                             tile<Lyt> anker = {ri_tile.x - 1, ri_tile.y};
 
                             ri_tile   = layout.eastern_border_of(ri_tile);
-                            ri_tile.x = latest_pos.x + reg_number - ri_counter - 1;
+                            ri_tile.x = aspect_ratio.x - ( num_ris - 1 ) * 4 + reg_number - num_ris - global_syc_const * 2;
 
                             layout.create_ri(wire_east(layout, anker, ri_tile), fmt::format("ri{}", ri_counter++),
                                              ri_tile);
@@ -490,7 +490,7 @@ class orthogonal_sequential_network_impl
                             const auto anker = layout.create_buf(n_s, ri_tile);
 
                             ri_tile   = layout.eastern_border_of(ri_tile);
-                            ri_tile.x = latest_pos.x + reg_number - ri_counter - 1;
+                            ri_tile.x = aspect_ratio.x - ( num_ris - 1 ) * 4 + reg_number - num_ris - global_syc_const * 2;
 
                             layout.create_ri(wire_east(layout, static_cast<tile<Lyt>>(anker), ri_tile),
                                              fmt::format("ri{}", ri_counter++), ri_tile);
