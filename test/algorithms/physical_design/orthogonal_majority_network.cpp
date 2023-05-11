@@ -2,11 +2,13 @@
 // Created by benjamin on 25.04.23.
 //
 #include <catch2/catch_test_macros.hpp>
+
+#include "utils/blueprints/majority_network_blueprints.hpp"
 #include "utils/blueprints/network_blueprints.hpp"
 
-#include <fiction/algorithms/physical_design/orthogonal_majority_network.hpp>
 #include <fiction/algorithms/physical_design/apply_gate_library.hpp>
 #include <fiction/algorithms/physical_design/ortho_ordering_network.hpp>
+#include <fiction/algorithms/physical_design/orthogonal_majority_network.hpp>
 #include <fiction/technology/qca_one_library.hpp>
 #include <fiction/utils/debug/network_writer.hpp>
 

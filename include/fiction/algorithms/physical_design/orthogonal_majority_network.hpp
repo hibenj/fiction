@@ -421,7 +421,12 @@ int check_maj_color(Lyt layout, const coloring_container<Ntk>& ctn,
             ++latest_pos.y;
             return 0;
         }
-        assert(false);
+        pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, latest_pos.y + 1}));
+        pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {latest_pos.x + 1, pre_t.y}));
+        ++latest_pos.x;
+        ++latest_pos.y;
+        ++latest_pos.y;
+        return 1;
     }
 }
 void compare_and_swap(fiction::offset::ucoord_t& pre1_t, fiction::offset::ucoord_t& pre2_t,
