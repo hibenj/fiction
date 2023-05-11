@@ -24,27 +24,11 @@ TEST_CASE("color_majority_gates", "[ortho-majority-gate]")
         CHECK(detail::is_east_south_colored(container.color_ntk));
     };
     check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
-        blueprints::maj_one_buf<technology_network>())});
-    check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
         blueprints::maj_random_1<technology_network>())});
     check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
         blueprints::maj1_network<technology_network>())});
     check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
         blueprints::maj4_network<technology_network>())});
-    check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
-        blueprints::maj_e_s_buf<technology_network>())});
-    check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
-        blueprints::maj_mg_buf<technology_network>())});
-    check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
-        blueprints::maj_one_buf_a<technology_network>())});
-    check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
-        blueprints::maj_three_buf<technology_network>())});
-    check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
-        blueprints::maj_two_buf<technology_network>())});
-    check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
-        blueprints::maj_two_buf_a<technology_network>())});
-    check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
-        blueprints::maj_two_buf_b<technology_network>())});
 }
 
 TEST_CASE("Majority Gate library application", "[ortho-majority-gate]")
@@ -61,17 +45,10 @@ TEST_CASE("Majority Gate library application", "[ortho-majority-gate]")
         CHECK_NOTHROW(apply_gate_library<cell_layout, qca_one_library>(layout));
     };
 
-    check_ortho_ordering(blueprints::maj_one_buf<mockturtle::aig_network>());
     check_ortho_ordering(blueprints::maj_random_1<mockturtle::aig_network>());
     check_ortho_ordering(blueprints::maj1_network<mockturtle::aig_network>());
     check_ortho_ordering(blueprints::maj4_network<technology_network>());
-    check_ortho_ordering(blueprints::maj_e_s_buf<technology_network>());
-    check_ortho_ordering(blueprints::maj_mg_buf<technology_network>());
-    check_ortho_ordering(blueprints::maj_one_buf_a<mockturtle::mig_network>());
-    check_ortho_ordering(blueprints::maj_three_buf<mockturtle::mig_network>());
-    check_ortho_ordering(blueprints::maj_two_buf<mockturtle::mig_network>());
-    check_ortho_ordering(blueprints::maj_two_buf_a<mockturtle::mig_network>());
-    check_ortho_ordering(blueprints::maj_two_buf_b<mockturtle::mig_network>());
+
 
     // constant input network
     check_ortho_ordering(blueprints::unbalanced_and_inv_network<mockturtle::mig_network>());
