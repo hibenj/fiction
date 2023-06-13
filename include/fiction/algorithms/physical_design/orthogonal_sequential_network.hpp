@@ -277,6 +277,7 @@ class orthogonal_sequential_network_impl
                     else if (ctn.color_ntk.is_ro(n))
                     {
                         node2pos[n] = layout.move_node(ro2node[n], {2 * num_ris, latest_pos.y});
+                        // node2pos[n] = layout.create_buf(wire_east(layout, {2 * num_ris-1, latest_pos.y}, {2 * num_ris, latest_pos.y}), {2 * num_ris, latest_pos.y});
 
                         // resolve conflicting PIs
                         ctn.color_ntk.foreach_fanout(
@@ -483,6 +484,7 @@ class orthogonal_sequential_network_impl
 
                             layout.create_ri(wire_east(layout, anker, ri_tile), fmt::format("ri{}", ri_counter++),
                                              ri_tile);
+                            // ri_tile = static_cast<tile<Lyt>>(wire_east(layout, static_cast<tile<Lyt>>(anker), {ri_tile.x + 1, ri_tile.y}));
                         }
                         else
                         {
@@ -493,6 +495,7 @@ class orthogonal_sequential_network_impl
 
                             layout.create_ri(wire_east(layout, static_cast<tile<Lyt>>(anker), ri_tile),
                                              fmt::format("ri{}", ri_counter++), ri_tile);
+                            // ri_tile = static_cast<tile<Lyt>>(wire_east(layout, static_cast<tile<Lyt>>(anker), ri_tile));
                         }
                         wire_registers(layout, ctn, ri_tile, num_ris, reg_number, aspect_ratio, node2pos, n);
                     }

@@ -3,6 +3,8 @@
 //
 #include <catch2/catch_test_macros.hpp>
 
+#include "fiction/algorithms/physical_design/apply_gate_library.hpp"
+#include "fiction/io/write_svg_layout.hpp"
 #include "fiction/technology/qca_one_library.hpp"
 #include "utils/blueprints/network_blueprints.hpp"
 #include "utils/blueprints/sequential_network_blueprints.hpp"
@@ -19,7 +21,7 @@ TEST_CASE("sequential dot", "[ortho_sequential]")
     using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
     //cube::coord_t
 
-    auto mux21 = blueprints::i99t_b05<mockturtle::names_view<mockturtle::sequential<technology_network>>>();
+    auto mux21 = blueprints::seq_one<mockturtle::names_view<mockturtle::sequential<mockturtle::aig_network>>>();
     //mux21.set_network_name("mux21");
     orthogonal_physical_design_stats stats{};
 
@@ -30,7 +32,7 @@ TEST_CASE("sequential dot", "[ortho_sequential]")
 
     /*const auto cell_level_lyt = apply_gate_library<qca_cell_clk_lyt, qca_one_library>(layout);
 
-    write_qca_layout_svg(cell_level_lyt, "TEST_maj_two_buf_cell_lvl_lyt.svg");*/
+    write_qca_layout_svg(cell_level_lyt, "one_reg.svg");*/
 
     std::cout << "PROCESSING SEQ_NW "<< std::endl;
     std::cout << "Size: " <<(stats.x_size) * (stats.y_size) << std::endl;
