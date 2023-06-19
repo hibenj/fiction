@@ -586,17 +586,13 @@ struct is_cell_level_layout : std::false_type
 
 template <class Lyt>
 struct is_cell_level_layout<
-    Lyt,
-    std::enable_if_t<is_clocked_layout_v<Lyt>,
-                     std::void_t<typename Lyt::base_type, cell<Lyt>, typename Lyt::cell_type, typename Lyt::cell_mode,
-                                 technology<Lyt>, typename Lyt::storage,
-                                 decltype(std::declval<Lyt>().assign_cell_type(cell<Lyt>(), typename Lyt::cell_type())),
-                                 decltype(std::declval<Lyt>().get_cell_type(cell<Lyt>())),
-                                 decltype(std::declval<Lyt>().is_empty_cell(cell<Lyt>())),
-                                 decltype(std::declval<Lyt>().assign_cell_mode(cell<Lyt>(), typename Lyt::cell_mode())),
-                                 decltype(std::declval<Lyt>().get_cell_mode(cell<Lyt>())),
-                                 decltype(std::declval<Lyt>().assign_cell_name(cell<Lyt>(), std::string())),
-                                 decltype(std::declval<Lyt>().get_cell_name(cell<Lyt>()))>>> : std::true_type
+    Lyt, std::enable_if_t<is_clocked_layout_v<Lyt>,
+                          std::void_t<typename Lyt::base_type, cell<Lyt>, typename Lyt::cell_type,
+                                      typename Lyt::cell_mode, technology<Lyt>, typename Lyt::storage,
+                                      decltype(std::declval<Lyt>().get_cell_type(cell<Lyt>())),
+                                      decltype(std::declval<Lyt>().is_empty_cell(cell<Lyt>())),
+                                      decltype(std::declval<Lyt>().get_cell_mode(cell<Lyt>())),
+                                      decltype(std::declval<Lyt>().get_cell_name(cell<Lyt>()))>>> : std::true_type
 {};
 
 template <class Lyt>
@@ -659,6 +655,10 @@ template <class Ntk>
 inline constexpr bool has_get_layout_name_v = has_get_layout_name<Ntk>::value;
 #pragma endregion
 
+/**
+ * SiDB surfaces
+ */
+
 #pragma region has_assign_sidb_defect
 template <class Lyt, class = void>
 struct has_assign_sidb_defect : std::false_type
@@ -703,6 +703,10 @@ template <class Lyt>
 inline constexpr bool has_foreach_sidb_defect_v = has_foreach_sidb_defect<Lyt>::value;
 #pragma endregion
 
+/**
+ * Charge distribution surfaces
+ */
+
 #pragma region has_assign_charge_state
 template <class Lyt, class = void>
 struct has_assign_charge_state : std::false_type
@@ -730,22 +734,6 @@ struct has_get_charge_state<Lyt, std::void_t<decltype(std::declval<Lyt>().get_ch
 
 template <class Lyt>
 inline constexpr bool has_get_charge_state_v = has_get_charge_state<Lyt>::value;
-#pragma endregion
-
-#pragma region has_foreach_charge_state
-template <class Lyt, class = void>
-struct has_foreach_charge_state : std::false_type
-{};
-
-template <class Lyt>
-struct has_foreach_charge_state<Lyt,
-                                std::void_t<decltype(std::declval<Lyt>().foreach_charge_state(
-                                    std::declval<void(std::pair<coordinate<Lyt>, sidb_charge_state>, uint32_t)>()))>>
-        : std::true_type
-{};
-
-template <class Lyt>
-inline constexpr bool has_foreach_charge_state_v = has_foreach_charge_state<Lyt>::value;
 #pragma endregion
 
 /**
@@ -1137,6 +1125,85 @@ struct has_is_and_xor<Ntk, std::void_t<decltype(std::declval<Ntk>().is_and_xor(s
 
 template <class Ntk>
 inline constexpr bool has_is_and_xor_v = has_is_and_xor<Ntk>::value;
+#pragma endregion
+
+#pragma region has_get_fo_two
+template <class Ntk, class = void>
+struct has_get_fo_two : std::false_type
+{};
+
+template <class Ntk>
+struct has_get_fo_two<Ntk, std::void_t<decltype(std::declval<Ntk>().get_fo_two())>> : std::true_type
+{};
+
+template <class Ntk>
+inline constexpr bool has_get_fo_two_v = has_get_fo_two<Ntk>::value;
+#pragma endregion
+
+#pragma region has_get_fo_one
+template <class Ntk, class = void>
+struct has_get_fo_one : std::false_type
+{};
+
+template <class Ntk>
+struct has_get_fo_one<Ntk, std::void_t<decltype(std::declval<Ntk>().get_fo_one())>> : std::true_type
+{};
+
+template <class Ntk>
+inline constexpr bool has_get_fo_one_v = has_get_fo_one<Ntk>::value;
+#pragma endregion
+
+#pragma region has_get_pi_to_pi
+template <class Ntk, class = void>
+struct has_get_pi_to_pi : std::false_type
+{};
+
+template <class Ntk>
+struct has_get_pi_to_pi<Ntk, std::void_t<decltype(std::declval<Ntk>().get_pi_to_pi())>> : std::true_type
+{};
+
+template <class Ntk>
+inline constexpr bool has_get_pi_to_pi_v = has_get_pi_to_pi<Ntk>::value;
+#pragma endregion
+
+#pragma region is_input_ordered
+template <class Ntk, class = void>
+struct is_input_ordered : std::false_type
+{};
+
+template <class Ntk>
+struct is_input_ordered<Ntk, std::enable_if_t<Ntk::is_input_ordered, std::void_t<decltype(Ntk::is_input_ordered)>>>
+        : std::true_type
+{};
+
+template <class Ntk>
+inline constexpr bool is_input_ordered_v = is_input_ordered<Ntk>::value;
+#pragma endregion
+
+#pragma region has_nc_inv_flag
+template <class Ntk, class = void>
+struct has_nc_inv_flag : std::false_type
+{};
+
+template <class Ntk>
+struct has_nc_inv_flag<Ntk, std::void_t<decltype(std::declval<Ntk>().nc_inv_flag())>> : std::true_type
+{};
+
+template <class Ntk>
+inline constexpr bool has_nc_inv_flag_v = has_nc_inv_flag<Ntk>::value;
+#pragma endregion
+
+#pragma region has_nc_inv_num
+template <class Ntk, class = void>
+struct has_nc_inv_num : std::false_type
+{};
+
+template <class Ntk>
+struct has_nc_inv_num<Ntk, std::void_t<decltype(std::declval<Ntk>().nc_inv_num())>> : std::true_type
+{};
+
+template <class Ntk>
+inline constexpr bool has_nc_inv_num_v = has_nc_inv_num<Ntk>::value;
 #pragma endregion
 
 }  // namespace fiction

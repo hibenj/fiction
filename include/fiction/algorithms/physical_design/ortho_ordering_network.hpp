@@ -14,9 +14,9 @@ namespace fiction
 
 namespace detail
 {
-
+// paints a node and all incoming edges
 template <typename Ntk>
-void paint_node_and_edges(const coloring_container<Ntk>& ctn, mockturtle::node<Ntk> const& n, uint32_t color)
+void paint_node_and_edges(const coloring_container<Ntk>& ctn, const mockturtle::node<Ntk>& n, const uint32_t color)
 {
     const auto finc = fanin_edges(ctn.color_ntk, n);
     std::for_each(finc.fanin_edges.cbegin(), finc.fanin_edges.cend(),
@@ -25,30 +25,105 @@ void paint_node_and_edges(const coloring_container<Ntk>& ctn, mockturtle::node<N
 }
 
 template <typename Ntk>
-int64_t get_index(std::vector<Ntk> v, Ntk n)
+void paint_fo_two(const Ntk& ntk, const coloring_container<Ntk>& ctn, mockturtle::node<Ntk>& current_node)
 {
-    auto it = find(v.begin(), v.end(), n);
+    auto swap_color = ctn.color_south;
+    ntk.foreach_fanout(current_node,
+                       [&ctn, &current_node, &ntk, &swap_color](const auto& cur_fon)
+                       {
+                           // Jump to next node
+                           current_node = cur_fon;
 
-    // If element was found
-    if (it != v.end())
+                           if (ntk.is_inv(current_node))
+                           {
+                               // Color Inverter east
+                               paint_node_and_edges(ctn, current_node, ctn.color_east);
+                               ntk.foreach_fanout(current_node,
+                                                  [&](const auto& fon_inv)
+                                                  {
+                                                      // Jump to next node
+                                                      current_node = fon_inv;
+                                                  });
+                               paint_node_and_edges(ctn, current_node, ctn.color_south);
+                           }
+                           else
+                           {
+                               paint_node_and_edges(ctn, current_node, swap_color);
+                               swap_color = ctn.color_east;
+                           }
+                       });
+}
+
+template <typename Ntk>
+void paint_fo_one(const Ntk& ntk, const coloring_container<Ntk>& ctn, const mockturtle::node<Ntk>& current_node)
+{
+    const auto fc = fanins(ctn.color_ntk, current_node);
+    if (ntk.is_inv(fc.fanin_nodes[0]))
     {
-        // calculating the index
-        int64_t index = it - v.begin();
-        return index;
+        const auto fc_fi = fanins(ctn.color_ntk, fc.fanin_nodes[0]);
+        if (ntk.is_fanout(fc_fi.fanin_nodes[0]) && ntk.fanout_size(fc_fi.fanin_nodes[0]) >= 2)
+        {
+            if (ctn.color_ntk.color(fc.fanin_nodes[0]) == ctn.color_south)
+            {
+                paint_node_and_edges(ctn, current_node, ctn.color_east);
+            }
+            else
+            {
+                paint_node_and_edges(ctn, current_node, ctn.color_south);
+            }
+        }
     }
-    return -1;
+    else if (ntk.is_inv(fc.fanin_nodes[1]))
+    {
+        const auto fc_fi = fanins(ctn.color_ntk, fc.fanin_nodes[1]);
+        if (ntk.is_fanout(fc_fi.fanin_nodes[0]) && ntk.fanout_size(fc_fi.fanin_nodes[0]) >= 2)
+        {
+            if (ctn.color_ntk.color(fc.fanin_nodes[1]) == ctn.color_south)
+            {
+                paint_node_and_edges(ctn, current_node, ctn.color_east);
+            }
+            else
+            {
+                paint_node_and_edges(ctn, current_node, ctn.color_south);
+            }
+        }
+    }
+}
+
+template <typename Ntk>
+void paint_pi_to_pi(const Ntk& ntk, const coloring_container<Ntk>& ctn, const mockturtle::node<Ntk>& current_node)
+{
+    if (const auto fc = fanins(ctn.color_ntk, current_node);
+        (ntk.is_inv(fc.fanin_nodes[0]) && !ntk.is_inv(fc.fanin_nodes[1])) ||
+        (!ntk.is_inv(fc.fanin_nodes[0]) && ntk.is_inv(fc.fanin_nodes[1])))
+    {
+        paint_node_and_edges(ctn, current_node, ctn.color_south);
+    }
+    else
+    {
+        paint_node_and_edges(ctn, current_node, ctn.color_east);
+    }
 }
 
 /*
+ * Conditional coloring computes a valid coloring for all the nodes, which are affected by the input ordering network.
+ *
+ * Two PIs are related to each other, when they are connected to the same two fan-in gate and between the PI and this
+ * gate are only fan-out nodes or inverters.
+ *
  * Conditional coloring rules:
- * 0. All 1-fan-in nodes (inverters and fan-outs) after PIs have to be colored east
- * 1. fan-out node related to two PIs:
- * - Case: 2-inverters -> get balanced to the beginning of the fan-out node (nl_inv has to be respected here for
+ * 0. All 1-fan-in nodes (inverters and fan-outs) after PIs get colored east
+ * 1. PI connected to a fan-out and related to two PIs:
+ * - Case: 2-inverters -> get balanced to the beginning of the fan-out node (nc_inv has to be respected here for
  * instance)
  * - Case: one inverter (color inverter east and other outgoing edges south)
  * - Case: no inverter (color one outgoing edge east and one south)
- * 2. fan-out node related to one PI (coloring is dependent on the coloring of the whole network)
- * 3. PI connected to node connected to PI: color connecting node east
+ * 2. PI node connected to fan-out node and related to one PI (coloring is dependent on the coloring of the network)
+ * 3. PI related to PI: color connecting node east
+ *
+ * @param ntk network to be colored based on the rules of the ordering network stated above
+ *
+ * @return the conditional coloring
  */
 template <typename Ntk>
 coloring_container<Ntk> conditional_coloring(const Ntk& ntk) noexcept
@@ -107,121 +182,247 @@ coloring_container<Ntk> conditional_coloring(const Ntk& ntk) noexcept
                 pi,
                 [&](const auto& fon)
                 {
-                    // Always track the current_node
+                    // always track the current_node
                     current_node = fon;
 
-                    // Skip Inverters and color them east
+                    // skip Inverters and paint them east
                     if (ntk.is_inv(current_node))
                     {
-                        // Color Inverter east
+                        // paint inverter east
                         paint_node_and_edges(ctn, current_node, ctn.color_east);
                         auto cur_fon = fanouts(ctn.color_ntk, current_node);
-                        // Jump to next node
+                        // jump to next node
                         current_node = cur_fon[0];
                     }
+
+                    auto fo_one = ctn.color_ntk.get_fo_one();
+                    auto pi_pi  = ctn.color_ntk.get_pi_to_pi();
+
                     // 1. fan-out node related to two PIs
                     if (ntk.is_fanout(current_node) && ntk.fanout_size(current_node) >= 2)
                     {
+                        auto fo_two = ctn.color_ntk.get_fo_two();
+
+                        // paint the fan-out node east
                         paint_node_and_edges(ctn, current_node, ctn.color_east);
 
-                        /*bool inv_flag = false;*/
-                        if (auto fo_two = ctn.color_ntk.get_fo_two(); get_index(fo_two, pi) % 3 == 0)
+                        if (const auto it = find(fo_two.cbegin(), fo_two.cend(), pi); it != fo_two.cend())
                         {
-                            auto cur_fon = fanouts(ctn.color_ntk, current_node);
-                            /*// Jump to next node
-                            current_node = cur_fon[0];
-                            if (ntk.is_inv(current_node))
+                            int i = static_cast<int>(it - fo_two.cbegin());
+                            if (i % 3 == 0)
                             {
-                                // Color Inverter east
-                                paint_node_and_edges(ctn, current_node, ctn.color_east);
-                                inv_flag = true;
-                            }*/
-
-                            auto swap_color = ctn.color_south;
-                            ntk.foreach_fanout(
-                                current_node,
-                                [&ctn, &current_node, &ntk, &fon, &swap_color](const auto& cur_fon)
-                                {
-                                    // Jump to next node
-                                    current_node = cur_fon;
-
-                                    if (ntk.is_inv(current_node))
-                                    {
-                                        // Color Inverter east
-                                        paint_node_and_edges(ctn, current_node, ctn.color_east);
-                                        ntk.foreach_fanout(fon,
-                                                           [&](const auto& fon_inv)
-                                                           {
-                                                               // Jump to next node
-                                                               current_node = fon_inv;
-                                                           });
-                                        paint_node_and_edges(ctn, current_node, ctn.color_south);
-                                    }
-                                    /*else if (inv_flag)
-                                    {
-                                        paint_node_and_edges(ctn, current_node, ctn.color_south);
-                                    }*/
-                                    else
-                                    {
-                                        paint_node_and_edges(ctn, current_node, swap_color);
-                                        swap_color = ctn.color_east;
-                                    }
-                                });
+                                // paint the related nodes
+                                paint_fo_two(ntk, ctn, current_node);
+                            }
                         }
                     }
                     // 2. fan-out node related to one PI
-                    else if (auto fo_one = ctn.color_ntk.get_fo_one(); get_index(fo_one, pi) % 2 == 1)
+                    else if (const auto it = find(fo_one.cbegin(), fo_one.cend(), pi); it != fo_one.cend())
                     {
-                        const auto fc = fanins(ctn.color_ntk, current_node);
-                        if (ntk.is_inv(fc.fanin_nodes[0]))
+                        int i = static_cast<int>(it - fo_one.cbegin());
+                        if (i % 2 == 1)
                         {
-                            const auto fc_fi = fanins(ctn.color_ntk, fc.fanin_nodes[0]);
-                            if (ntk.is_fanout(fc_fi.fanin_nodes[0]) && ntk.fanout_size(fc_fi.fanin_nodes[0]) >= 2)
-                            {
-                                if (ctn.color_ntk.color(fc.fanin_nodes[0]) == ctn.color_south)
-                                {
-                                    paint_node_and_edges(ctn, current_node, ctn.color_east);
-                                }
-                                else
-                                {
-                                    paint_node_and_edges(ctn, current_node, ctn.color_south);
-                                }
-                            }
-                        }
-                        else if (ntk.is_inv(fc.fanin_nodes[1]))
-                        {
-                            const auto fc_fi = fanins(ctn.color_ntk, fc.fanin_nodes[1]);
-                            if (ntk.is_fanout(fc_fi.fanin_nodes[0]) && ntk.fanout_size(fc_fi.fanin_nodes[0]) >= 2)
-                            {
-                                if (ctn.color_ntk.color(fc.fanin_nodes[1]) == ctn.color_south)
-                                {
-                                    paint_node_and_edges(ctn, current_node, ctn.color_east);
-                                }
-                                else
-                                {
-                                    paint_node_and_edges(ctn, current_node, ctn.color_south);
-                                }
-                            }
+                            // paint the related nodes
+                            paint_fo_one(ntk, ctn, current_node);
                         }
                     }
                     // 3. PI connected to node connected to PI
-                    else if (auto pi_pi = ctn.color_ntk.get_pi_to_pi(); get_index(pi_pi, pi) % 2 == 0)
+                    else if (const auto it_pi = find(pi_pi.cbegin(), pi_pi.cend(), pi); it_pi != pi_pi.cend())
                     {
-                        if (const auto fc = fanins(ctn.color_ntk, current_node);
-                            (ntk.is_inv(fc.fanin_nodes[0]) && !ntk.is_inv(fc.fanin_nodes[1])) ||
-                            (!ntk.is_inv(fc.fanin_nodes[0]) && ntk.is_inv(fc.fanin_nodes[1])))
+                        int i = static_cast<int>(it_pi - pi_pi.cbegin());
+                        if (i % 2 == 0)
                         {
-                            paint_node_and_edges(ctn, current_node, ctn.color_south);
-                        }
-                        else
-                        {
-                            paint_node_and_edges(ctn, current_node, ctn.color_east);
+                            // paint the related nodes
+                            paint_pi_to_pi(ntk, ctn, current_node);
                         }
                     }
                 });
         });
 
     return ctn;
+}
+
+template <typename Ntk, typename Lyt>
+void resolve_unaffected_pi(Lyt& layout, const coloring_container<Ntk>& ctn, const mockturtle::node<Ntk>& pre,
+                           tile<Lyt>& pre_t, tile<Lyt>& latest_pos)
+{
+    auto fo_two = ctn.color_ntk.get_fo_two();
+    auto fo_one = ctn.color_ntk.get_fo_one();
+    auto pi_pi  = ctn.color_ntk.get_pi_to_pi();
+    if (ctn.color_ntk.is_pi(pre) && std::find(fo_two.cbegin(), fo_two.cend(), pre) == fo_two.cend() &&
+        std::find(fo_one.cbegin(), fo_one.cend(), pre) == fo_one.cend() &&
+        std::find(pi_pi.cbegin(), pi_pi.cend(), pre) == pi_pi.cend())
+    {
+        pre_t = static_cast<tile<Lyt>>(wire_east(layout, pre_t, {latest_pos.x + 1, pre_t.y}));
+        ++latest_pos.x;
+    }
+}
+
+template <typename Ntk, typename Lyt>
+void place_one_fanin_gate_east(const Ntk& ntk, Lyt& layout, const coloring_container<Ntk>& ctn,
+                               const mockturtle::node<Ntk>& n, const mockturtle::node<Ntk>& pre, tile<Lyt>& latest_pos,
+                               const tile<Lyt>& pre_t, std::uint64_t& insert_position_inv,
+                               mockturtle::node_map<mockturtle::signal<Lyt>, decltype(ctn.color_ntk)>& node2pos)
+{
+    // new column for inverters
+    auto insert_position = latest_pos.x;
+    if (ntk.nc_inv_flag() && ntk.is_inv(n) && ntk.is_pi(pre))
+    {
+        insert_position = insert_position_inv;
+        ++insert_position_inv;
+        --latest_pos.x;
+    }
+
+    if (ctn.color_ntk.is_fanout(n) && ctn.color_ntk.is_pi(pre))
+    {
+        ++latest_pos.y;
+    }
+    const tile<Lyt> t{insert_position, pre_t.y};
+
+    node2pos[n] = connect_and_place(layout, t, ctn.color_ntk, n, pre_t);
+    ++latest_pos.x;
+}
+
+template <typename Ntk, typename Lyt>
+void place_one_fanin_gate_south(Lyt& layout, const coloring_container<Ntk>& ctn, const mockturtle::node<Ntk>& n,
+                                tile<Lyt>& latest_pos, tile<Lyt>& latest_pos_inputs, const tile<Lyt>& pre_t,
+                                mockturtle::node_map<mockturtle::signal<Lyt>, decltype(ctn.color_ntk)>& node2pos)
+{
+    if ((ctn.color_ntk.is_inv(n) || ctn.color_ntk.is_fanout(n)) && latest_pos.y < latest_pos_inputs.y)
+    {
+        const tile<Lyt> t{pre_t.x, latest_pos_inputs.y};
+
+        // place and route from 'pre_t' to 't'
+        node2pos[n]  = connect_and_place(layout, t, ctn.color_ntk, n, pre_t);
+        latest_pos.y = t.y + 1;
+    }
+    else
+    {
+        const tile<Lyt> t{pre_t.x, latest_pos.y};
+
+        // place and route from 'pre_t' to 't'
+        node2pos[n] = connect_and_place(layout, t, ctn.color_ntk, n, pre_t);
+        ++latest_pos.y;
+    }
+}
+
+template <typename Lyt>
+void place_two_fanin_gate_east(Lyt& layout, tile<Lyt>& latest_pos, tile<Lyt>& latest_pos_inputs, tile<Lyt>& t,
+                               tile<Lyt>& pre1_t, tile<Lyt>& pre2_t)
+{
+    // make sure pre1_t is the northward tile
+    if (pre2_t.y < pre1_t.y)
+    {
+        std::swap(pre1_t, pre2_t);
+    }
+
+    // use larger y position of predecessors
+    t = {latest_pos.x, pre2_t.y};
+
+    // each 2-input gate has one incoming bent wire
+    pre1_t = static_cast<tile<Lyt>>(wire_east(layout, pre1_t, {t.x + 1, pre1_t.y}));
+
+    ++latest_pos.x;
+    if (latest_pos.y < latest_pos_inputs.y)
+    {
+        latest_pos.y = t.y + 1;
+    }
+}
+
+template <typename Ntk, typename Lyt>
+void place_two_fanin_gate_south(Lyt& layout, const coloring_container<Ntk>& ctn, tile<Lyt>& latest_pos,
+                                const tile<Lyt>& latest_pos_inputs, const mockturtle::node<Ntk>& pre1,
+                                const mockturtle::node<Ntk>& pre2, tile<Lyt>& t, tile<Lyt>& pre1_t, tile<Lyt>& pre2_t)
+{
+    // resolve conflicts for PIs not affected by the ordering
+    resolve_unaffected_pi(layout, ctn, pre2, pre2_t, latest_pos);
+    resolve_unaffected_pi(layout, ctn, pre1, pre1_t, latest_pos);
+
+    auto pre_fo = pre2;
+    if (pre2_t.x > pre1_t.x)
+    {
+        std::swap(pre1_t, pre2_t);
+        pre_fo = pre1;
+    }
+    // Area saving south rule
+    // check if pre1_t is now also the northward tile
+    if (pre1_t.y < pre2_t.y && !ctn.color_ntk.is_fanout(pre_fo))
+    {
+        if (pre2_t.x == pre1_t.x)
+        {
+            // use larger x position of predecessors
+            t = {latest_pos.x, pre2_t.y};
+            ++latest_pos.x;
+        }
+        else
+        {
+            // use larger x position of predecessors
+            t = {pre1_t.x, pre2_t.y};
+        }
+        if (pre2_t.y + 1 > latest_pos.y)
+        {
+            latest_pos.y = pre2_t.y + 1;
+        }
+    }
+    else
+    {
+        if (latest_pos.y < latest_pos_inputs.y)
+        {
+            // use larger x position of predecessors
+            t = {pre1_t.x, latest_pos_inputs.y};
+            // each 2-input gate has one incoming bent wire
+            pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, t.y + 1}));
+
+            latest_pos.y = t.y + 1;
+        }
+        else
+        {
+            // use larger x position of predecessors
+            t = {pre1_t.x, latest_pos.y};
+
+            // each 2-input gate has one incoming bent wire
+            pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, t.y + 1}));
+
+            ++latest_pos.y;
+        }
+    }
+}
+
+template <typename Ntk, typename Lyt>
+void place_two_fanin_gate_null(Lyt& layout, const coloring_container<Ntk>& ctn, tile<Lyt>& latest_pos, tile<Lyt>& t,
+                               tile<Lyt>& pre1_t, tile<Lyt>& pre2_t, const mockturtle::node<Ntk>& pre1,
+                               const mockturtle::node<Ntk>& pre2)
+{
+    // check which output direction is already used
+    auto fos_pre1   = fanouts(ctn.color_ntk, pre1);
+    auto color_pre1 = std::any_of(fos_pre1.begin(), fos_pre1.end(),
+                                  [&ctn](const auto& fe) { return ctn.color_ntk.color(fe) == ctn.color_east; }) ?
+                          ctn.color_south :
+                          ctn.color_east;
+
+    auto fos_pre2   = fanouts(ctn.color_ntk, pre2);
+    auto color_pre2 = std::any_of(fos_pre2.begin(), fos_pre2.end(),
+                                  [&ctn](const auto& fe) { return ctn.color_ntk.color(fe) == ctn.color_east; }) ?
+                          ctn.color_south :
+                          ctn.color_east;
+
+    t = latest_pos;
+
+    if (color_pre1 == ctn.color_east && color_pre2 == ctn.color_south)
+    {
+        // both wires have one bent
+        pre1_t = static_cast<tile<Lyt>>(wire_east(layout, pre1_t, {t.x + 1, pre1_t.y}));
+        pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, t.y + 1}));
+    }
+    else
+    {
+        // both wires have one bent
+        pre1_t = static_cast<tile<Lyt>>(wire_south(layout, pre1_t, {pre1_t.x, t.y + 1}));
+        pre2_t = static_cast<tile<Lyt>>(wire_east(layout, pre2_t, {t.x + 1, pre2_t.y}));
+    }
+
+    ++latest_pos.x;
+    ++latest_pos.y;
 }
 
 template <typename Lyt, typename Ntk>
@@ -269,16 +470,16 @@ class orthogonal_ordering_network_impl
         mockturtle::progress_bar bar{static_cast<uint32_t>(ctn.color_ntk.size()), "[i] arranging layout: |{0}|"};
 #endif
         // Find multi_output_nodes
-        std::vector<mockturtle::node<Ntk>> my_out_nodes;
+        std::vector<mockturtle::node<Ntk>> output_nodes;
         std::vector<mockturtle::node<Ntk>> multi_out_nodes;
         ctn.color_ntk.foreach_po(
             [&](const auto& po)
             {
-                if (std::find(my_out_nodes.begin(), my_out_nodes.end(), po) != my_out_nodes.end())
+                if (std::find(output_nodes.begin(), output_nodes.end(), po) != output_nodes.end())
                 {
                     multi_out_nodes.push_back(po);
                 }
-                my_out_nodes.push_back(po);
+                output_nodes.push_back(po);
             });
 
         // Start of the algorithm
@@ -304,42 +505,13 @@ class orthogonal_ordering_network_impl
                         // n is colored east
                         if (const auto clr = ctn.color_ntk.color(n); clr == ctn.color_east)
                         {
-                            // new column for inverters
-                            auto insert_position = latest_pos.x;
-                            if (ntk.nc_inv_flag() && ntk.is_inv(n) && ntk.is_pi(pre))
-                            {
-                                insert_position = insert_position_inv;
-                                ++insert_position_inv;
-                                --latest_pos.x;
-                            }
-
-                            if (ctn.color_ntk.is_fanout(n) && ctn.color_ntk.is_pi(pre))
-                            {
-                                ++latest_pos.y;
-                            }
-                            const tile<Lyt> t{insert_position, pre_t.y};
-
-                            node2pos[n] = connect_and_place(layout, t, ctn.color_ntk, n, pre_t);
-                            ++latest_pos.x;
+                            place_one_fanin_gate_east(ntk, layout, ctn, n, pre, latest_pos, pre_t, insert_position_inv,
+                                                      node2pos);
                         }
                         // n is colored south
                         else if (clr == ctn.color_south)
                         {
-                            if ((ctn.color_ntk.is_inv(n) || ctn.color_ntk.is_fanout(n)) &&
-                                latest_pos.y < latest_pos_inputs.y)
-                            {
-                                const tile<Lyt> t{pre_t.x, latest_pos_inputs.y};
-
-                                node2pos[n]  = connect_and_place(layout, t, ctn.color_ntk, n, pre_t);
-                                latest_pos.y = t.y + 1;
-                            }
-                            else
-                            {
-                                const tile<Lyt> t{pre_t.x, latest_pos.y};
-
-                                node2pos[n] = connect_and_place(layout, t, ctn.color_ntk, n, pre_t);
-                                ++latest_pos.y;
-                            }
+                            place_one_fanin_gate_south(layout, ctn, n, latest_pos, latest_pos_inputs, pre_t, node2pos);
                         }
                         else
                         {
@@ -354,142 +526,27 @@ class orthogonal_ordering_network_impl
                         auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre1]),
                              pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
 
+                        // the tile, where the gate is placed on
                         tile<Lyt> t{};
 
                         // n is colored east
                         if (const auto clr = ctn.color_ntk.color(n); clr == ctn.color_east)
                         {
-                            // make sure pre1_t is the northward tile
-                            if (pre2_t.y < pre1_t.y)
-                            {
-                                std::swap(pre1_t, pre2_t);
-                            }
-
-                            // use larger y position of predecessors
-                            t = {latest_pos.x, pre2_t.y};
-
-                            // each 2-input gate has one incoming bent wire
-                            pre1_t = static_cast<tile<Lyt>>(wire_east(layout, pre1_t, {t.x + 1, pre1_t.y}));
-
-                            ++latest_pos.x;
-                            if (latest_pos.y < latest_pos_inputs.y)
-                            {
-                                latest_pos.y = t.y + 1;
-                            }
+                            place_two_fanin_gate_east(layout, latest_pos, latest_pos_inputs, t, pre1_t, pre2_t);
                         }
                         // n is colored south
                         else if (clr == ctn.color_south)
                         {
-                            // instantiate the PIs affected by the ordering
-                            auto fo_two = ctn.color_ntk.get_fo_two();
-                            auto fo_one = ctn.color_ntk.get_fo_one();
-                            auto pi_pi  = ctn.color_ntk.get_pi_to_pi();
-                            // resolve conflicts for PIs not affected by the ordering
-                            if (ctn.color_ntk.is_pi(pre2) &&
-                                std::find(fo_two.begin(), fo_two.end(), pre2) == fo_two.end() &&
-                                std::find(fo_one.begin(), fo_one.end(), pre2) == fo_one.end() &&
-                                std::find(pi_pi.begin(), pi_pi.end(), pre2) == pi_pi.end())
-                            {
-                                pre2_t =
-                                    static_cast<tile<Lyt>>(wire_east(layout, pre2_t, {latest_pos.x + 1, pre2_t.y}));
-                                ++latest_pos.x;
-                            }
-                            if (ctn.color_ntk.is_pi(pre1) &&
-                                std::find(fo_two.begin(), fo_two.end(), pre1) == fo_two.end() &&
-                                std::find(fo_one.begin(), fo_one.end(), pre1) == fo_one.end() &&
-                                std::find(pi_pi.begin(), pi_pi.end(), pre1) == pi_pi.end())
-                            {
-                                pre1_t =
-                                    static_cast<tile<Lyt>>(wire_east(layout, pre1_t, {latest_pos.x + 1, pre1_t.y}));
-                                ++latest_pos.x;
-                            }
-                            auto pre_fo = pre2;
-                            if (pre2_t.x > pre1_t.x)
-                            {
-                                std::swap(pre1_t, pre2_t);
-                                pre_fo = pre1;
-                            }
-                            // Area saving south rule
-                            // check if pre1_t is now also the northward tile
-                            if (pre1_t.y < pre2_t.y && !ctn.color_ntk.is_fanout(pre_fo))
-                            {
-                                if (pre2_t.x == pre1_t.x)
-                                {
-                                    // use larger x position of predecessors
-                                    t = {latest_pos.x, pre2_t.y};
-                                    ++latest_pos.x;
-                                }
-                                else
-                                {
-                                    // use larger x position of predecessors
-                                    t = {pre1_t.x, pre2_t.y};
-                                }
-                                if (pre2_t.y + 1 > latest_pos.y)
-                                {
-                                    latest_pos.y = pre2_t.y + 1;
-                                }
-                            }
-                            /**!!**************************************************************************************/
-                            else
-                            {
-                                if (latest_pos.y < latest_pos_inputs.y)
-                                {
-                                    // use larger x position of predecessors
-                                    t = {pre1_t.x, latest_pos_inputs.y};
-                                    // each 2-input gate has one incoming bent wire
-                                    pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, t.y + 1}));
-
-                                    latest_pos.y = t.y + 1;
-                                }
-                                else
-                                {
-                                    // use larger x position of predecessors
-                                    t = {pre1_t.x, latest_pos.y};
-
-                                    // each 2-input gate has one incoming bent wire
-                                    pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, t.y + 1}));
-
-                                    ++latest_pos.y;
-                                }
-                            }
+                            place_two_fanin_gate_south(layout, ctn, latest_pos, latest_pos_inputs, pre1, pre2, t,
+                                                       pre1_t, pre2_t);
                         }
                         // n is colored null; corner case
                         else
                         {
-                            // check which output direction is already used
-                            auto fos_pre1   = fanouts(ctn.color_ntk, pre1);
-                            auto color_pre1 = std::any_of(fos_pre1.begin(), fos_pre1.end(),
-                                                          [&ctn](const auto& fe)
-                                                          { return ctn.color_ntk.color(fe) == ctn.color_east; }) ?
-                                                  ctn.color_south :
-                                                  ctn.color_east;
-
-                            auto fos_pre2   = fanouts(ctn.color_ntk, pre2);
-                            auto color_pre2 = std::any_of(fos_pre2.begin(), fos_pre2.end(),
-                                                          [&ctn](const auto& fe)
-                                                          { return ctn.color_ntk.color(fe) == ctn.color_east; }) ?
-                                                  ctn.color_south :
-                                                  ctn.color_east;
-
-                            t = latest_pos;
-
-                            if (color_pre1 == ctn.color_east && color_pre2 == ctn.color_south)
-                            {
-                                // both wires have one bent
-                                pre1_t = static_cast<tile<Lyt>>(wire_east(layout, pre1_t, {t.x + 1, pre1_t.y}));
-                                pre2_t = static_cast<tile<Lyt>>(wire_south(layout, pre2_t, {pre2_t.x, t.y + 1}));
-                            }
-                            else
-                            {
-                                // both wires have one bent
-                                pre1_t = static_cast<tile<Lyt>>(wire_south(layout, pre1_t, {pre1_t.x, t.y + 1}));
-                                pre2_t = static_cast<tile<Lyt>>(wire_east(layout, pre2_t, {t.x + 1, pre2_t.y}));
-                            }
-
-                            ++latest_pos.x;
-                            ++latest_pos.y;
+                            place_two_fanin_gate_null(layout, ctn, latest_pos, t, pre1_t, pre2_t, pre1, pre2);
                         }
 
+                        // place and route from 'pre1_t' and 'pre2_t' to 't'
                         node2pos[n] = connect_and_place(layout, t, ctn.color_ntk, n, pre1_t, pre2_t, fc.constant_fanin);
                     }
                     if (ctn.color_ntk.is_po(n))
@@ -512,56 +569,66 @@ class orthogonal_ordering_network_impl
         // Since the layout size is only known after placing all gates, the POs are placed after the main algorithm
         bool                               multi_out_node = false;
         std::vector<mockturtle::node<Ntk>> out_nodes;
+        uint32_t                           inputs_border = ctn.color_ntk.num_pis();
+        tile<Lyt>                          po_tile{};
         ctn.color_ntk.foreach_po(
-            [this, &out_nodes, &multi_out_node, &node2pos, &ctn, &layout, &latest_pos](const auto& po)
+            [this, &out_nodes, &multi_out_node, &node2pos, &ctn, &layout, &latest_pos, &inputs_border,
+             &po_tile](const auto& po)
             {
-                const auto n_s = node2pos[po];
-
-                tile<Lyt> po_tile{};
-
-                if (std::find(out_nodes.begin(), out_nodes.end(), po) != out_nodes.end())
+                if (!ctn.color_ntk.is_constant(po))
                 {
-                    multi_out_node = true;
-                }
+                    const auto n_s = node2pos[po];
 
-                // determine PO orientation
-                if (is_eastern_po_orientation_available(ctn, po) && !multi_out_node)
-                {
-                    po_tile = static_cast<tile<Lyt>>(n_s);
-                    layout.resize({latest_pos.x, latest_pos.y - 1, 1});
-                }
-                else
-                {
-                    po_tile = static_cast<tile<Lyt>>(n_s);
-                    po_tile = static_cast<tile<Lyt>>(wire_south(layout, po_tile, {po_tile.x, po_tile.y + 2}));
-                    layout.resize({latest_pos.x, latest_pos.y - 1, 1});
-                }
-                // check if PO position is located at the border
-                if (layout.is_at_eastern_border({po_tile.x + 1, po_tile.y}) && !multi_out_node)
-                {
-                    ++po_tile.x;
-                    layout.create_po(n_s,
-                                     ctn.color_ntk.has_output_name(po_counter) ?
-                                         ctn.color_ntk.get_output_name(po_counter++) :
-                                         fmt::format("po{}", po_counter++),
-                                     po_tile);
-                }
-                // place PO at the border and connect it by wire segments
-                else
-                {
-                    const tile<Lyt> anker{po_tile};
+                    if (std::find(out_nodes.begin(), out_nodes.end(), po) != out_nodes.end())
+                    {
+                        multi_out_node = true;
+                    }
 
-                    po_tile = layout.eastern_border_of(po_tile);
+                    // determine PO orientation
+                    if (is_eastern_po_orientation_available(ctn, po) && !multi_out_node)
+                    {
+                        po_tile = static_cast<tile<Lyt>>(n_s);
+                        layout.resize({latest_pos.x, latest_pos.y - 1, 1});
+                    }
+                    else
+                    {
+                        po_tile = static_cast<tile<Lyt>>(n_s);
+                        po_tile = static_cast<tile<Lyt>>(wire_south(layout, po_tile, {po_tile.x, po_tile.y + 2}));
+                        if (po_tile.y < inputs_border)
+                        {
+                            po_tile =
+                                static_cast<tile<Lyt>>(wire_south(layout, po_tile, {po_tile.x, latest_pos.y + 1}));
+                            ++latest_pos.y;
+                        }
+                        layout.resize({latest_pos.x, latest_pos.y - 1, 1});
+                    }
+                    // check if PO position is located at the border
+                    if (layout.is_at_eastern_border({po_tile.x + 1, po_tile.y}) && !multi_out_node)
+                    {
+                        ++po_tile.x;
+                        layout.create_po(n_s,
+                                         ctn.color_ntk.has_output_name(po_counter) ?
+                                             ctn.color_ntk.get_output_name(po_counter++) :
+                                             fmt::format("po{}", po_counter++),
+                                         po_tile);
+                    }
+                    // place PO at the border and connect it by wire segments
+                    else
+                    {
+                        const tile<Lyt> anker{po_tile};
 
-                    layout.create_po(wire_east(layout, anker, po_tile),
-                                     ctn.color_ntk.has_output_name(po_counter) ?
-                                         ctn.color_ntk.get_output_name(po_counter++) :
-                                         fmt::format("po{}", po_counter++),
-                                     po_tile);
-                    multi_out_node = false;
+                        po_tile = layout.eastern_border_of(po_tile);
+
+                        layout.create_po(wire_east(layout, anker, po_tile),
+                                         ctn.color_ntk.has_output_name(po_counter) ?
+                                             ctn.color_ntk.get_output_name(po_counter++) :
+                                             fmt::format("po{}", po_counter++),
+                                         po_tile);
+                        multi_out_node = false;
+                    }
+
+                    out_nodes.push_back(po);
                 }
-
-                out_nodes.push_back(po);
             });
 
         // restore possibly set signal names
@@ -577,6 +644,12 @@ class orthogonal_ordering_network_impl
     }
 
   private:
+    /**
+     * @param ntk Network with ordered PIs
+     * @param ps Design parameters for orthogonal P&R
+     * @param pst Design stats for orthogonal P&R
+     */
+
     input_ordering_view<mockturtle::fanout_view<mockturtle::names_view<technology_network>>> ntk;
 
     orthogonal_physical_design_params ps;
@@ -588,8 +661,19 @@ class orthogonal_ordering_network_impl
 }  // namespace detail
 
 /**
- * A modification of the orthogonal algorithm, which saves area and wire crossings by ordering PIs
- * and coloring the affected nodes based on the relevant conditions.
+ * A modification of the orthogonal algorithm, that addresses certain limitations of the original algorithm.
+ * The modifications aim to save area, reduce wiring and wire crossings, and optimize the placement of nodes.
+ * The first modification involves ordering Pis, which are connected as fan-ins to the same gate, and place them
+ * side-by-side. The reduction of the distance between such 'related' nodes reduces the wiring effort.
+ * The second drawback of the original algorithm relates to conflicts that arise when a PI has an outgoing edge
+ * colored south, as it would lead to forbidden routing over other Pis. The modified algorithm uses a combination
+ * of Pi ordering, conditional coloring, and a new placement rule for nodes colored 'south' to resolve conflicts
+ * while still adhering to coloring constraints. This enables the algorithm to utilize the rows of the Pis effectively,
+ * and minimize wire crossings.
+ *
+ * Furthermore, the algorithm addresses the challenges posed by inverters. The function 'inverter_substitution'
+ * substitutes two inverters at the fan-outs of a fan-out node with a single inverter at its fan-in.
+ * This substitution significantly reduces area, wiring, and wire crossings, as fewer gates need to be placed.
  *
  * May throw a high_degree_fanin_exception if `ntk` contains any node with a fan-in larger than 2.
  *
