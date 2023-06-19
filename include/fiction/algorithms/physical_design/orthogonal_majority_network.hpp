@@ -35,9 +35,6 @@
 namespace fiction
 {
 
-/**
- * Parameters for the orthogonal physical design algorithm.
- */
 namespace detail
 {
 /**
@@ -72,6 +69,7 @@ mockturtle::signal<Lyt> wire_west(Lyt& lyt, const tile<Lyt>& src, const tile<Lyt
 
     return a;
 }
+
 template <typename Lyt>
 mockturtle::signal<Lyt> wire_north(Lyt& lyt, const tile<Lyt>& src, const tile<Lyt>& dest)
 {
@@ -101,6 +99,15 @@ mockturtle::signal<Lyt> wire_north(Lyt& lyt, const tile<Lyt>& src, const tile<Ly
 
     return a;
 }
+
+/**
+ * Routes a buffer in south direction
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param layout Gate-level layout.
+ * @param src Starting tile of the buffer routing.
+ * @param pre_clock Clocking number of the starting tile.
+ */
 template <typename Lyt>
 mockturtle::signal<Lyt> buffer_south(Lyt& layout, const tile<Lyt>& src, unsigned char pre_clock)
 {
@@ -135,6 +142,15 @@ mockturtle::signal<Lyt> buffer_south(Lyt& layout, const tile<Lyt>& src, unsigned
 
     return static_cast<mockturtle::signal<Lyt>>(pre_t);
 }
+
+/**
+ * Routes a buffer in east direction
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param layout Gate-level layout.
+ * @param src Starting tile of the buffer routing.
+ * @param pre_clock Clocking number of the starting tile.
+ */
 template <typename Lyt>
 mockturtle::signal<Lyt> buffer_east(Lyt& layout, const tile<Lyt>& src, unsigned char pre_clock)
 {
@@ -189,7 +205,19 @@ mockturtle::signal<Lyt> buffer_east(Lyt& layout, const tile<Lyt>& src, unsigned 
 
     return static_cast<mockturtle::signal<Lyt>>(pre_t);
 }
-// provides the connect_and_place function for majority gates (having three predecessors)
+
+/**
+ * Place a gate and connect it to its predecessors (function overload for majority gates/three predecessors)
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @tparam Ntk Logic network type.
+ * @param lyt Gate-level layout.
+ * @param t Tile in `lyt` to place the gate onto.
+ * @param ntk Network whose node is to be placed.
+ * @param n Node in `ntk` to place onto `t` in `lyt`.
+ * @param pre1_t, pre2_t, pre3_t Tiles in 'lyt' to connect to 't'
+ * @return Signal pointing to the placed gate in `lyt`.
+ */
 template <typename Lyt, typename Ntk>
 mockturtle::signal<Lyt> connect_and_place(Lyt& lyt, const tile<Lyt>& t, const Ntk& ntk, const mockturtle::node<Ntk>& n,
                                           tile<Lyt> pre1_t, tile<Lyt> pre2_t, tile<Lyt> pre3_t)
@@ -210,7 +238,15 @@ mockturtle::signal<Lyt> connect_and_place(Lyt& lyt, const tile<Lyt>& t, const Nt
 
     return place(lyt, t, ntk, n, wire_south(lyt, pre1_t, t), wire_east(lyt, pre2_t, t), wire_west(lyt, pre3_t, t));
 }
-// check edges for buffering according to the delays resulting from majority gates
+
+/**
+ * Check edges for buffering according to the delays resulting from majority gates.
+ *
+ * @tparam Ntk Logic network type.
+ * @param ntk Network whose node is to be examined.
+ * @param n Node in `ntk` to calculate the dealys at the incoming edges.
+ * @return Vector with the delays on the incoming edges of 'n'.
+ */
 template <typename Ntk>
 std::vector<int> majority_buffer(const Ntk& ntk, const mockturtle::node<Ntk>& n) noexcept
 {
@@ -258,6 +294,12 @@ std::vector<int> majority_buffer(const Ntk& ntk, const mockturtle::node<Ntk>& n)
     return delays;
 }
 
+/**
+ * Determine the layout size, when majority gates are allowed to be placed
+ *
+ * @param ctn Coloring container with the colored network.
+ * @return Aspect ratio with the size of the resulting layout.
+ */
 template <typename Lyt, typename Ntk>
 aspect_ratio<Lyt> determine_layout_size_majority(const coloring_container<Ntk>& ctn) noexcept
 {
@@ -357,7 +399,18 @@ aspect_ratio<Lyt> determine_layout_size_majority(const coloring_container<Ntk>& 
 
     return {x, y, 1};
 }
-// route the predecessors of majority gates
+
+/**
+ * Rerouting the predecessors of majority gates to prepare the placement of the majority gate.
+ *
+ * @param layout Gate-level layout.
+ * @param ctn Coloring container with the colored network.
+ * @param node2pos node_map containing the nodes and positions of the network.
+ * @param latest_pos Coordinate tracker of the layout.
+ * @param n Node being a majority gate.
+ * @param pre Predecessor node, which is viewed
+ * @param pre_t Position of the predecessor node.
+ */
 template <typename Ntk, typename Lyt>
 int check_maj_color(Lyt layout, const coloring_container<Ntk>& ctn,
                     const mockturtle::node_map<mockturtle::signal<Lyt>, decltype(ctn.color_ntk)>& node2pos,
@@ -429,6 +482,13 @@ int check_maj_color(Lyt layout, const coloring_container<Ntk>& ctn,
         return 1;
     }
 }
+
+/**
+ * Make sure the order of the predecessor tiles for a majority gate from top-down is 1,2,3
+ *
+ * @param pre1_t, pre2_t, pre3_t Predecessor nodes, which have to be ordered.
+ * @param maj_buf Delay values being switched matching the node they are based on.
+ */
 void compare_and_swap(fiction::offset::ucoord_t& pre1_t, fiction::offset::ucoord_t& pre2_t,
                       fiction::offset::ucoord_t& pre3_t, std::vector<int>& maj_buf)
 {
@@ -448,6 +508,17 @@ void compare_and_swap(fiction::offset::ucoord_t& pre1_t, fiction::offset::ucoord
         std::swap(maj_buf[1], maj_buf[2]);
     }
 }
+
+/**
+ * Place and route buffers east, according to the edge delays of the fan-ins of a given node
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param maj_buf Vector containing the delays of the incoming edges, which have to be compensated inserting buffers.
+ * @param pre1_t, pre2_t Tiles of the predecessor nodes.
+ * @param t Output tile of the buffering.
+ * @param latest_pos Coordinate tracker of the layout.
+ *
+ */
 template <typename Lyt>
 void place_and_route_majority_buffer_east(Lyt layout, const std::vector<int>& maj_buf,
                                           fiction::offset::ucoord_t& pre1_t, fiction::offset::ucoord_t& pre2_t,
@@ -499,6 +570,16 @@ void place_and_route_majority_buffer_east(Lyt layout, const std::vector<int>& ma
     }
 }
 
+/**
+ * Place and route buffers south, according to the edge delays of the fan-ins of a given node
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @param maj_buf Vector containing the delays of the incoming edges, which have to be compensated inserting buffers.
+ * @param pre1_t, pre2_t Tiles of the predecessor nodes.
+ * @param t Output tile of the buffering.
+ * @param latest_pos Coordinate tracker of the layout.
+ *
+ */
 template <typename Lyt>
 void place_and_route_majority_buffer_south(Lyt layout, const std::vector<int>& maj_buf,
                                            fiction::offset::ucoord_t& pre1_t, fiction::offset::ucoord_t& pre2_t,
@@ -548,7 +629,19 @@ void place_and_route_majority_buffer_south(Lyt layout, const std::vector<int>& m
         }
     }
 }
-// actual placement and routing of the majority gates including buffers
+
+/**
+ * Placement and routing of the majority gate including buffer insertion
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @tparam Ntk Logic network type.
+ * @param lyt Gate-level layout.
+ * @param t Tile in `lyt` to place the gate onto.
+ * @param ntk Network whose node is to be placed.
+ * @param n Node in `ntk` to place onto `t` in `lyt`.
+ * @param pre1_t, pre2_t, pre3_t Tiles in 'lyt' to connect to 't'
+ * @return Signal pointing to the placed gate in `lyt`.
+ */
 template <typename Ntk, typename Lyt>
 void place_and_route_majority_gate(Lyt layout, const coloring_container<Ntk>& ctn,
                                    mockturtle::node_map<mockturtle::signal<Lyt>, decltype(ctn.color_ntk)>& node2pos,
@@ -716,6 +809,7 @@ class orthogonal_majority_network_impl
 
                         ++latest_pos.y;
                     }
+                    // if n is a majority gate
                     else if (const auto fc_m = fanins(ctn.color_ntk, n);
                              ctn.color_ntk.is_maj(n) && fc_m.fanin_nodes.size() > 2)
                     {
