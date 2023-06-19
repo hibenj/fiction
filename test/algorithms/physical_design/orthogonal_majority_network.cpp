@@ -23,12 +23,12 @@ TEST_CASE("color_majority_gates", "[ortho-majority-gate]")
         auto container = detail::east_south_edge_coloring(ntk);
         CHECK(detail::is_east_south_colored(container.color_ntk));
     };
-    check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
-        blueprints::maj_random_1<technology_network>())});
-    check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
-        blueprints::maj1_network<technology_network>())});
-    check_colors(mockturtle::fanout_view{fanout_substitution<technology_network>(
-        blueprints::maj4_network<technology_network>())});
+    check_colors(mockturtle::fanout_view{
+        fanout_substitution<technology_network>(blueprints::maj_random_1<technology_network>())});
+    check_colors(mockturtle::fanout_view{
+        fanout_substitution<technology_network>(blueprints::maj1_network<technology_network>())});
+    check_colors(mockturtle::fanout_view{
+        fanout_substitution<technology_network>(blueprints::maj4_network<technology_network>())});
 }
 
 TEST_CASE("Majority Gate library application", "[ortho-majority-gate]")
@@ -48,7 +48,6 @@ TEST_CASE("Majority Gate library application", "[ortho-majority-gate]")
     check_ortho_ordering(blueprints::maj_random_1<mockturtle::aig_network>());
     check_ortho_ordering(blueprints::maj1_network<mockturtle::aig_network>());
     check_ortho_ordering(blueprints::maj4_network<technology_network>());
-
 
     // constant input network
     check_ortho_ordering(blueprints::unbalanced_and_inv_network<mockturtle::mig_network>());

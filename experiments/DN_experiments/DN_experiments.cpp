@@ -2,14 +2,11 @@
 // Created by benjamin on 11.05.23.
 //
 
-
 #include "../../test/utils/blueprints/majority_network_blueprints.hpp"
-#include "../../test/utils/blueprints/network_blueprints.hpp"
 #include "fiction/algorithms/physical_design/orthogonal_majority_network.hpp"
 #include "fiction_experiments.hpp"
 
-#include <fiction/algorithms/physical_design/color_routing.hpp>  // routing based on graph coloring
-#include <fiction/algorithms/physical_design/exact.hpp>          // SMT-based physical design of FCN layouts
+#include <fiction/algorithms/physical_design/exact.hpp>       // SMT-based physical design of FCN layouts
 #include <fiction/algorithms/physical_design/ortho_ordering_network.hpp>
 #include <fiction/algorithms/physical_design/orthogonal.hpp>  // OGD-based physical design of FCN layouts
 #include <fiction/types.hpp>                                  // pre-defined types suitable for the FCN domain
@@ -18,7 +15,7 @@
 #include <fmt/format.h>                                       // output formatting
 #include <lorina/lorina.hpp>                                  // Verilog/BLIF/AIGER/... file parsing
 #include <mockturtle/io/verilog_reader.hpp>                   // call-backs to read Verilog files into networks
-#include <mockturtle/networks/aig.hpp>                           // AND-inverter graphs
+#include <mockturtle/networks/aig.hpp>                        // AND-inverter graphs
 
 #include <cstdlib>
 #include <string>
@@ -31,15 +28,6 @@ using gate_lyt = fiction::gate_level_layout<
 // NOLINTBEGIN(cppcoreguidelines-avoid-non-const-global-variables)
 static fiction::orthogonal_physical_design_stats ortho_stats{};
 // NOLINTEND(cppcoreguidelines-avoid-non-const-global-variables)
-
-std::string benchmark_path_blif(const std::string& benchmark_name, const std::string& benchmark_folder = "../benchmarks")
-{
-    return fmt::format("{}{}/{}.blif", EXPERIMENTS_PATH, benchmark_folder, benchmark_name);
-}
-std::string benchmark_path_bench(const std::string& benchmark_name, const std::string& benchmark_folder = "../benchmarks")
-{
-    return fmt::format("{}{}/{}.bench", EXPERIMENTS_PATH, benchmark_folder, benchmark_name);
-}
 
 template <typename Ntk>
 Ntk read_ntk(const std::string& name)
@@ -101,11 +89,12 @@ void ortho_ordering_exp_stats()
     }
 }
 
-void ortho_majority_mcs()
+void ortho_majority_exp_stats()
 {
     ortho_stats = {};
 
-    experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, uint32_t, double>
+    experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, uint32_t,
+                            double, std::size_t>
         majority_exp{"ordering",
                      "benchmark",
                      "inputs",
@@ -116,29 +105,30 @@ void ortho_majority_mcs()
                      "layout area (in tiles)",
                      "gates",
                      "wires",
-                     "runtime (in sec)"};
+                     "runtime (in sec)",
+                     "drvs"};
 
-    auto r1 = blueprints::maj_random_1<mockturtle::names_view<fiction::technology_network>>();
-    auto r2 = blueprints::maj_random_2<mockturtle::names_view<fiction::technology_network>>();
-    auto r3 = blueprints::maj_random_3<mockturtle::names_view<fiction::technology_network>>();
-    auto r4 = blueprints::maj_random_4<mockturtle::names_view<fiction::technology_network>>();
-    auto r5 = blueprints::maj_random_5<mockturtle::names_view<fiction::technology_network>>();
-    auto r6 = blueprints::maj_random_6<mockturtle::names_view<fiction::technology_network>>();
-    auto r7 = blueprints::maj_random_7<mockturtle::names_view<fiction::technology_network>>();
-    auto r8 = blueprints::maj_random_8<mockturtle::names_view<fiction::technology_network>>();
-    auto r9 = blueprints::maj_random_9<mockturtle::names_view<fiction::technology_network>>();
+    auto r1  = blueprints::maj_random_1<mockturtle::names_view<fiction::technology_network>>();
+    auto r2  = blueprints::maj_random_2<mockturtle::names_view<fiction::technology_network>>();
+    auto r3  = blueprints::maj_random_3<mockturtle::names_view<fiction::technology_network>>();
+    auto r4  = blueprints::maj_random_4<mockturtle::names_view<fiction::technology_network>>();
+    auto r5  = blueprints::maj_random_5<mockturtle::names_view<fiction::technology_network>>();
+    auto r6  = blueprints::maj_random_6<mockturtle::names_view<fiction::technology_network>>();
+    auto r7  = blueprints::maj_random_7<mockturtle::names_view<fiction::technology_network>>();
+    auto r8  = blueprints::maj_random_8<mockturtle::names_view<fiction::technology_network>>();
+    auto r9  = blueprints::maj_random_9<mockturtle::names_view<fiction::technology_network>>();
     auto r10 = blueprints::maj_random_10<mockturtle::names_view<fiction::technology_network>>();
     auto r11 = blueprints::maj_random_11<mockturtle::names_view<fiction::technology_network>>();
 
-    auto r1_aig = blueprints::maj_random_1<mockturtle::names_view<mockturtle::aig_network>>();
-    auto r2_aig = blueprints::maj_random_2<mockturtle::names_view<mockturtle::aig_network>>();
-    auto r3_aig = blueprints::maj_random_3<mockturtle::names_view<mockturtle::aig_network>>();
-    auto r4_aig = blueprints::maj_random_4<mockturtle::names_view<mockturtle::aig_network>>();
-    auto r5_aig = blueprints::maj_random_5<mockturtle::names_view<mockturtle::aig_network>>();
-    auto r6_aig = blueprints::maj_random_6<mockturtle::names_view<mockturtle::aig_network>>();
-    auto r7_aig = blueprints::maj_random_7<mockturtle::names_view<mockturtle::aig_network>>();
-    auto r8_aig = blueprints::maj_random_8<mockturtle::names_view<mockturtle::aig_network>>();
-    auto r9_aig = blueprints::maj_random_9<mockturtle::names_view<mockturtle::aig_network>>();
+    auto r1_aig  = blueprints::maj_random_1<mockturtle::names_view<mockturtle::aig_network>>();
+    auto r2_aig  = blueprints::maj_random_2<mockturtle::names_view<mockturtle::aig_network>>();
+    auto r3_aig  = blueprints::maj_random_3<mockturtle::names_view<mockturtle::aig_network>>();
+    auto r4_aig  = blueprints::maj_random_4<mockturtle::names_view<mockturtle::aig_network>>();
+    auto r5_aig  = blueprints::maj_random_5<mockturtle::names_view<mockturtle::aig_network>>();
+    auto r6_aig  = blueprints::maj_random_6<mockturtle::names_view<mockturtle::aig_network>>();
+    auto r7_aig  = blueprints::maj_random_7<mockturtle::names_view<mockturtle::aig_network>>();
+    auto r8_aig  = blueprints::maj_random_8<mockturtle::names_view<mockturtle::aig_network>>();
+    auto r9_aig  = blueprints::maj_random_9<mockturtle::names_view<mockturtle::aig_network>>();
     auto r10_aig = blueprints::maj_random_10<mockturtle::names_view<mockturtle::aig_network>>();
     auto r11_aig = blueprints::maj_random_11<mockturtle::names_view<mockturtle::aig_network>>();
 
@@ -147,7 +137,7 @@ void ortho_majority_mcs()
     std::vector<mockturtle::names_view<mockturtle::aig_network>>     bms_aig  = {
         r1_aig, r2_aig, r3_aig, r4_aig, r5_aig, r6_aig, r7_aig, r8_aig, r9_aig, r10_aig, r11_aig};
 
-    std::vector<std::string> const benchmark_names {"r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11"};
+    std::vector<std::string> const benchmark_names{"r1", "r2", "r3", "r4", "r5", "r6", "r7", "r8", "r9", "r10", "r11"};
 
     for (int i = 0; i < bms_tech.size(); ++i)
     {
@@ -155,17 +145,23 @@ void ortho_majority_mcs()
 
         auto bm_name = benchmark_names[i];
 
-        std::cout<<"Size "<<bms_tech.size()<<std::endl;
-
-        using gate_layout = fiction::gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
-
-        //const auto layout_one = fiction::orthogonal<gate_layout>(bm_tech, {}, &st_tech_one);
+        using gate_layout =
+            fiction::gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
 
         const auto lyt = fiction::orthogonal_majority_network<gate_layout>(bm_tech, {}, &ortho_stats);
 
+        fiction::gate_level_drv_stats  st = {};
+        fiction::gate_level_drv_params ps = {};
+
+        // suppress standard output
+        std::stringstream ss{};
+        ps.out = &ss;
+
+        // gate_level_drvs(lyt, ps, &st);
+
         majority_exp(bm_name, bm_tech.num_pis(), bm_tech.num_pos(), bm_tech.num_gates(), lyt.x() + 1, lyt.y() + 1,
-                     (lyt.x() + 1) * (lyt.y() + 1), lyt.num_gates(),
-                     lyt.num_wires(), mockturtle::to_seconds(ortho_stats.time_total));
+                     (lyt.x() + 1) * (lyt.y() + 1), lyt.num_gates(), lyt.num_wires(),
+                     mockturtle::to_seconds(ortho_stats.time_total), st.drvs);
 
         majority_exp.save();
         majority_exp.table();
@@ -177,15 +173,23 @@ void ortho_majority_mcs()
 
         auto bm_name = benchmark_names[i];
 
-        using gate_layout = fiction::gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
-
-        //const auto layout_one = fiction::orthogonal<gate_layout>(bm_tech, {}, &st_tech_one);
+        using gate_layout =
+            fiction::gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
 
         const auto lyt = fiction::orthogonal<gate_layout>(bm_aig, {}, &ortho_stats);
 
+        fiction::gate_level_drv_stats  st = {};
+        fiction::gate_level_drv_params ps = {};
+
+        // suppress standard output
+        std::stringstream ss{};
+        ps.out = &ss;
+
+        // gate_level_drvs(lyt, ps, &st);
+
         majority_exp(bm_name, bm_aig.num_pis(), bm_aig.num_pos(), bm_aig.num_gates(), lyt.x() + 1, lyt.y() + 1,
-                     (lyt.x() + 1) * (lyt.y() + 1), lyt.num_gates(),
-                     lyt.num_wires(), mockturtle::to_seconds(ortho_stats.time_total));
+                     (lyt.x() + 1) * (lyt.y() + 1), lyt.num_gates(), lyt.num_wires(),
+                     mockturtle::to_seconds(ortho_stats.time_total), st.drvs);
 
         majority_exp.save();
         majority_exp.table();
@@ -194,7 +198,9 @@ void ortho_majority_mcs()
 
 int main()  // NOLINT
 {
-    ortho_ordering_exp_stats();
+    // ortho_ordering_exp_stats();
+
+    ortho_majority_exp_stats();
 
     return EXIT_SUCCESS;
 }
