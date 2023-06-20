@@ -55,6 +55,14 @@ class technology_dot_drawer : public mockturtle::gate_dot_drawer<Ntk>
         {
             return "snow2";
         }
+        if constexpr (mockturtle::has_is_ro_v<Ntk>)
+        {
+            if (ntk.is_ro(n))
+            {
+                return "snow2";
+            }
+        }
+
         if constexpr (has_is_fanout_v<Ntk>)
         {
             if (ntk.is_fanout(n))
@@ -95,6 +103,13 @@ class technology_dot_drawer : public mockturtle::gate_dot_drawer<Ntk>
             if (ntk.is_dot(n))
             {
                 return "thistle";
+            }
+        }
+        if constexpr (mockturtle::has_is_ro_v<Ntk>)
+        {
+            if (ntk.is_ro(n))
+            {
+                return "RO";
             }
         }
 
@@ -327,6 +342,18 @@ class simple_gate_layout_tile_drawer : public technology_dot_drawer<Lyt, DrawInd
                 }
             }
         }
+        else if (lyt.is_ro_tile(t) || lyt.is_ri_tile(t))
+        {
+            if (lyt.is_ro_tile(t))
+            {
+                return "RO";
+            }
+
+            if (lyt.is_ri_tile(t))
+            {
+                return "RI";
+            }
+        }
 
         if constexpr (has_is_buf_v<Lyt>)
         {
@@ -361,7 +388,7 @@ class simple_gate_layout_tile_drawer : public technology_dot_drawer<Lyt, DrawInd
                 return "white";
             }
 
-            if (lyt.is_pi_tile(t) || lyt.is_po_tile(t))
+            if (lyt.is_pi_tile(t) || lyt.is_po_tile(t) || lyt.is_ri_tile(t) || lyt.is_ro_tile(t))
             {
                 return "snow2";
             }

@@ -293,6 +293,11 @@ class gate_level_layout : public ClockedLayout
         return is_pi(get_node(t));
     }
 
+    [[nodiscard]] bool is_ro_tile(const tile& t) const noexcept
+    {
+        return is_ro(get_node(t));
+    }
+
     [[nodiscard]] bool is_po(const node n) const noexcept
     {
         return std::find_if(strg->outputs.cbegin(), strg->outputs.cbegin()+num_pos(),
@@ -319,6 +324,11 @@ class gate_level_layout : public ClockedLayout
     [[nodiscard]] bool is_po_tile(const tile& t) const noexcept
     {
         return is_po(get_node(t));
+    }
+
+    [[nodiscard]] bool is_ri_tile(const tile& t) const noexcept
+    {
+        return is_ri(get_node(t));
     }
 
     [[nodiscard]] node pi_at(const uint32_t index) const noexcept

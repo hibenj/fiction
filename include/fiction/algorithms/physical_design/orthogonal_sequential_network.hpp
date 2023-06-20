@@ -18,6 +18,12 @@ namespace fiction
 namespace detail
 {
 
+/**
+ * Determine the layout size for sequential circuits
+ *
+ * @param ctn Coloring container with the colored network.
+ * @return Aspect ratio with the size of the resulting layout.
+ */
 template <typename Lyt, typename Ntk>
 aspect_ratio<Lyt> determine_sequential_layout_size(const coloring_container<Ntk>& ctn) noexcept
 {
@@ -27,7 +33,7 @@ aspect_ratio<Lyt> determine_sequential_layout_size(const coloring_container<Ntk>
 #endif
     auto     new_field_cis = floor((ctn.color_ntk.num_cis() - 1) / 4);
     uint64_t x             = 0ull +
-                 static_cast<uint64_t>((new_field_cis * 2) + (ctn.color_ntk.num_registers() - 1) * 4 +
+                 static_cast<uint64_t>((new_field_cis * 2) + (std::max(ctn.color_ntk.num_registers(), 1u) - 1) * 4 +
                                        ctn.color_ntk.num_registers() * 2) +
                  1,
              y = ctn.color_ntk.num_pis() + ctn.color_ntk.num_registers() * 3 - 1;
@@ -81,7 +87,7 @@ aspect_ratio<Lyt> determine_sequential_layout_size(const coloring_container<Ntk>
                 }
                 if (ctn.color_ntk.is_ri(n))
                 {
-                    if (is_eastern_po_orientation_available(ctn, n))
+                    if (is_eastern_po_orientation_available(ctn, n) && !ctn.color_ntk.is_po(n))
                     {
                         ++x;
                     }
@@ -102,12 +108,26 @@ aspect_ratio<Lyt> determine_sequential_layout_size(const coloring_container<Ntk>
     return {x, y, 1};
 }
 
+/**
+ * Routing from the register inputs (RIs) to the register outputs (ROs)
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @tparam Ntk Logic network type.
+ * @param lyt Gate-level layout.
+ * @param ctn Coloring container with the colored network.
+ * @param ri_tile Starting point at the register input.
+ * @param reg_number Number of registers in the network.
+ * @param aspect_ratio Size of the layout 'lyt'.
+ * @param node2pos node_map containing the nodes of the network and layout signals of 'lyt'.
+ * @param n Register input node of the network held in 'ctn'.
+ */
 template <typename Ntk, typename Lyt>
 void wire_registers(Lyt layout, const coloring_container<Ntk>& ctn, tile<Lyt>& ri_tile, const uint32_t& num_ris,
                     const uint32_t& reg_number, aspect_ratio<Lyt> aspect_ratio,
                     const mockturtle::node_map<mockturtle::signal<Lyt>, decltype(ctn.color_ntk)>& node2pos,
                     const mockturtle::node<Ntk>                                                   n)
 {
+    // wire to the starting positions
     ri_tile =
         static_cast<tile<Lyt>>(wire_south(layout, ri_tile, {ri_tile.x, aspect_ratio.y + 2 - 2 * num_ris + reg_number}));
 
@@ -115,6 +135,7 @@ void wire_registers(Lyt layout, const coloring_container<Ntk>& ctn, tile<Lyt>& r
     const auto ro_position    = node2pos[ctn.color_ntk.ri_to_ro(n)];
     const auto ri_tile_ro_pos = static_cast<tile<Lyt>>(ro_position);
 
+    // global synchronization is needed, when ROs are placed in a different clocking cycle
     const auto global_syc_const = floor((ri_tile_ro_pos.y) / 4);
     ri_tile                     = static_cast<tile<Lyt>>(
         wire_east(layout, ri_tile, {ri_tile.x + num_ris + reg_number * 3 + global_syc_const * 2 + 1, ri_tile.y}));
@@ -154,7 +175,6 @@ void wire_registers(Lyt layout, const coloring_container<Ntk>& ctn, tile<Lyt>& r
                 wire_west(layout, ri_tile, {reg_pos_x - 3 - 2 * (num_ris - reg_number - 1) + 1, ri_tile.y}));
             ri_tile = static_cast<tile<Lyt>>(
                 wire_west(layout, ri_tile, {reg_pos_x - 3 - 2 * (num_ris - reg_number - 1) + 1, ri_tile.y}));
-            std::cout << ri_tile.x << std::endl;
         }
         else
         {
@@ -194,7 +214,7 @@ void wire_registers(Lyt layout, const coloring_container<Ntk>& ctn, tile<Lyt>& r
         ri_tile = static_cast<tile<Lyt>>(wire_north(
             layout, ri_tile, {ri_tile.x, static_cast<tile<Lyt>>(node2pos[ctn.color_ntk.ro_at(reg_number)]).y - 1}));
     }
-    wire_east(layout, ri_tile, {reg_pos_x, ri_tile.y});
+    wire_east(layout, ri_tile, {reg_pos_x + 1, ri_tile.y});
 }
 
 template <typename Lyt, typename Ntk>
@@ -277,7 +297,8 @@ class orthogonal_sequential_network_impl
                     else if (ctn.color_ntk.is_ro(n))
                     {
                         node2pos[n] = layout.move_node(ro2node[n], {2 * num_ris, latest_pos.y});
-                        // node2pos[n] = layout.create_buf(wire_east(layout, {2 * num_ris-1, latest_pos.y}, {2 * num_ris, latest_pos.y}), {2 * num_ris, latest_pos.y});
+                        // node2pos[n] = layout.create_buf(wire_east(layout, {2 * num_ris-1, latest_pos.y}, {2 *
+                        // num_ris, latest_pos.y}), {2 * num_ris, latest_pos.y});
 
                         // resolve conflicting PIs
                         ctn.color_ntk.foreach_fanout(
@@ -390,14 +411,11 @@ class orthogonal_sequential_network_impl
                         node2pos[n] = connect_and_place(layout, t, ctn.color_ntk, n, pre1_t, pre2_t, fc.constant_fanin);
                     }
 
-                    // create PO at applicable position
                     if (ctn.color_ntk.is_po(n))
                     {
                         const auto n_s = node2pos[n];
 
                         tile<Lyt> po_tile{};
-
-                        bool south{false};
 
                         // determine PO orientation
                         if (is_eastern_po_orientation_available(ctn, n))
@@ -409,7 +427,6 @@ class orthogonal_sequential_network_impl
                         {
                             po_tile = layout.south(static_cast<tile<Lyt>>(n_s));
                             ++latest_pos.y;
-                            south = true;
                         }
 
                         // check if PO position is located at the border
@@ -424,30 +441,15 @@ class orthogonal_sequential_network_impl
                         // place PO at the border and connect it by wire segments
                         else
                         {
-                            if (south)
-                            {
-                                const auto anker = layout.create_buf(n_s, po_tile);
+                            const auto anker = layout.create_buf(n_s, po_tile);
 
-                                po_tile = layout.eastern_border_of(po_tile);
+                            po_tile = layout.eastern_border_of(po_tile);
 
-                                layout.create_po(wire_east(layout, static_cast<tile<Lyt>>(anker), po_tile),
-                                                 ctn.color_ntk.has_output_name(po_counter) ?
-                                                     ctn.color_ntk.get_output_name(po_counter++) :
-                                                     fmt::format("po{}", po_counter++),
-                                                 po_tile);
-                            }
-                            else
-                            {
-                                tile<Lyt> anker = {po_tile.x - 1, po_tile.y};
-
-                                po_tile = layout.eastern_border_of(po_tile);
-
-                                layout.create_po(wire_east(layout, anker, po_tile),
-                                                 ctn.color_ntk.has_output_name(po_counter) ?
-                                                     ctn.color_ntk.get_output_name(po_counter++) :
-                                                     fmt::format("po{}", po_counter++),
-                                                 po_tile);
-                            }
+                            layout.create_po(wire_east(layout, static_cast<tile<Lyt>>(anker), po_tile),
+                                             ctn.color_ntk.has_output_name(po_counter) ?
+                                                 ctn.color_ntk.get_output_name(po_counter++) :
+                                                 fmt::format("po{}", po_counter++),
+                                             po_tile);
                         }
                     }
                     if (ctn.color_ntk.is_ri(n))
@@ -458,7 +460,7 @@ class orthogonal_sequential_network_impl
 
                         const uint32_t reg_number = ctn.color_ntk.ro_index(ctn.color_ntk.ri_to_ro(n));
 
-                        const auto global_syc_const = floor((ctn.color_ntk.num_cis()) / 4);
+                        const auto global_syc_const = floor((ctn.color_ntk.num_cis()-1) / 4);
 
                         bool south{false};
 
@@ -532,6 +534,22 @@ class orthogonal_sequential_network_impl
 
 }  // namespace detail
 
+/**
+ * A modification of the orthogonal algorithm, which is able to place sequential networks. In this approach, the idea of
+ * sequentiality in QCA is completely rethought due to the unique properties of clocking. Therefore wire segments can be
+ * connected to form registers. The algorithm treats register inputs (RIs) similar to POs and register outputs (ROs)
+ * similar to PIs and then connects the RIs and ROs with wires, modifying the clocking scheme to hold both the local and
+ * global clocking constraint.
+ *
+ * May throw a high_degree_fanin_exception if `ntk` contains any node with a fan-in larger than 2.
+ *
+ * @tparam Lyt Desired gate-level layout type.
+ * @tparam Ntk Network type that acts as specification.
+ * @param ntk The network that is to place and route.
+ * @param ps Parameters.
+ * @param pst Statistics.
+ * @return A gate-level layout of type `Lyt` that implements `ntk` as an combinatorial or sequential FCN circuit.
+ */
 template <typename Lyt, typename Ntk>
 Lyt orthogonal_sequential_network(const Ntk& ntk, orthogonal_physical_design_params ps = {},
                                   orthogonal_physical_design_stats* pst = nullptr)

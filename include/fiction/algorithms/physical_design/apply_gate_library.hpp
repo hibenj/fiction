@@ -58,7 +58,10 @@ class apply_gate_library_impl
                     const auto c =
                         relative_to_absolute_cell_position<GateLibrary::gate_x_size(), GateLibrary::gate_y_size(),
                                                            GateLyt, CellLyt>(gate_lyt, t, cell<CellLyt>{0, 0});
-
+                    if(t.x == 2 && t.y == 1)
+                    {
+                        int i = 0;
+                    }
                     assign_gate(c, GateLibrary::set_up_gate(gate_lyt, t), n);
                 }
 #if (PROGRESS_BARS)

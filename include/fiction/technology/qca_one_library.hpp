@@ -70,6 +70,30 @@ class qca_one_library : public fcn_gate_library<qca_technology, 5, 5>
             {
                 if (lyt.is_buf(n))
                 {
+                    if constexpr (mockturtle::has_is_ro_v<GateLyt>&& fiction::has_is_ri_v<GateLyt>)
+                    {
+                        if (t.z == 0 && lyt.is_ro(n))
+                        {
+                            const tile<GateLyt>& above_t = {t.x, t.y, 1};
+                            if (!lyt.has_no_incoming_signal(above_t) && lyt.has_no_outgoing_signal(above_t))
+                            {
+                                return REGISTER_OUTPUT_MAP.at(p);
+                            }
+                        }
+                        else if (t.z == 1)
+                        {
+                            const tile<GateLyt>& under_t = {t.x, t.y, 0};
+                            const auto           under_n = lyt.get_node(under_t);
+                            if (lyt.is_ro(under_n))
+                            {
+                                return REGISTER_OUTPUT_MAP.at(p);
+                            }
+                        }
+                        else if (lyt.is_ri(n))
+                        {
+                            return REGISTER_INPUT_MAP.at(p);
+                        }
+                    }
                     return WIRE_MAP.at(p);
                 }
             }
@@ -201,6 +225,49 @@ class qca_one_library : public fcn_gate_library<qca_technology, 5, 5>
                 p.out.emplace(4u, 2u);
             }
         }
+        else if (t.z == 0 && lyt.is_ro(n) && lyt.is_buf(n))
+        {
+            const tile<Lyt>& above_t = {t.x, t.y, 1};
+            if (!lyt.has_no_incoming_signal(above_t) && lyt.has_no_outgoing_signal(above_t))
+            {
+                p.inp.clear();
+                if (lyt.has_northern_incoming_signal(above_t))
+                {
+                    p.inp.emplace(2u, 0u);
+                }
+                if (lyt.has_eastern_incoming_signal(above_t))
+                {
+                    p.inp.emplace(4u, 2u);
+                }
+                if (lyt.has_southern_incoming_signal(above_t))
+                {
+                    p.inp.emplace(2u, 4u);
+                }
+                if (lyt.has_western_incoming_signal(above_t))
+                {
+                    p.inp.emplace(0u, 2u);
+                }
+            }
+        }
+        else if (t.z == 1)
+        {
+            const tile<Lyt>& under_t = {t.x, t.y, 0};
+            const auto       under_n = lyt.get_node(under_t);
+            if (lyt.is_ro(under_n))
+            {
+                p.inp.clear();
+                p.out.clear();
+                p.inp.emplace(2u, 2u);
+                p.out.emplace(2u, 2u);
+            }
+        }
+        /*else if (lyt.is_ri(n))
+        {
+            p.inp.clear();
+            p.out.clear();
+            p.inp.emplace(2u, 2u);
+            p.out.emplace(2u, 2u);
+        }*/
 
         return p;
     }
@@ -388,6 +455,51 @@ class qca_one_library : public fcn_gate_library<qca_technology, 5, 5>
                                   {'x', ' ', ' ', ' ', ' '},
                                   {'x', 'x', 'x', 'x', 'x'}}})};
 
+    static constexpr const fcn_gate CONNECTING_REG_WIRE{cell_list_to_gate<char>(
+        {{
+            {' ', ' ', ' ', ' ', ' '},
+            {' ', ' ', ' ', ' ', ' '},
+            {' ', ' ', ' ', ' ', ' '},
+            {' ', ' ', ' ', ' ', ' '},
+            {' ', ' ', ' ', ' ', ' '}
+        }})};
+
+    static constexpr const fcn_gate STRAIGHT_REGISTER_OUTPUT_PORT{cell_list_to_gate<char>(
+        {{
+            {' ', ' ', 'x', ' ', ' '},
+            {' ', ' ', 'x', ' ', ' '},
+            {' ', ' ', 'i', ' ', ' '},
+            {' ', ' ', 'x', ' ', ' '},
+            {' ', ' ', 'x', ' ', ' '}
+        }})};
+
+    static constexpr const fcn_gate BENT_REGISTER_OUTPUT_PORT{cell_list_to_gate<char>(
+        {{
+            {' ', ' ', 'x', ' ', ' '},
+            {' ', ' ', 'x', ' ', ' '},
+            {' ', ' ', 'i', 'x', 'x'},
+            {' ', ' ', ' ', ' ', ' '},
+            {' ', ' ', ' ', ' ', ' '}
+        }})};
+
+    static constexpr const fcn_gate STRAIGHT_REGISTER_INPUT_PORT{cell_list_to_gate<char>(
+            {{
+                {' ', ' ', 'x', ' ', ' '},
+                {' ', ' ', 'x', ' ', ' '},
+                {' ', ' ', 'o', ' ', ' '},
+                {' ', ' ', 'x', ' ', ' '},
+                {' ', ' ', 'x', ' ', ' '}
+            }})};
+
+    static constexpr const fcn_gate BENT_REGISTER_INPUT_PORT{cell_list_to_gate<char>(
+            {{
+                {' ', ' ', 'x', ' ', ' '},
+                {' ', ' ', 'x', ' ', ' '},
+                {' ', ' ', 'o', 'x', 'x'},
+                {' ', ' ', ' ', ' ', ' '},
+                {' ', ' ', ' ', ' ', ' '}
+            }})};
+
     // clang-format on
 
     using port_gate_map = phmap::flat_hash_map<port_list<port_position>, fcn_gate>;
@@ -524,7 +636,40 @@ class qca_one_library : public fcn_gate_library<qca_technology, 5, 5>
         {{{port_position(2, 0)}, {port_position(2, 4), port_position(4, 2)}}, rotate_270(FAN_OUT_1_2)},
         {{{port_position(4, 2)}, {port_position(2, 4), port_position(2, 0)}}, rotate_270(FAN_OUT_1_2)},
         {{{port_position(2, 4)}, {port_position(4, 2), port_position(2, 0)}}, rotate_270(FAN_OUT_1_2)}};
+
+    static inline const port_gate_map REGISTER_INPUT_MAP = {
+        {{{port_position(2, 0)}, {port_position(2, 4)}}, STRAIGHT_REGISTER_INPUT_PORT},
+        {{{port_position(2, 4)}, {port_position(2, 0)}}, STRAIGHT_REGISTER_INPUT_PORT},
+        {{{port_position(0, 2)}, {port_position(4, 2)}}, rotate_90(STRAIGHT_REGISTER_INPUT_PORT)},
+        {{{port_position(4, 2)}, {port_position(0, 2)}}, rotate_90(STRAIGHT_REGISTER_INPUT_PORT)},
+
+        {{{port_position(2, 0)}, {port_position(4, 2)}}, BENT_REGISTER_INPUT_PORT},
+        {{{port_position(4, 2)}, {port_position(2, 0)}}, BENT_REGISTER_INPUT_PORT},
+        {{{port_position(4, 2)}, {port_position(2, 4)}}, rotate_90(BENT_REGISTER_INPUT_PORT)},
+        {{{port_position(2, 4)}, {port_position(4, 2)}}, rotate_90(BENT_REGISTER_INPUT_PORT)},
+        {{{port_position(0, 2)}, {port_position(2, 4)}}, rotate_180(BENT_REGISTER_INPUT_PORT)},
+        {{{port_position(2, 4)}, {port_position(0, 2)}}, rotate_180(BENT_REGISTER_INPUT_PORT)},
+        {{{port_position(2, 0)}, {port_position(0, 2)}}, rotate_270(BENT_REGISTER_INPUT_PORT)},
+        {{{port_position(0, 2)}, {port_position(2, 0)}}, rotate_270(BENT_REGISTER_INPUT_PORT)}};
+
+    static inline const port_gate_map REGISTER_OUTPUT_MAP = {
+        {{{port_position(2, 2)}, {port_position(2, 2)}}, CONNECTING_REG_WIRE},
+
+        {{{port_position(2, 0)}, {port_position(2, 4)}}, STRAIGHT_REGISTER_OUTPUT_PORT},
+        {{{port_position(2, 4)}, {port_position(2, 0)}}, STRAIGHT_REGISTER_OUTPUT_PORT},
+        {{{port_position(0, 2)}, {port_position(4, 2)}}, rotate_90(STRAIGHT_REGISTER_OUTPUT_PORT)},
+        {{{port_position(4, 2)}, {port_position(0, 2)}}, rotate_90(STRAIGHT_REGISTER_OUTPUT_PORT)},
+
+        {{{port_position(2, 0)}, {port_position(4, 2)}}, BENT_REGISTER_OUTPUT_PORT},
+        {{{port_position(4, 2)}, {port_position(2, 0)}}, BENT_REGISTER_OUTPUT_PORT},
+        {{{port_position(4, 2)}, {port_position(2, 4)}}, rotate_90(BENT_REGISTER_OUTPUT_PORT)},
+        {{{port_position(2, 4)}, {port_position(4, 2)}}, rotate_90(BENT_REGISTER_OUTPUT_PORT)},
+        {{{port_position(0, 2)}, {port_position(2, 4)}}, rotate_180(BENT_REGISTER_OUTPUT_PORT)},
+        {{{port_position(2, 4)}, {port_position(0, 2)}}, rotate_180(BENT_REGISTER_OUTPUT_PORT)},
+        {{{port_position(2, 0)}, {port_position(0, 2)}}, rotate_270(BENT_REGISTER_OUTPUT_PORT)},
+        {{{port_position(0, 2)}, {port_position(2, 0)}}, rotate_270(BENT_REGISTER_OUTPUT_PORT)}};
 };
+
 
 }  // namespace fiction
 

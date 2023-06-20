@@ -95,7 +95,6 @@ mockturtle::node_map<mockturtle::node<Lyt>, Ntk> reserve_register_output_nodes(L
     ntk.foreach_ro(
         [&lyt, &ntk, &ro_map](const auto& ro)
         {
-            //std::cout<<"Ro wird erstellt"<<std::endl;
             std::string ro_name{};
 
             if constexpr (mockturtle::has_has_name_v<Ntk> && mockturtle::has_get_name_v<Ntk>)

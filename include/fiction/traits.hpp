@@ -14,6 +14,7 @@
 
 #include <mockturtle/traits.hpp>
 
+#include <csignal>
 #include <cstdint>
 #include <string>
 #include <type_traits>
@@ -810,6 +811,34 @@ template <class Lyt>
 inline constexpr bool has_is_empty_v = has_is_empty<Lyt>::value;
 #pragma endregion
 
+#pragma region has_num_ros
+template <class Lyt, class = void>
+struct has_num_ros : std::false_type
+{};
+
+template <class Lyt>
+struct has_num_ros<Lyt, std::void_t<decltype(std::declval<Lyt>().num_ros())>>
+        : std::true_type
+{};
+
+template <class Lyt>
+inline constexpr bool has_num_ros_v = has_num_ros<Lyt>::value;
+#pragma endregion
+
+#pragma region has_num_ris
+template <class Lyt, class = void>
+struct has_num_ris : std::false_type
+{};
+
+template <class Lyt>
+struct has_num_ris<Lyt, std::void_t<decltype(std::declval<Lyt>().num_ris())>>
+        : std::true_type
+{};
+
+template <class Lyt>
+inline constexpr bool has_num_ris_v = has_num_ris<Lyt>::value;
+#pragma endregion
+
 /**
  * Obstruction layout
  */
@@ -914,6 +943,20 @@ struct has_is_po<Ntk, std::void_t<decltype(std::declval<Ntk>().is_po(std::declva
 
 template <class Ntk>
 inline constexpr bool has_is_po_v = has_is_po<Ntk>::value;
+#pragma endregion
+
+#pragma region has_is_ri
+template <class Ntk, class = void>
+struct has_is_ri : std::false_type
+{};
+
+template <class Ntk>
+struct has_is_ri<Ntk, std::void_t<decltype(std::declval<Ntk>().is_ri(std::declval<mockturtle::node<Ntk>>()))>>
+        : std::true_type
+{};
+
+template <class Ntk>
+inline constexpr bool has_is_ri_v = has_is_ri<Ntk>::value;
 #pragma endregion
 
 #pragma region has_is_buf
@@ -1204,6 +1247,33 @@ struct has_nc_inv_num<Ntk, std::void_t<decltype(std::declval<Ntk>().nc_inv_num()
 
 template <class Ntk>
 inline constexpr bool has_nc_inv_num_v = has_nc_inv_num<Ntk>::value;
+#pragma endregion
+
+#pragma region has_create_ro
+template <class Ntk, class = void>
+struct has_create_ro : std::false_type
+{};
+
+template <class Ntk>
+struct has_create_ro<Ntk, std::void_t<decltype(std::declval<Ntk>().create_ro())>> : std::true_type
+{};
+
+template <class Ntk>
+inline constexpr bool has_create_ro_v = has_create_ro<Ntk>::value;
+#pragma endregion
+
+#pragma region has_create_ri
+template <class Ntk, class = void>
+struct has_create_ri : std::false_type
+{};
+
+template <class Ntk>
+struct has_create_ri<Ntk, std::void_t<decltype(std::declval<Ntk>().create_ri(std::declval<mockturtle::signal<Ntk>>()))>>
+        : std::true_type
+{};
+
+template <class Ntk>
+inline constexpr bool has_create_ri_v = has_create_ri<Ntk>::value;
 #pragma endregion
 
 }  // namespace fiction

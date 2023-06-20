@@ -400,9 +400,10 @@ class gate_level_drvs_impl
                 }
 
                 const auto n = lyt.get_node(t);
+                const tile<Lyt> u_t = {t.x, t.y, 0};
 
-                const bool dangling_inp_connection = lyt.fanin_size(n) == 0 && !lyt.is_pi_tile(t);
-                const bool dangling_out_connection = lyt.fanout_size(n) == 0 && !lyt.is_po_tile(t);
+                const bool dangling_inp_connection = lyt.fanin_size(n) == 0 && !lyt.is_pi_tile(t) && !lyt.is_ro_tile(t);
+                const bool dangling_out_connection = lyt.fanout_size(n) == 0 && !lyt.is_po_tile(t) && !lyt.is_ri_tile(t) && !lyt.is_ro_tile(u_t);
 
                 if (dangling_out_connection || dangling_inp_connection)
                 {
@@ -494,25 +495,42 @@ class gate_level_drvs_impl
 
         uint32_t num_io{0ul};
 
+        uint32_t lyt_num_io{0ul};
+
         const auto count_io = [&num_io]([[maybe_unused]] const mockturtle::node<Lyt>& io) { ++num_io; };
 
-        has_io_report["Specified PIs"] = lyt.num_pis();
+        if constexpr (has_num_ros_v<Lyt>)
+        {
+            lyt_num_io = lyt.num_pis() + lyt.num_ros();
+        }
+        else
+            lyt_num_io = lyt.num_pis();
+
+        has_io_report["Specified PIs"] = lyt_num_io;
         lyt.foreach_pi(count_io);
         has_io_report["Counted PIs"] = num_io;
 
-        if (lyt.num_pis() != num_io || lyt.num_pis() == 0 || num_io == 0)
+        if (lyt_num_io != num_io || lyt.num_pis() == 0 || num_io == 0)
         {
             ios_present = false;
             ++pst.drvs;
         }
 
         num_io = 0ul;
+        lyt_num_io = 0ul;
 
-        has_io_report["Specified POs"] = lyt.num_pos();
+        if constexpr (has_num_ris_v<Lyt>)
+        {
+            lyt_num_io = lyt.num_pos() + lyt.num_ris();
+        }
+        else
+            lyt_num_io = lyt.num_pos();
+
+        has_io_report["Specified POs"] = lyt_num_io;
         lyt.foreach_po([this, &count_io](const auto& o) { count_io(lyt.get_node(o)); });
         has_io_report["Counted POs"] = num_io;
 
-        if (lyt.num_pos() != num_io || lyt.num_pos() == 0 || num_io == 0)
+        if (lyt_num_io != num_io || lyt.num_pos() == 0 || num_io == 0)
         {
             ios_present = false;
             ++pst.drvs;
@@ -599,8 +617,35 @@ class gate_level_drvs_impl
             }
         };
 
-        lyt.foreach_pi(check_io);
-        lyt.foreach_po([this, &check_io](const auto& o) { check_io(lyt.get_node(o)); });
+        lyt.foreach_pi([this, &check_io](const auto& i)
+                       {
+                           bool check{true};
+                           if constexpr (mockturtle::has_is_ro_v<Lyt>)
+                           {
+                               if (lyt.is_ro(i))
+                               {
+                                   check = false;
+                               }
+                           }
+                           if (check)
+                           {
+                               check_io(i);
+                           }
+                       });
+        lyt.foreach_po([this, &check_io](const auto& o) {
+                           bool check{true};
+                           if constexpr (fiction::has_is_ri_v<Lyt>)
+                           {
+                               if (lyt.is_ri(lyt.get_node(o)))
+                               {
+                                   check = false;
+                               }
+                           }
+                           if (check)
+                           {
+                               check_io(lyt.get_node(o));
+                           }
+                       });
 
         pst.report["Border I/O ports"] = border_report;
 
