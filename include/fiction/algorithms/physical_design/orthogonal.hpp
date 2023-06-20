@@ -219,6 +219,12 @@ bool is_east_south_colored(const Ntk& ntk) noexcept
                                            // since we are working with 3-graphs, this can only be executed if i == 1
                                            is_properly_colored = false;
                                        }
+                                       // the coloring algorithm colors everything according to the rules except
+                                       // majority gates, conflicts are then cleared in the P&R algorithm
+                                       if (ntk.is_maj(fon))
+                                       {
+                                           is_properly_colored = true;
+                                       }
 
                                        return is_properly_colored;
                                    });

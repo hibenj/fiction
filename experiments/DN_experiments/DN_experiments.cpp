@@ -157,7 +157,7 @@ void ortho_majority_exp_stats()
         std::stringstream ss{};
         ps.out = &ss;
 
-        // gate_level_drvs(lyt, ps, &st);
+        gate_level_drvs(lyt, ps, &st);
 
         majority_exp(bm_name, bm_tech.num_pis(), bm_tech.num_pos(), bm_tech.num_gates(), lyt.x() + 1, lyt.y() + 1,
                      (lyt.x() + 1) * (lyt.y() + 1), lyt.num_gates(), lyt.num_wires(),
@@ -185,7 +185,7 @@ void ortho_majority_exp_stats()
         std::stringstream ss{};
         ps.out = &ss;
 
-        // gate_level_drvs(lyt, ps, &st);
+        gate_level_drvs(lyt, ps, &st);
 
         majority_exp(bm_name, bm_aig.num_pis(), bm_aig.num_pos(), bm_aig.num_gates(), lyt.x() + 1, lyt.y() + 1,
                      (lyt.x() + 1) * (lyt.y() + 1), lyt.num_gates(), lyt.num_wires(),
