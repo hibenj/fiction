@@ -4,174 +4,125 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-#include <fiction/networks/sequential_technology_network.hpp>
-#include <fiction/algorithms/network_transformation/fanout_substitution.hpp>
-#include <fiction/networks/technology_network.hpp>
-
 #include "utils/blueprints/network_blueprints.hpp"
+
+#include <fiction/algorithms/network_transformation/fanout_substitution.hpp>
+#include <fiction/networks/sequential_technology_network.hpp>
+#include <fiction/networks/technology_network.hpp>
 
 using namespace fiction;
 
-TEST_CASE("sequ_net_one", "[ortho-sequential]")
+TEST_CASE("check for sequential traits", "[tec_sequential]")
 {
+    technology_network tec{};
+    // check traits of technology network
+    CHECK(mockturtle::has_size_v<technology_network>);
+    CHECK(mockturtle::has_get_constant_v<technology_network>);
+    CHECK(mockturtle::has_is_constant_v<technology_network>);
+    CHECK(mockturtle::has_is_pi_v<technology_network>);
+    CHECK(mockturtle::has_is_constant_v<technology_network>);
+    CHECK(mockturtle::has_get_node_v<technology_network>);
+    CHECK(mockturtle::has_is_complemented_v<technology_network>);
+    CHECK(mockturtle::has_foreach_po_v<technology_network>);
+    CHECK(mockturtle::has_create_po_v<technology_network>);
+    CHECK(mockturtle::has_create_pi_v<technology_network>);
+    CHECK(mockturtle::has_create_and_v<technology_network>);
+    // check traits of sequential technology network
+    CHECK(!has_create_ro_v<technology_network>);
+    CHECK(!has_create_ri_v<technology_network>);
+    CHECK(!mockturtle::has_ri_to_ro_v<technology_network>);
+    CHECK(!mockturtle::has_ro_to_ri_v<technology_network>);
+    CHECK(!mockturtle::has_create_ro_v<technology_network>);
+    CHECK(!mockturtle::has_create_ri_v<technology_network>);
+    CHECK(!mockturtle::has_foreach_ro_v<technology_network>);
+    CHECK(!mockturtle::has_foreach_ri_v<technology_network>);
 
-    auto seq_one = blueprints::seq_one<mockturtle::sequential<technology_network>>();
-
-    seq_one.set_network_name("seq_one");
-
-    std::cout<<typeid(seq_one).name()<<std::endl;
-
-    //static_assert(mockturtle::has_create_ro_v<mockturtle::topo_view<class mockturtle::names_view<class mockturtle::sequential<class fiction::technology_network,0> >>>, "NtkDest does not implement the create_ro function");
-
-    std::cout<<"Combinational check "<<seq_one.is_combinational()<<std::endl;
-
-
-    seq_one.foreach_node(
-        [&](const auto& n)
-        {
-            std::cout<<"Node "<<n<<std::endl;
-        });
-
-
-    seq_one.foreach_node(
-        [&](const auto& n)
-        {
-            if(seq_one.is_constant(n))
-                std::cout<<"Constants "<<n<<std::endl;
-        });
-
-    seq_one.foreach_pi(
-        [&](const auto& n)
-        {
-            std::cout<<"Pis "<<n<<std::endl;
-        });
-
-    seq_one.foreach_node(
-        [&](const auto& n)
-        {
-            if(seq_one.is_ci(n))
-                std::cout<<"Cis "<<n<<std::endl;
-        });
-
-    seq_one.foreach_ro(
-        [&](const auto& n)
-        {
-            std::cout<<"Ros "<<n<<std::endl;
-        });
-
-    seq_one.foreach_node(
-        [&](const auto& n)
-        {
-            if(seq_one.is_xor(n))
-                std::cout<<"Xor "<<n<<std::endl;
-        });
-
-    seq_one.foreach_node(
-        [&](const auto& n)
-        {
-            if(seq_one.is_and(n))
-                std::cout<<"And "<<n<<std::endl;
-        });
-
-    /*seq_one.foreach_node(
-        [&](const auto& n)
-        {
-            if(seq_one.is_not(n))
-                std::cout<<"Xor "<<n<<std::endl;
-        });*/
-
-    /*seq_one.foreach_ri(
-        [&](const auto& n)
-        {
-            std::cout<<"Ri "<<n<<std::endl;
-        });
-
-    seq_one.foreach_co(
-        [&](const auto& n)
-        {
-            std::cout<<"Co "<<n<<std::endl;
-        });*/
-
-    std::cout<<"Ro at 0 "<<seq_one.ro_at(0)<<std::endl;
-
-    std::cout<<"Num Reg "<<seq_one.num_registers()<<std::endl;
-
-    std::cout<<"Num Gates "<<seq_one.num_gates()<<std::endl;
-
-    std::cout<<"Num Cis "<<seq_one.num_cis()<<std::endl;
-
-    std::cout<<"Num Cos "<<seq_one.num_cos()<<std::endl;
-
+    mockturtle::sequential<technology_network> tec_seq;
+    // check traits of technology network
+    CHECK(mockturtle::has_size_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_get_constant_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_is_constant_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_is_pi_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_is_constant_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_get_node_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_is_complemented_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_foreach_po_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_create_po_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_create_pi_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_create_and_v<mockturtle::sequential<technology_network>>);
+    // check traits of sequential technology network
+    CHECK(has_create_ro_v<mockturtle::sequential<technology_network>>);
+    CHECK(has_create_ri_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_ri_to_ro_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_ro_to_ri_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_create_ro_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_create_ri_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_foreach_ro_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_foreach_ri_v<mockturtle::sequential<technology_network>>);
 }
 
-TEST_CASE("fo_sub and ntk_conv for sequential", "[ortho-sequential]")
+TEST_CASE("create and use sequential functions", "[tec_sequential]")
 {
+    mockturtle::sequential<technology_network> tec_seq;
+    // check traits of technology network
+    CHECK(mockturtle::has_foreach_po_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_create_po_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_create_pi_v<mockturtle::sequential<technology_network>>);
+    CHECK(mockturtle::has_create_and_v<mockturtle::sequential<technology_network>>);
+    // check traits of sequential technology network
+    CHECK(has_create_ro_v<mockturtle::sequential<technology_network>>);
+    CHECK(has_create_ri_v<mockturtle::sequential<technology_network>>);
 
-    auto seq_one = blueprints::seq_one<mockturtle::sequential<mockturtle::aig_network>>();
+    const auto x1 = tec_seq.create_pi();
+    const auto x2 = tec_seq.create_pi();
+    const auto x3 = tec_seq.create_pi();
 
-    auto seq_two = fanout_substitution<mockturtle::names_view<mockturtle::sequential<technology_network>>>(seq_one);
-    seq_one.set_network_name("seq_one");
+    // two constant nodes and three PIs
+    CHECK( tec_seq.size() == 5 );
+    CHECK( tec_seq.num_registers() == 0 );
+    CHECK( tec_seq.num_pis() == 3 );
+    CHECK( tec_seq.num_pos() == 0 );
 
-    //std::cout<<typeid(seq_one).name()<<std::endl;
+    const auto f1 = tec_seq.create_and( x1, x2 );
+    tec_seq.create_po( f1 );
+    tec_seq.create_po( !f1 );
 
-    static_assert(mockturtle::has_create_ro_v<class mockturtle::names_view<class mockturtle::sequential<class fiction::technology_network> >>, "NtkDest does not implement the create_ro function");
-    static_assert(mockturtle::ro_index_v<mockturtle::topo_view<class mockturtle::names_view<class mockturtle::sequential<class fiction::technology_network> >>>, "NtkDest does not implement the create_ro function");
+    const auto f2 = tec_seq.create_and( f1, x3 );
+    const auto ro = tec_seq.create_ro();
+    tec_seq.create_po( ro );
+    tec_seq.create_ri( f2 );
 
-    std::cout<<"Combinational check "<<seq_one.is_combinational()<<std::endl;
+    CHECK( tec_seq.num_pos() == 3 );
+    CHECK( tec_seq.num_registers() == 1 );
 
-    std::cout<<"ro_index "<<seq_one.ro_index(2)<<std::endl;
-    std::cout<<"pi_index "<<seq_one.pi_index(1)<<std::endl;
+    tec_seq.foreach_po( [&]( auto s , auto i) {
+                       switch ( i )
+                       {
+                           case 0:
+                               CHECK( s == f1 );
+                               break;
+                           case 1:
+                               CHECK( s == !f1 );
+                               break;
+                           case 2:
+                               // Check if the output (connected to the register) data is the same as the node data being registered.
+                               CHECK( s == ro );
+                               break;
+                           default:
+                               CHECK( false );
+                               break;
+                       }
+                   } );
 
-    //std::cout<<"Cro_index "<<seq_two.ro_index(3)<<std::endl;
-
-    seq_two.foreach_node(
-        [&](const auto& n)
-        {
-            std::cout<<"Node "<<n<<std::endl;
-        });
-
-    seq_two.foreach_pi(
-        [&](const auto& n)
-        {
-            std::cout<<"Pis "<<n<<std::endl;
-        });
-
-    seq_two.foreach_ci(
-        [&](const auto& n)
-        {
-            std::cout<<"Cis "<<n<<std::endl;
-        });
-
-    seq_two.foreach_ro(
-        [&](const auto& n)
-        {
-            std::cout<<"Ros "<<n<<std::endl;
-        });
-
-    seq_two.foreach_node(
-        [&](const auto& n)
-        {
-            if(seq_two.is_and(n))
-                std::cout<<"And "<<n<<std::endl;
-        });
-
-    seq_two.foreach_ri(
-        [&](const auto& n)
-        {
-            std::cout<<"Ri "<<n<<std::endl;
-        });
-
-    seq_two.foreach_node(
-        [&](const auto& n)
-        {
-            if(seq_two.is_buf(n))
-                std::cout<<"Buf "<<n<<std::endl;
-        });
-
-    seq_two.foreach_co(
-        [&](const auto& n)
-        {
-            std::cout<<"Co "<<n<<std::endl;
-        });
-
+    tec_seq.foreach_ri( [&]( auto s , auto i) {
+                           switch ( i )
+                           {
+                               case 0:
+                                   CHECK( s == f2 );
+                                   break;
+                               default:
+                                   CHECK( false );
+                                   break;
+                           }
+                       } );
 }
