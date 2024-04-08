@@ -6,6 +6,7 @@
 
 #include <fiction/types.hpp>                                         // pre-defined types suitable for the FCN domain
 
+#include <filesystem>
 #include <cstdint>
 #include <vector>
 
@@ -29,6 +30,17 @@
 #include <mockturtle/io/verilog_reader.hpp>  // call-backs to read Verilog files into networks
 
 using namespace mockturtle;
+
+std::vector<std::string> GetVFiles(const std::string& path) {
+    std::vector<std::string> files;
+    for(const auto & entry : std::filesystem::directory_iterator(path)) {
+        if(entry.is_regular_file() && entry.path().extension() == ".v") {
+            std::string fullPath = entry.path().string();
+            files.push_back(fullPath);
+        }
+    }
+    return files;
+}
 
 template <typename Ntk>
 Ntk read_ntk(const std::string& name)
@@ -58,7 +70,7 @@ std::string const test_library = "GATE  zero        0  O=CONST0;\n"
                                  "GATE  xor_and     1 O=a*(b^c);                    PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  or_and      1 O=a*(b+c);                    PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  maj3        1 O=a*b+a*c+b*c;                PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
-                                 "GATE  maj6        6 O=a*b*c*d+a*b*e*f+c*d*e*f;    PIN * INV 1 999 1.0 1.0 1.0 1.0\n"
+                                 "GATE  maj6        6 O=a*b*c*d+a*b*e*f+c*d*e*f;    PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  mux  1 O=(a*!c)+(b*c);  PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  and_xor  1 O=a^(b*c);  PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n";
 
@@ -79,7 +91,19 @@ int main()
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
-        const auto network = read_ntk<fiction::tec_nt>(benchmark);
+        const auto network = read_ntk<aig_network>(benchmark);
+        binding_view<klut_network> ntk_map = map( network, lib, ps, &st );
+        ntk_map.report_gates_usage();
+    }
+
+    auto files = GetVFiles( "/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93" );
+
+    for (const auto& filePath : files) {
+        std::cout << filePath << std::endl;
+        aig_network network;
+        const auto read_verilog_result =
+            lorina::read_verilog(filePath, mockturtle::verilog_reader(network));
+        assert(read_verilog_result == lorina::return_code::success);
         binding_view<klut_network> ntk_map = map( network, lib, ps, &st );
         ntk_map.report_gates_usage();
     }
