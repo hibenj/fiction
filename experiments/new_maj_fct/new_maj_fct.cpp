@@ -70,7 +70,7 @@ std::string const test_library = "GATE  zero        0  O=CONST0;\n"
                                  "GATE  xor_and     1 O=a*(b^c);                    PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  or_and      1 O=a*(b+c);                    PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  maj3        1 O=a*b+a*c+b*c;                PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
-                                 "GATE  maj6        6 O=a*b*c*d+a*b*e*f+c*d*e*f;    PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
+                                 "GATE  maj6        6 O=a*b*c*d+a*b*e*f+c*d*e*f;    PIN * INV    1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  mux  1 O=(a*!c)+(b*c);  PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  and_xor  1 O=a^(b*c);  PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n";
 
@@ -89,14 +89,14 @@ int main()
     map_params ps;
     map_stats st;
 
-    for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
+    /*for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
         const auto network = read_ntk<aig_network>(benchmark);
         binding_view<klut_network> ntk_map = map( network, lib, ps, &st );
         ntk_map.report_gates_usage();
-    }
+    }*/
 
-    auto files = GetVFiles( "/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93" );
+    auto files = GetVFiles( "/home/benjamin/Documents/Repositories/working/fiction/benchmarks/abc_gen" );
 
     for (const auto& filePath : files) {
         std::cout << filePath << std::endl;
