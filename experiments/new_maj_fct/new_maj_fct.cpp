@@ -170,7 +170,7 @@ int main()
     map_stats st;
 
     // fiction benchmarks
-    for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
+    /*for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
         const auto network = read_ntk<aig_network>(benchmark);
         binding_view<klut_network> ntk_map = map( network, lib, ps, &st );
@@ -185,7 +185,7 @@ int main()
         ntk_map.report_gates_usage();
         std::cout << "Area: " << st.area << std::endl;
         std::cout << "Delay: " << st.delay << std::endl;
-    }
+    }*/
     // IWLS93 benchmarks
     /*auto files_iwls = GetVFiles( "/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93" );
 
@@ -201,7 +201,7 @@ int main()
     }*/
 
     // abd generated benchmarks
-    /*auto files_abc = GetVFiles( "/home/benjamin/Documents/Repositories/working/fiction/benchmarks/abc_gen" );
+    auto files_abc = GetVFiles( "/home/benjamin/Documents/Repositories/working/fiction/benchmarks/abc_gen" );
 
     for (const auto& filePath : files_abc) {
         std::cout << filePath << std::endl;
@@ -214,23 +214,8 @@ int main()
         std:: cout << "num_gates" << network.num_gates() << std::endl;
         binding_view<klut_network> ntk_map = map( network, lib, ps, &st );
         ntk_map.report_gates_usage();
-    }*/
+    }
 
-    // abd generated benchmarks
-    /*auto files_mcnc = GetVFiles( "/home/benjamin/Documents/Repositories/original/SCE-benchmarks/MCNC/original" );
-
-    for (const auto& filePath : files_mcnc) {
-        std::cout << filePath << std::endl;
-        aig_network network;
-        std::string top_module = extractModuleName(filePath);
-        std::cout << "!" << top_module << "!" << std::endl;
-        const auto read_verilog_result =
-            lorina::read_verilog(filePath, mockturtle::verilog_reader(network, top_module));
-        assert(read_verilog_result == lorina::return_code::success);
-        std:: cout << "num_gates" << network.num_gates() << std::endl;
-        binding_view<klut_network> ntk_map = map( network, lib, ps, &st );
-        ntk_map.report_gates_usage();
-    }*/
     // lgsynth91 benchmarks
     /*auto files = GetBlifFiles( "/home/benjamin/Documents/Repositories/original/hdl-benchmarks/hdl/mcnc/Combinational/blif" );
 
