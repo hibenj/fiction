@@ -125,7 +125,11 @@ std::string const test_library = "GATE  zero        0  O=CONST0;\n"
                                  "GATE  xor_and     1 O=a*(b^c);                    PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  or_and      1 O=a*(b+c);                    PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  maj3        1 O=a*b+a*c+b*c;                PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
-                                 "GATE  maj6        6 O=a*b*c*d+a*b*e*f+c*d*e*f;    PIN * INV    1 999 1.0 1.0 1.0 1.0\n"
+                                 "GATE  maj6_0      1 O=(a*b*c*d)+(a*b*e*f)+(c*d*e*f);    PIN * INV    1 999 1.0 1.0 1.0 1.0\n"
+                                 "GATE  maj6_1      1 O=(a*b*c)+(a*d*e)+(b*c*d*e);        PIN * INV    1 999 1.0 1.0 1.0 1.0\n"
+                                 "GATE  maj6_2      1 O=(a*b)+(a*c*d)+(b*c*d);            PIN * INV    1 999 1.0 1.0 1.0 1.0\n"
+                                 "GATE  maj6_3      1 O=(a*b)+(c*d);                    PIN * INV    1 999 1.0 1.0 1.0 1.0\n"
+                                 "GATE  maj6_4      1 O=a+(b*c);                      PIN * INV    1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  mux  1 O=(a*!c)+(b*c);  PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n"
                                  "GATE  and_xor  1 O=a^(b*c);  PIN * NONINV 1 999 1.0 1.0 1.0 1.0\n";
 
@@ -148,7 +152,7 @@ std::string const test_library_ = "GATE  zero        0  O=CONST0;\n"
 
 int main()
 {
-    constexpr const uint64_t bench_select = fiction_experiments::sqrt;
+    constexpr const uint64_t bench_select = fiction_experiments::all;
 
     std::vector<gate> gates;
 
@@ -170,14 +174,17 @@ int main()
     map_stats st;
 
     // fiction benchmarks
-    /*for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
+    int count = 0;
+    for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
         const auto network = read_ntk<aig_network>(benchmark);
         binding_view<klut_network> ntk_map = map( network, lib, ps, &st );
         ntk_map.report_gates_usage();
         std::cout << "Area: " << st.area << std::endl;
         std::cout << "Delay: " << st.delay << std::endl;
+        ++count;
     }
+    std::cout << count << std::endl;
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
         const auto network = read_ntk<aig_network>(benchmark);
@@ -185,7 +192,7 @@ int main()
         ntk_map.report_gates_usage();
         std::cout << "Area: " << st.area << std::endl;
         std::cout << "Delay: " << st.delay << std::endl;
-    }*/
+    }
     // IWLS93 benchmarks
     /*auto files_iwls = GetVFiles( "/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93" );
 
@@ -201,7 +208,7 @@ int main()
     }*/
 
     // abd generated benchmarks
-    auto files_abc = GetVFiles( "/home/benjamin/Documents/Repositories/working/fiction/benchmarks/abc_gen" );
+    /*auto files_abc = GetVFiles( "/home/benjamin/Documents/Repositories/working/fiction/benchmarks/abc_gen" );
 
     for (const auto& filePath : files_abc) {
         std::cout << filePath << std::endl;
@@ -214,7 +221,7 @@ int main()
         std:: cout << "num_gates" << network.num_gates() << std::endl;
         binding_view<klut_network> ntk_map = map( network, lib, ps, &st );
         ntk_map.report_gates_usage();
-    }
+    }*/
 
     // lgsynth91 benchmarks
     /*auto files = GetBlifFiles( "/home/benjamin/Documents/Repositories/original/hdl-benchmarks/hdl/mcnc/Combinational/blif" );
