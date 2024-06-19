@@ -8,7 +8,7 @@
 
 #include <fiction/algorithms/network_transformation/crossing_reduction.hpp>   // crossing reduction
 #include <fiction/algorithms/network_transformation/fanout_substitution.hpp>  // fanout substitution
-// #include <fiction/algorithms/network_transformation/network_balancing.hpp>    // network balancing
+#include <fiction/algorithms/network_transformation/network_balancing.hpp>    // network balancing
 // #include <fiction/networks/technology_network.hpp>                            // technology networks
 
 #include <fmt/format.h>                                        // output formatting
@@ -97,6 +97,9 @@ int main()  // NOLINT
         auto cec = experiments::abc_cec_blif(klut_original, klut_results);
 
         std::cout << klut_results.num_gates() << "\n";
+
+        klut_original = fiction::network_balancing<fiction::technology_network>(klut_original);
+        klut_results = fiction::network_balancing<fiction::technology_network>(klut_results);
 
         // perform crossing reduction
         /*[[maybe_unused]] const auto rank_ntk_original =
