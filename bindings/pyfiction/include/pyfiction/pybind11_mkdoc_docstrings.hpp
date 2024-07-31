@@ -1918,7 +1918,8 @@ Returns:
     Integer representing the SiDB's charge state.)doc";
 
 static const char *__doc_fiction_check_planarity =
-R"doc(Checks if a logic network is planar.
+R"doc(Checks if a logic network is planar. To perform this check, the
+network must have ranks assigned.
 
 If the network is not balanced, an exception is thrown. To balance the
 network, insert buffers to divide multi-level edges.
@@ -1946,12 +1947,12 @@ R"doc(Checks if a given network is planar.
 
 This function checks if the network represented by the variable `ntk`
 is planar. The network is planar if for any edge with starting point m
-and end point n there is never another edge with starting point m_ > m
-and ending point n_ < n or vice versa. When iterating through the
-ranks of one level the end points ar always increasing. Therefore only
-the starting points need to be checked. Therefore the highest
-connected starting point in the fanin gives a border m_max for every
-next edge.
+and endpoint n (represented by the node ranks), there is never another
+edge with starting point m_ > m and endpoint n_ < n, or vice versa.
+When iterating through the ranks of one level, the endpoints are
+always increasing. Therefore, only the starting points need to be
+checked. Thus, the highest connected starting point in the fan-in
+gives a border m_max for every subsequent edge.
 
 Returns:
     `true` if the network is planar, `false` otherwise.)doc";
@@ -12000,13 +12001,17 @@ Parameter ``file``:
 Parameter ``rfun``:
     The actual parsing function.)doc";
 
-static const char *__doc_fiction_node_duplication_params = R"doc(Parameters for the fanout substitution algorithm.)doc";
+static const char *__doc_fiction_node_duplication_params = R"doc(Parameters for the node duplication algorithm.)doc";
 
-static const char *__doc_fiction_node_duplication_params_random_output_order = R"doc()doc";
+static const char *__doc_fiction_node_duplication_params_random_output_order =
+R"doc(The output order determines the starting layer for this algorithm. If
+this option is turned off, the output order remains the same as in the
+provided network. If it is turned on, the outputs are ordered
+randomly.)doc";
 
 static const char *__doc_fiction_node_duplication_planarization =
-R"doc(Implements a planarization mechanism for Mockturtle networks using a
-H-Graph strategy and node duplication.
+R"doc(Implements a planarization mechanism for networks using a H-Graph
+strategy for node duplication.
 
 Template parameter ``NtkDest``:
     Destination network type
@@ -12022,11 +12027,14 @@ Parameter ``ps``:
 
 The planarization achieved by this function solves the Node
 Duplication Crossing Minimization (NDCE) problem by finding the
-shortest x-y path in the H-graph for every level in the network. The
+shortest x-y path in the H-graph for every level in the network. An
+H-graph describes edge relations between two levels in a network, with
+one level assumed as fixed, starting at the Primary Outputs (POs). By
+finding the shortest path from the source (x) to the sink (y) in this
+H-graph, an optimal solution for the NDCE problem is found. The
 function constructs an H-graph that captures edge relations between
 two levels within the graph and computes the shortest x-y paths on the
-H-graph. The graph is traversed from Primary Outputs (POs) towards
-Primary Inputs (PIs).
+H-graph, traversing from the POs towards the Primary Inputs (PIs).
 
 Returns:
     A view of the planarized virtual_pi_network created in the format
@@ -15775,10 +15783,16 @@ R"doc(\verbatim +-------+ | | | +-------+ | | | +-------+ | | | +-------+
 \endverbatim)doc";
 
 static const char *__doc_fiction_virtual_pi_network =
-R"doc(!Manager view for virtual PIs
+R"doc(!Network with additional "virtual" PIs.
 
-Virtual PIs are mapping of a "virtual" PI onto a "real" PI in the
-network. Virtual PIs handle PI-duplications.)doc";
+"Virtual" PIs (Primary Inputs) are used to manage the duplication of
+PIs in the network. Each "real" PI can have an arbitrary number of
+"virtual" PIs, which are copies of the original "real" PI. A "virtual"
+PI can be created by duplicating a "real" PI. To keep track of this
+relationship, there is a mapping of each "virtual" PI to its
+corresponding "real" PI in the network.)doc";
+
+static const char *__doc_fiction_virtual_pi_network_map = R"doc(Map from virtual_pis to real_pis.)doc";
 
 static const char *__doc_fiction_virtual_pi_network_virtual_pi_network =
 R"doc(A default constructor for the `virtual_pi_network` class.
