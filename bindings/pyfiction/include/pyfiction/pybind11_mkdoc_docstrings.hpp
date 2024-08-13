@@ -24,16 +24,16 @@
 
 
 static const char *__doc_extended_rank_view =
-R"doc(@class extended_rank_view (specialization)
+R"doc(@class extended_rank_view<Ntk, true>
 
-A derived class from depth_view.)doc";
+If already a rank_interface exists only the depth_view constructor
+gets called.
+
+Template parameter ``Ntk``:
+    - The network type.)doc";
 
 static const char *__doc_extended_rank_view_2 =
 R"doc(Deduction guide for `extended_rank_view'
-
-This template helps to deduce the type argument `T` for the
-`extended_rank_view` class when constructed with an argument of type
-`T`.
 
 Template parameter ``T``:
     Network type deduced from the construction context of
@@ -42,11 +42,6 @@ Template parameter ``T``:
 static const char *__doc_extended_rank_view_3 =
 R"doc(Deduction guide for `extended_rank_view` with two constructor
 arguments
-
-This template helps to deduce the type argument `T` for the
-`extended_rank_view` class when constructed with two arguments: a
-network of type `T`, and a `vector` of `vector` containing network
-nodes.
 
 Template parameter ``T``:
     Network type deduced from the construction context of
@@ -10441,9 +10436,13 @@ static const char *__doc_fiction_has_north_east = R"doc()doc";
 
 static const char *__doc_fiction_has_north_west = R"doc()doc";
 
+static const char *__doc_fiction_has_num_real_pis = R"doc()doc";
+
 static const char *__doc_fiction_has_ordinal_operations = R"doc()doc";
 
 static const char *__doc_fiction_has_post_layout_optimization = R"doc()doc";
+
+static const char *__doc_fiction_has_remove_virtual_input_nodes = R"doc()doc";
 
 static const char *__doc_fiction_has_set_layout_name = R"doc()doc";
 
@@ -11916,6 +11915,20 @@ static const char *__doc_fiction_missing_sidb_position_exception_line = R"doc()d
 static const char *__doc_fiction_missing_sidb_position_exception_missing_sidb_position_exception = R"doc()doc";
 
 static const char *__doc_fiction_missing_sidb_position_exception_where = R"doc()doc";
+
+static const char *__doc_fiction_miter =
+R"doc(! Creates a combinational miter from two networks.
+
+This method combines two networks that have the same number of primary
+inputs and the same number of primary outputs into a miter. The miter
+has the same number of inputs and one primary output. This output is
+the OR of XORs of all primary output pairs. In other words, the miter
+outputs 1 for all input assignments in which the two input networks
+differ.
+
+All networks may have different types. The method returns an optional,
+which is `nullopt`, whenever the two input networks don't match in
+their number of primary inputs and primary outputs.)doc";
 
 static const char *__doc_fiction_network_balancing =
 R"doc(Balances a logic network with buffer nodes that compute the identity
@@ -15782,34 +15795,25 @@ static const char *__doc_fiction_vertical_shift_cartesian =
 R"doc(\verbatim +-------+ | | | +-------+ | | | +-------+ | | | +-------+
 \endverbatim)doc";
 
-static const char *__doc_fiction_virtual_pi_network =
-R"doc(!Network with additional "virtual" PIs.
-
-"Virtual" PIs (Primary Inputs) are used to manage the duplication of
-PIs in the network. Each "real" PI can have an arbitrary number of
-"virtual" PIs, which are copies of the original "real" PI. A "virtual"
-PI can be created by duplicating a "real" PI. To keep track of this
-relationship, there is a mapping of each "virtual" PI to its
-corresponding "real" PI in the network.)doc";
-
-static const char *__doc_fiction_virtual_pi_network_map = R"doc(Map from virtual_pis to real_pis.)doc";
+static const char *__doc_fiction_virtual_pi_network = R"doc()doc";
 
 static const char *__doc_fiction_virtual_pi_network_virtual_pi_network =
-R"doc(A default constructor for the `virtual_pi_network` class.
-
-This constructor initializes `virtual_inputs` with a shared pointer to
-an empty std::vector of uint32_t.)doc";
+R"doc(Default constructor for the `virtual_pi_network` class. Initializes
+`_storage` as a shared pointer.)doc";
 
 static const char *__doc_fiction_virtual_pi_network_virtual_pi_network_2 =
-R"doc(A parameterized constructor for the `virtual_pi_network` class.
+R"doc(Copy constructor for the `virtual_pi_network` class. Given a network
+`ntk`, constructs a new `virtual_pi_network` as a clone of `ntk`.
+Initializes `_storage` as a shared pointer.
 
-This constructor creates a `virtual_pi_network` using the `other`
-`technology_network` and initializes `virtual_inputs` with a shared
-pointer to an empty std::vector of uint32_t.
+Parameter ``ntk``:
+    The network to clone into this object.)doc";
 
-Parameter ``other``:
-    A `technology_network` object to create an instance of
-    `virtual_pi_network`.)doc";
+static const char *__doc_fiction_virtual_storage = R"doc()doc";
+
+static const char *__doc_fiction_virtual_storage_map_virt_to_real_pi = R"doc(Map from virtual_pis to real_pis.)doc";
+
+static const char *__doc_fiction_virtual_storage_virtual_inputs = R"doc(Shared pointer vector storage for virtual_inputs.)doc";
 
 static const char *__doc_fiction_volume =
 R"doc(Computes the volume of a given coordinate assuming its origin is (0,
