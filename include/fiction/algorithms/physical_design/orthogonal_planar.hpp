@@ -6,6 +6,7 @@
 #define FICTION_ORTHOGONAL_PLANAR_HPP
 
 #include "fiction/algorithms/network_transformation/fanout_substitution.hpp"
+#include "fiction/algorithms/properties/check_planarity.hpp"
 #include "fiction/io/print_layout.hpp"
 #include "fiction/layouts/clocking_scheme.hpp"
 #include "fiction/networks/views/edge_color_view.hpp"
@@ -13,13 +14,13 @@
 #include "fiction/utils/name_utils.hpp"
 #include "fiction/utils/network_utils.hpp"
 #include "fiction/utils/placement_utils.hpp"
-#include "fiction/algorithms/properties/check_planarity.hpp"
 
 #include <fmt/format.h>
 #include <mockturtle/traits.hpp>
 #include <mockturtle/utils/node_map.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
 #include <mockturtle/views/fanout_view.hpp>
+#include <mockturtle/views/rank_view.hpp>
 #include <mockturtle/views/topo_view.hpp>
 
 #include <algorithm>
@@ -465,18 +466,116 @@ void place_outputs(Lyt& layout, const coloring_container<Ntk>& ctn, uint32_t po_
         });
 }
 
+/*template<typename Ntk>
+void identify_structures(Ntk& ntk)
+{
+    ntk.foreach_nod
+}*/
+
 template <typename Lyt, typename Ntk>
 class orthogonal_planar_impl
 {
   public:
-    orthogonal_planar_impl(const Ntk& src, const orthogonal_physical_design_params& p, orthogonal_physical_design_stats& st) :
-            ntk{extended_rank_view{mockturtle::fanout_view{fanout_substitution<mockturtle::names_view<technology_network>>(src)}}},
+    orthogonal_planar_impl(const Ntk& src, const orthogonal_physical_design_params& p,
+                           orthogonal_physical_design_stats& st) :
+            ntk{extended_rank_view{
+                mockturtle::fanout_view{fanout_substitution<mockturtle::names_view<technology_network>>(src)}}},
             ps{p},
             pst{st}
     {}
 
     Lyt run()
     {
+        using node = typename Ntk::node;
+        debug::write_dot_network(ntk);
+
+        node last_visited_node;
+        // orientation: 1 = vertical, 2 = horizontal
+        int orientation = 0;
+
+        std::vector<std::vector<node>> gap_array(ntk.depth());
+
+        for (uint32_t r = 0; r < ntk.depth(); r++)
+        {
+            // identify_structures(ntk);
+            ntk.foreach_node_in_rank(r,
+                                     [&](const auto& n)
+                                     {
+                                         const auto fo = ntk.fanout(n);
+                                         // fi of buffer/inv
+                                         if (ntk.fanin_size(fo[0]) == 1 && fo.size() == 1)
+                                         {
+                                             // propagate gap: array[r + 1, rank(fo[0])] += array[r, rank(n)]
+                                             gap_array[r+1][ntk.rank_position(fo[0])] += ;
+                                             last_visited_node = fo[0];
+                                             // orientation stays the same
+                                             std::cout << "Buf\n";
+                                         }
+                                         // fanout
+                                         else if (ntk.is_fanout(n) && fo.size() == 2)
+                                         {
+                                             int max_value_index =
+                                                 std::max_element(
+                                                     fo.begin(), fo.end(), [&](const auto& a, const auto& b)
+                                                     { return ntk.rank_position(a) < ntk.rank_position(b); }) -
+                                                 fo.begin();
+
+                                             // chain starts here
+                                             if (last_visited_node != fo[1 - max_value_index])
+                                             {
+                                                 if (orientation == 1)
+                                                 {
+                                                     // array[r + 1, rank(fo[1 - max_value_index]) - 1] -= 1
+                                                 }
+                                             }
+
+                                             // chain ends here
+                                             if (ntk.fanin_size(fo[max_value_index]) == 1)
+                                             {
+                                                 // propagate gap: array[r + 1, rank(fo[max_value_index])] += array[r,
+                                                 // rank(n)]
+                                                 orientation = 1;
+                                             }
+                                             else  // chain extends
+                                             {
+                                                 // if array[r, rank(n)] > 0, then x new lines and propagate to left
+                                                 // rank(fo[0]) - 1
+                                             }
+
+                                             last_visited_node = fo[max_value_index];
+                                             std::cout << fo[max_value_index] << std::endl;
+                                             std::cout << "FO\n";
+                                         }
+                                         // fi of 2-input node
+                                         else
+                                         {
+                                             assert(ntk.fanin_size(fo[0]) == 2 && fo.size() == 1);
+
+                                             // chain starts here
+                                             if (last_visited_node != fo[0])
+                                             {
+                                                 // if array[r, rank(n)] > 0, then x new lines and propagate to left
+                                                 // rank(fo[0]) - 1
+
+                                                 if (orientation == 2)
+                                                 {
+                                                     // array[r + 1, rank(fo[0]-1)] += 1
+                                                 }
+                                                 // if(orientation == 1) no gap
+                                             }
+                                             else  // chain ends here
+                                             {
+                                                 assert(last_visited_node == fo[0]);
+                                                 // propagate gap: array[r + 1, rank(fo[0])] += array[r, rank(n)]
+                                                 orientation = 2;
+                                             }
+
+                                             last_visited_node = fo[0];
+                                             std::cout << "2-ary\n";
+                                         }
+                                     });
+        }
+
         // measure run time
         mockturtle::stopwatch stop{pst.time_total};
         // compute a coloring
@@ -685,7 +784,7 @@ class orthogonal_planar_impl
  */
 template <typename Lyt, typename Ntk>
 Lyt orthogonal_planar(const Ntk& ntk, orthogonal_physical_design_params ps = {},
-               orthogonal_physical_design_stats* pst = nullptr)
+                      orthogonal_physical_design_stats* pst = nullptr)
 {
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
     static_assert(mockturtle::is_network_type_v<Ntk>,
@@ -698,13 +797,13 @@ Lyt orthogonal_planar(const Ntk& ntk, orthogonal_physical_design_params ps = {},
         throw high_degree_fanin_exception();
     }
 
-    //check for planarity
+    // check for planarity
     if (!check_planarity(ntk))
     {
         throw std::runtime_error("Input network has to be planar");
     }
 
-    orthogonal_physical_design_stats  st{};
+    orthogonal_physical_design_stats         st{};
     detail::orthogonal_planar_impl<Lyt, Ntk> p{ntk, ps, st};
 
     auto result = p.run();
@@ -717,6 +816,6 @@ Lyt orthogonal_planar(const Ntk& ntk, orthogonal_physical_design_params ps = {},
     return result;
 }
 
-}
+}  // namespace fiction
 
 #endif  // FICTION_ORTHOGONAL_PLANAR_HPP
