@@ -32,6 +32,68 @@
 
 using namespace fiction;
 
+TEST_CASE("Case buf", "[orthogonal-planar]")
+{
+    using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
+
+    virtual_pi_network<technology_network> v_ntk{};
+
+    const auto x1 = v_ntk.create_pi();
+    const auto x2 = v_ntk.create_pi();
+    const auto x3 = v_ntk.create_virtual_pi(x1);
+    const auto x4 = v_ntk.create_virtual_pi(x2);
+    const auto x5 = v_ntk.create_pi();
+    const auto x6 = v_ntk.create_pi();
+    const auto x7 = v_ntk.create_virtual_pi(x5);
+    const auto x8 = v_ntk.create_virtual_pi(x6);
+
+    const auto f1 = v_ntk.create_and(x1, x2);
+    const auto f2 = v_ntk.create_and(x3, x4);
+    const auto f3 = v_ntk.create_and(x5, x6);
+    const auto f4 = v_ntk.create_and(x7, x8);
+
+    const auto f5 = v_ntk.create_and(f1, f2);
+    const auto f6 = v_ntk.create_and(f3, f4);
+
+    v_ntk.create_po(f5);
+    v_ntk.create_po(f5);
+    v_ntk.create_po(f5);
+    v_ntk.create_po(f5);
+    v_ntk.create_po(f5);
+    v_ntk.create_po(f5);
+    v_ntk.create_po(f5);
+    v_ntk.create_po(f5);
+
+    v_ntk.create_po(f6);
+    v_ntk.create_po(f6);
+    v_ntk.create_po(f6);
+    v_ntk.create_po(f6);
+    v_ntk.create_po(f6);
+    v_ntk.create_po(f6);
+    v_ntk.create_po(f6);
+    v_ntk.create_po(f6);
+
+
+
+    network_balancing_params ps;
+    ps.unify_outputs = true;
+
+    const auto fo_ntk = network_balancing<technology_network>(fanout_substitution<technology_network>(v_ntk), ps);
+
+    extended_rank_view aig_r(fo_ntk);
+
+    std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
+    std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
+
+    /*aig_r.modify_rank(0, nodes_rank0);
+    aig_r.modify_rank(0, nodes_rank0);*/
+
+    const auto layout = orthogonal_planar<gate_layout>(aig_r);
+
+    debug::write_dot_layout(layout);
+    // debug::write_dot_network(fo_ntk);
+}
+
 TEST_CASE("Print layout", "[orthogonal-planar]")
 {
     using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
@@ -51,7 +113,10 @@ TEST_CASE("Print layout", "[orthogonal-planar]")
     v_ntk.create_po(f2);
     v_ntk.create_po(f3);
 
-    const auto fo_ntk = network_balancing<technology_network>(fanout_substitution<technology_network>(v_ntk));
+    network_balancing_params ps;
+    ps.unify_outputs = true;
+
+    const auto fo_ntk = network_balancing<technology_network>(fanout_substitution<technology_network>(v_ntk), ps);
 
     extended_rank_view aig_r(fo_ntk);
 
