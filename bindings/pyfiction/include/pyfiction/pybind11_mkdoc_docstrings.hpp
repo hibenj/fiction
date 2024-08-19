@@ -5087,6 +5087,8 @@ static const char *__doc_fiction_detail_fanout_substitution_impl_run = R"doc()do
 
 static const char *__doc_fiction_detail_fill_gap_array_zeros = R"doc()doc";
 
+static const char *__doc_fiction_detail_fill_gap_array_zeros_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_fix_wires =
 R"doc(Utility function to move wires that cross over empty tiles down one
 layer. This can happen if the wiring of a gate is deleted.
