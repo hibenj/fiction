@@ -5,6 +5,7 @@
 
 #include "fiction/algorithms/network_transformation/fanout_substitution.hpp"
 #include "fiction/algorithms/network_transformation/network_balancing.hpp"
+#include "fiction/algorithms/network_transformation/node_duplication_planarization.hpp"
 #include "fiction/networks/views/extended_rank_view.hpp"
 #include "fiction/utils/debug/network_writer.hpp"
 #include "utils/blueprints/network_blueprints.hpp"
@@ -92,7 +93,68 @@ TEST_CASE("Case buf", "[orthogonal-planar]")
     // debug::write_dot_network(fo_ntk);
 }
 
+TEST_CASE("Test blueprints", "[orthogonal-planar]")
+{
+    using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
+
+    auto maj = blueprints::maj1_network<mockturtle::names_view<mockturtle::aig_network>>();
+
+    auto maj_t = convert_network<technology_network>(maj);
+    auto maj_tec = fanout_substitution<technology_network>(maj_t);
+
+    network_balancing_params ps;
+    ps.unify_outputs = true;
+
+    const auto maj_tec_b = network_balancing<technology_network>(maj_tec, ps);
+
+    auto planarized_maj = fiction::node_duplication_planarization<technology_network>(maj_tec_b);
+
+    const auto layout = orthogonal_planar<gate_layout>(planarized_maj);
+
+    debug::write_dot_layout(layout);
+
+    debug::write_dot_network(planarized_maj);
+}
+
 TEST_CASE("Print layout", "[orthogonal-planar]")
+{
+    using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
+
+    virtual_pi_network<technology_network> v_ntk{};
+
+    const auto x1 = v_ntk.create_pi();
+    const auto x2 = v_ntk.create_pi();
+    const auto x3 = v_ntk.create_virtual_pi(x1);
+    const auto x4 = v_ntk.create_virtual_pi(x2);
+
+    const auto f1 = v_ntk.create_and(x1, x2);
+    const auto f2 = v_ntk.create_and(x2, x3);
+    const auto f3 = v_ntk.create_and(x3, x4);
+
+    v_ntk.create_po(f1);
+    v_ntk.create_po(f2);
+    v_ntk.create_po(f3);
+
+    network_balancing_params ps;
+    ps.unify_outputs = true;
+
+    const auto fo_ntk = network_balancing<technology_network>(fanout_substitution<technology_network>(v_ntk), ps);
+
+    extended_rank_view aig_r(fo_ntk);
+
+    std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
+    std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
+
+    /*aig_r.modify_rank(0, nodes_rank0);
+    aig_r.modify_rank(0, nodes_rank0);*/
+
+    const auto layout = orthogonal_planar<gate_layout>(aig_r);
+
+    debug::write_dot_layout(layout);
+    // debug::write_dot_network(fo_ntk);
+}
+
+TEST_CASE("Print layout two", "[orthogonal-planar]")
 {
     using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
 

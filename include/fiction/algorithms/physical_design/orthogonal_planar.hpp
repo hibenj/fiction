@@ -486,8 +486,8 @@ void fill_gap_array_zeros(Ntk& ntk, std::vector<std::vector<int>>& gap_array, in
 
 template <typename Ntk>
 uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_array,
-                           std::vector<std::vector<int>>& bw_gap_array, uint32_t starting_rank,
-                           bool& is_negative)
+                           std::vector<std::vector<int>>& bw_gap_array, uint32_t starting_rank, bool& is_negative,
+                           std::vector<int>& orientations)
 {
     debug::write_dot_network(ntk);
 
@@ -502,7 +502,7 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_array
         // identify_structures(ntk);
         ntk.foreach_node_in_rank(
             r,
-            [&ntk, &fw_gap_array, &bw_gap_array, &last_visited_node, &r, &orientation, &fo_gap](const auto& n)
+            [&ntk, &fw_gap_array, &bw_gap_array, &last_visited_node, &r, &orientation, &fo_gap, &orientations](const auto& n)
             {
                 const auto fo = ntk.fanout(n);
                 // fi of buffer/inv
@@ -566,13 +566,20 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_array
                         std::cout << "gap between fos\n";
                     }
 
-                    if (bw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] > fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] )
+                    if (bw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] >
+                        fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])])
                     {
-                        fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] = bw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])];
+                        fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] =
+                            bw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])];
                     }
                     fo_gap = fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])];
 
                     last_visited_node = fo[max_value_index];
+
+                    if (orientations[r+1] == 0)
+                    {
+                        orientations[r+1] = 2;
+                    }
                 }
                 // fi of 2-input node
                 else
@@ -590,7 +597,11 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_array
                             fw_gap_array[r + 1].back() = fw_gap_array[r][ntk.rank_position(n)];
 
                             // shift gap to the left
-                            fw_gap_array[r + 1][ntk.rank_position(fo[0]) - 1] += fw_gap_array[r][ntk.rank_position(n)];
+                            if (orientation == 2)
+                            {
+                                fw_gap_array[r + 1][ntk.rank_position(fo[0]) - 1] +=
+                                    fw_gap_array[r][ntk.rank_position(n)];
+                            }
                         }
 
                         if (orientation == 2)
@@ -609,6 +620,11 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_array
                     }
 
                     last_visited_node = fo[0];
+
+                    if (orientations[r+1] == 0)
+                    {
+                        orientations[r+1] = 1;
+                    }
                 }
             });
         // compare for new lines
@@ -697,8 +713,11 @@ uint32_t propagate_backward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_arra
                         bw_gap_array[r + 1].back() = bw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])];
 
                         // shift gap to the right
-                        bw_gap_array[r][ntk.rank_position(n)] +=
-                            bw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])];
+                        if (ntk.is_fanout(ntk.at_rank_position(r, ntk.rank_position(n) + 1)))
+                        {
+                            bw_gap_array[r][ntk.rank_position(n)] +=
+                                bw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])];
+                        }
                     }
 
                     last_visited_node = fo[max_value_index];
@@ -772,7 +791,7 @@ class orthogonal_planar_impl
     {
         using node = typename Ntk::node;
 
-        uint32_t starting_rank_forward = 0;
+        uint32_t starting_rank_forward  = 0;
         uint32_t starting_rank_backward = 0;
 
         std::vector<std::vector<int>> forward_gap_array(ntk.depth() + 1);
@@ -788,10 +807,13 @@ class orthogonal_planar_impl
         // return this level again as starting_rank_forward
         // start again with forward propagation
 
-        bool is_negative = false;
+        bool             is_negative = false;
+        std::vector<int> orientations(ntk.depth(), 0);
 
-        starting_rank_backward = propagate_forward(ntk, forward_gap_array, backward_gap_array, starting_rank_forward, is_negative);
-        // starting_rank_foreward = propagate_backward(ntk, forward_gap_array, backward_gap_array, starting_rank_backward);
+        starting_rank_backward = propagate_forward(ntk, forward_gap_array, backward_gap_array, starting_rank_forward,
+                                                   is_negative, orientations);
+        // starting_rank_foreward = propagate_backward(ntk, forward_gap_array, backward_gap_array,
+        // starting_rank_backward);
 
         while (is_negative)
         {
@@ -809,8 +831,9 @@ class orthogonal_planar_impl
                     }
                 }
             }
-            starting_rank_backward = propagate_forward(ntk, forward_gap_array, backward_gap_array, starting_rank_forward, is_negative);
-            is_negative = false;
+            starting_rank_backward = propagate_forward(ntk, forward_gap_array, backward_gap_array,
+                                                       starting_rank_forward, is_negative, orientations);
+            // is_negative = false;
 
             // fill_gap_array_zeros(ntk, backward_gap_array);
         }
@@ -859,8 +882,9 @@ class orthogonal_planar_impl
                 output_nodes.push_back(po);
             });
 
+        aspect_ratio<Lyt> size_ = {15, 15};
         // instantiate the layout
-        Lyt layout{determine_layout_size<Lyt>(ctn, num_multi_output_nodes),
+        Lyt layout{size_,
                    twoddwave_clocking<Lyt>(ps.number_of_clock_phases)};
 
         // reserve PI nodes without positions
@@ -874,7 +898,153 @@ class orthogonal_planar_impl
         mockturtle::progress_bar bar{ctn.color_ntk.size(), "[i] arranging layout: |{0}|"};
 #endif
 
-        ctn.color_ntk.foreach_node(
+        const auto first_pi_node = [this](const auto& r, const auto& gaps)
+        {
+            int level_size = 0;
+            if (r == 0)
+            {
+                level_size = std::accumulate(gaps.begin(), gaps.end() - 1, 0);
+            }
+            level_size += ntk.num_pis();
+
+            return level_size - 1;
+        };
+
+        const auto get_orientation = [this](const auto& lvl)
+        {
+            // orientation: 1 = vertical, 2 = horizontal
+            int orientation = 2;
+            ntk.foreach_node_in_rank(lvl,
+                                     [this, &orientation, &lvl](const auto& n)
+                                     {
+                                         const auto fo = ntk.fanout(n);
+                                         if (fo.size() == 2)
+                                         {
+                                             if (ntk.rank_position(n) != 0)
+                                             {
+                                                 orientation = 2;
+                                                 return;
+                                             }
+                                             else
+                                             {
+                                                 orientation = 1;
+                                                 return;
+                                             }
+                                         }
+                                         else if (ntk.fanin_size(n) == 2)
+                                         {
+                                             const auto rk = ntk.rank_position(n);
+                                             if (rk != 0)
+                                             {
+                                                 const auto fc_pre =
+                                                     fanins(ntk, ntk.at_rank_position(lvl, ntk.rank_position(n)) - 1);
+                                                 const auto fc = fanins(ntk, n);
+                                                 assert(fc_pre.fanin_nodes.size() == 1);
+                                                 assert(fc.fanin_nodes.size() == 2);
+                                                 if ((fc.fanin_nodes[0] == fc_pre.fanin_nodes[0]) ||
+                                                     (fc.fanin_nodes[1] == fc_pre.fanin_nodes[0]))
+                                                 {
+                                                     orientation = 2;
+                                                     return;
+                                                 }
+                                             }
+                                             orientation = 1;
+                                             return;
+                                         }
+                                     });
+            return orientation;
+        };
+
+        tile<Lyt> prec_pos{0, 0};
+
+
+        for (uint32_t lvl = 0; lvl < ntk.depth() + 1; lvl++)
+        {
+            auto        level_gaps  = forward_gap_array[lvl];
+            auto        pi_sz       = first_pi_node(lvl, level_gaps);
+            tile<Lyt>   first_pos   = {pi_sz, 0};
+            std::size_t r           = 0;
+            auto        orientation = orientations[lvl];
+            ntk.foreach_node_in_rank(
+                lvl,
+                [this, &r, &level_gaps, &forward_gap_array, &first_pos, &prec_pos, &node2pos, &pi2node, &layout,
+                 &orientation](const auto& n)
+                {
+                    if (!ntk.is_constant(n))
+                    {
+                        std::cout << n << " has rank 0 \n";
+                        // if node is a PI, move it to its correct position
+                        if (ntk.is_pi(n))
+                        {
+                            if (ntk.rank_position(n) == 0)
+                            {
+                                node2pos[n] = layout.move_node(pi2node[n], first_pos);
+                                prec_pos    = first_pos;
+                                std::cout << first_pos << "PI\n";
+                            }
+                            else
+                            {
+                                int gap     = level_gaps[r];
+                                prec_pos    = {prec_pos.x - gap - 1, prec_pos.y + gap + 1};
+                                node2pos[n] = layout.move_node(pi2node[n], prec_pos);
+                            }
+                        }
+                        // if n has only one fanin
+                        else if (const auto fc = fanins(ntk, n); fc.fanin_nodes.size() == 1)
+                        {
+                            const auto& pre       = fc.fanin_nodes[0];
+                            const auto  pre_t     = static_cast<tile<Lyt>>(node2pos[pre]);
+                            int         new_lines = level_gaps.back();
+                            // horizontal (corresponding to colored east)
+                            if (ntk.rank_position(n) == 0)
+                            {
+                                if (orientation == 1)
+                                {
+                                    first_pos   = {first_pos.x, first_pos.y + new_lines + 1};
+                                }
+                                else
+                                {
+                                    first_pos   = {first_pos.x + new_lines + 1, first_pos.y};
+                                }
+
+                                prec_pos    = first_pos;
+                                node2pos[n] = connect_and_place(layout, first_pos, ntk, n, pre_t);
+                            }
+                            else
+                            {
+                                int gap     = level_gaps[r];
+                                prec_pos    = {prec_pos.x - gap - 1, prec_pos.y + gap + 1};
+                                node2pos[n] = connect_and_place(layout, prec_pos, ntk, n, pre_t);
+                            }
+
+                            std::cout << "Nodes with 1 fanins: " << n << "\n";
+                        }
+                        /*else  // if node has two fanins (or three fanins with one of them being constant)
+                        {
+                            const auto &pre1 = fc.fanin_nodes[0], pre2 = fc.fanin_nodes[1];
+
+                            auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre1]),
+                                 pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
+
+                            // pre1_t is the northwards/eastern tile.
+                            if (pre2_t.y < pre1_t.y)
+                            {
+                                std::swap(pre1_t, pre2_t);
+                            }
+
+                            prec_pos = {pre1_t.x, pre2_t.y};
+
+                            node2pos[n] = connect_and_place(layout, prec_pos, ntk, n, pre1_t, pre2_t, fc.constant_fanin);
+
+                            std::cout << "Nodes with 2 fanins: " << n << "\n";
+                            // ToDo: new_lines have to be routed after and nodes
+                        }*/
+                    }
+                    ++r;
+                });
+        }
+
+        /*ctn.color_ntk.foreach_node(
             [&](const auto& n, [[maybe_unused]] const auto i)
             {
                 // do not place constants
@@ -1008,10 +1178,10 @@ class orthogonal_planar_impl
                 // update progress
                 bar(i);
 #endif
-            });
+            });*/
 
         // place outputs after the main algorithm to handle possible multi-output or unordered nodes
-        place_outputs(layout, ctn, po_counter, node2pos);
+        // place_outputs(layout, ctn, po_counter, node2pos);
 
         // restore possibly set signal names
         restore_names(ctn.color_ntk, layout, node2pos);
