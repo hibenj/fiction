@@ -5085,6 +5085,8 @@ static const char *__doc_fiction_detail_fanout_substitution_impl_ps = R"doc()doc
 
 static const char *__doc_fiction_detail_fanout_substitution_impl_run = R"doc()doc";
 
+static const char *__doc_fiction_detail_fill_gap_array_zeros = R"doc()doc";
+
 static const char *__doc_fiction_detail_fix_wires =
 R"doc(Utility function to move wires that cross over empty tiles down one
 layer. This can happen if the wiring of a gate is deleted.
@@ -6403,6 +6405,10 @@ static const char *__doc_fiction_detail_post_layout_optimization_impl_ps = R"doc
 static const char *__doc_fiction_detail_post_layout_optimization_impl_pst = R"doc(Statistics about the post-layout optimization process.)doc";
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_propagate_backward = R"doc()doc";
+
+static const char *__doc_fiction_detail_propagate_forward = R"doc()doc";
 
 static const char *__doc_fiction_detail_qca_energy_dissipation_impl = R"doc()doc";
 
