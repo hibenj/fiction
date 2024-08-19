@@ -476,7 +476,18 @@ void fill_gap_array_zeros(Ntk& ntk, std::vector<std::vector<int>>& gap_array)
 }
 
 template <typename Ntk>
-uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& gap_array, uint32_t starting_rank)
+void fill_gap_array_zeros(Ntk& ntk, std::vector<std::vector<int>>& gap_array, int start, int end)
+{
+    for (int i = start; i < end + 1; i++)
+    {
+        gap_array[i] = std::vector<int>(ntk.rank_width(i), 0);
+    }
+}
+
+template <typename Ntk>
+uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_array,
+                           std::vector<std::vector<int>>& bw_gap_array, uint32_t starting_rank,
+                           bool& is_negative)
 {
     debug::write_dot_network(ntk);
 
@@ -484,13 +495,14 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& gap_array, u
     // orientation: 1 = vertical, 2 = horizontal
     int      orientation            = 0;
     uint32_t starting_rank_backward = 0;
+    int      fo_gap                 = 0;
 
-    for (uint32_t r = 0; r < ntk.depth(); r++)
+    for (uint32_t r = starting_rank; r < ntk.depth(); r++)
     {
         // identify_structures(ntk);
         ntk.foreach_node_in_rank(
             r,
-            [&ntk, &gap_array, &last_visited_node, &r, &orientation](const auto& n)
+            [&ntk, &fw_gap_array, &bw_gap_array, &last_visited_node, &r, &orientation, &fo_gap](const auto& n)
             {
                 const auto fo = ntk.fanout(n);
                 // fi of buffer/inv
@@ -499,11 +511,10 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& gap_array, u
                     if (ntk.rank_position(n) != ntk.rank_width(r) - 1)
                     {
                         // propagate gap: array[r + 1, rank(fo[0])] += array[r, rank(n)]
-                        gap_array[r + 1][ntk.rank_position(fo[0])] += gap_array[r][ntk.rank_position(n)];
+                        fw_gap_array[r + 1][ntk.rank_position(fo[0])] += fw_gap_array[r][ntk.rank_position(n)];
                     }
                     last_visited_node = fo[0];
                     // orientation stays the same
-                    std::cout << "Buf\n";
                 }
                 // fanout
                 else if (ntk.is_fanout(n) && fo.size() == 2)
@@ -517,36 +528,51 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& gap_array, u
                     {
                         if (orientation == 1)
                         {
+                            fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index]) - 1] -= fo_gap;
                             // array[r + 1, rank(fo[1 - max_value_index]) - 1] -= 1
-                            gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index]) - 1] -= 1;
+                            fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index]) - 1] -= 1;
                         }
                     }
 
                     // chain ends here
-                    if (ntk.fanin_size(fo[max_value_index]) == 1 && ntk.rank_position(n) != ntk.rank_width(r) - 1)
+                    if (ntk.fanin_size(fo[max_value_index]) == 1)
                     {
-                        // propagate gap: array[r + 1, rank(fo[max_value_index])] += array[r,
-                        // rank(n)]
-                        gap_array[r + 1][ntk.rank_position(fo[max_value_index])] += gap_array[r][ntk.rank_position(n)];
-                        orientation = 1;
+                        if (ntk.rank_position(n) != ntk.rank_width(r) - 1)
+                        {
+                            // propagate gap: array[r + 1, rank(fo[max_value_index])] += array[r,
+                            // rank(n)]
+                            fw_gap_array[r + 1][ntk.rank_position(fo[max_value_index])] +=
+                                fw_gap_array[r][ntk.rank_position(n)];
+                            orientation = 1;
+                        }
                     }
                     else  // chain extends
                     {
                         // if array[r, rank(n)] > 0, then x new lines and propagate to left
                         // rank(fo[0]) - 1
-                        if (ntk.rank_position(n) != 0 && gap_array[r][ntk.rank_position(n)] > 0)
+                        if (ntk.rank_position(n) != 0 && fw_gap_array[r][ntk.rank_position(n)] > 0)
                         {
                             // the last entry holds the new line entry
-                            gap_array[r + 1].back() = gap_array[r][ntk.rank_position(n)];
+                            fw_gap_array[r + 1].back() = fw_gap_array[r][ntk.rank_position(n)];
 
                             // shift gap to the left
-                            gap_array[r + 1][ntk.rank_position(fo[0]) - 1] += gap_array[r][ntk.rank_position(n)];
+                            fw_gap_array[r + 1][ntk.rank_position(fo[0]) - 1] += fw_gap_array[r][ntk.rank_position(n)];
                         }
                     }
 
+                    // check if between the fanouts there is a gap (this gap comes from backward propagation)
+                    if (fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] > 0)
+                    {
+                        std::cout << "gap between fos\n";
+                    }
+
+                    if (bw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] > fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] )
+                    {
+                        fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] = bw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])];
+                    }
+                    fo_gap = fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])];
+
                     last_visited_node = fo[max_value_index];
-                    std::cout << fo[max_value_index] << std::endl;
-                    std::cout << "FO\n";
                 }
                 // fi of 2-input node
                 else
@@ -558,19 +584,19 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& gap_array, u
                     {
                         // if array[r, rank(n)] > 0, then x new lines and propagate to left
                         // rank(fo[0]) - 1
-                        if (gap_array[r][ntk.rank_position(n)] > 0)
+                        if (fw_gap_array[r][ntk.rank_position(n)] > 0)
                         {
                             // the last entry holds the new line entry
-                            gap_array[r + 1].back() = gap_array[r][ntk.rank_position(n)];
+                            fw_gap_array[r + 1].back() = fw_gap_array[r][ntk.rank_position(n)];
 
                             // shift gap to the left
-                            gap_array[r + 1][ntk.rank_position(fo[0]) - 1] += gap_array[r][ntk.rank_position(n)];
+                            fw_gap_array[r + 1][ntk.rank_position(fo[0]) - 1] += fw_gap_array[r][ntk.rank_position(n)];
                         }
 
                         if (orientation == 2)
                         {
                             // array[r + 1, rank(fo[0]-1)] += 1
-                            gap_array[r + 1][ntk.rank_position(fo[0]) - 1] += 1;
+                            fw_gap_array[r + 1][ntk.rank_position(fo[0]) - 1] += 1;
                         }
                         // if(orientation == 1) no gap
                     }
@@ -578,16 +604,33 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& gap_array, u
                              ntk.rank_position(n) != ntk.rank_width(r) - 1)  // chain ends here
                     {
                         // propagate gap: array[r + 1, rank(fo[0])] += array[r, rank(n)]
-                        gap_array[r + 1][ntk.rank_position(fo[0])] += gap_array[r][ntk.rank_position(n)];
+                        fw_gap_array[r + 1][ntk.rank_position(fo[0])] += fw_gap_array[r][ntk.rank_position(n)];
                         orientation = 2;
                     }
 
                     last_visited_node = fo[0];
-                    std::cout << "2-ary\n";
                 }
             });
+        // compare for new lines
+        fw_gap_array[r + 1].back() = std::max(fw_gap_array[r + 1].back(), bw_gap_array[r + 1].back());
+        // if there is a negative gap, go to backward propagation
+        is_negative = false;
+        for (std::size_t i = 0; i < fw_gap_array[r].size() - 1; i++)
+        {
+            if (fw_gap_array[r + 1][i] == -1)
+            {
+                is_negative = true;
+                break;
+            }
+        }
+
+        starting_rank_backward = r;
+
+        if (is_negative)
+        {
+            break;
+        }
     }
-    starting_rank_backward = ntk.depth();
     return starting_rank_backward;
 }
 
@@ -602,7 +645,9 @@ uint32_t propagate_backward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_arra
     int      orientation           = 0;
     uint32_t starting_rank_forward = 0;
 
-    for (uint32_t r = ntk.depth() - 1; r <= ntk.depth(); r--)
+    assert(starting_rank < ntk.depth());
+
+    for (uint32_t r = starting_rank; r <= ntk.depth(); r--)
     {
         ntk.foreach_node_in_rank(
             r,
@@ -619,7 +664,6 @@ uint32_t propagate_backward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_arra
                     }
                     last_visited_node = fo[0];
                     // orientation stays the same
-                    std::cout << "Buf\n";
                 }
                 // fanout
                 else if (ntk.is_fanout(n) && fo.size() == 2)
@@ -658,8 +702,6 @@ uint32_t propagate_backward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_arra
                     }
 
                     last_visited_node = fo[max_value_index];
-                    std::cout << fo[max_value_index] << std::endl;
-                    std::cout << "FO\n";
                 }
                 // fi of 2-input node
                 else
@@ -672,7 +714,7 @@ uint32_t propagate_backward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_arra
                         if (orientation == 2)
                         {
                             // array[r + 1, rank(fo[0]-1)] += 1
-                            bw_gap_array[r][ntk.rank_position(n)] -= 1;
+                            bw_gap_array[r][ntk.rank_position(n) - 1] -= 1;
                         }
                         // if(orientation == 1) no gap
                     }
@@ -684,14 +726,13 @@ uint32_t propagate_backward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_arra
                     }
 
                     last_visited_node = fo[0];
-                    std::cout << "2-ary\n";
                 }
             });
 
         // terminate if there is no gap in the backward propagation that is bigger than a value of the matrix in the
         // forward propagation
         bool is_larger = false;
-        for (size_t i = 0; i < bw_gap_array[r].size() - 1; i++)
+        for (std::size_t i = 0; i < bw_gap_array[r].size() - 1; i++)
         {
             if (bw_gap_array[r][i] > fw_gap_array[r][i])
             {
@@ -703,10 +744,14 @@ uint32_t propagate_backward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_arra
         starting_rank_forward = r;
 
         if (!is_larger)
+        {
             break;
+        }
 
         if (r == 0)  // to stop at 0
+        {
             break;
+        }
     }
     return starting_rank_forward;
 }
@@ -727,7 +772,7 @@ class orthogonal_planar_impl
     {
         using node = typename Ntk::node;
 
-        uint32_t starting_rank_foreward = 0;
+        uint32_t starting_rank_forward = 0;
         uint32_t starting_rank_backward = 0;
 
         std::vector<std::vector<int>> forward_gap_array(ntk.depth() + 1);
@@ -743,18 +788,32 @@ class orthogonal_planar_impl
         // return this level again as starting_rank_forward
         // start again with forward propagation
 
-        starting_rank_backward = propagate_forward(ntk, forward_gap_array, starting_rank_foreward);
-        starting_rank_foreward = propagate_backward(ntk, forward_gap_array, backward_gap_array, starting_rank_backward);
+        bool is_negative = false;
 
-        /*while(starting_rank_backward != ntk.depth())
+        starting_rank_backward = propagate_forward(ntk, forward_gap_array, backward_gap_array, starting_rank_forward, is_negative);
+        // starting_rank_foreward = propagate_backward(ntk, forward_gap_array, backward_gap_array, starting_rank_backward);
+
+        while (is_negative)
         {
-            starting_rank_foreward = propagate_backward(ntk, forward_gap_array, backward_gap_array,
-        starting_rank_backward); starting_rank_backward = propagate_forward(ntk, forward_gap_array,
-        starting_rank_foreward);
+            starting_rank_forward =
+                propagate_backward(ntk, forward_gap_array, backward_gap_array, starting_rank_backward);
+            fill_gap_array_zeros(ntk, forward_gap_array, starting_rank_forward + 1, starting_rank_backward + 1);
+            // if starting rank = 0, dann muss man die PI gaps mit bw_gap_array setzen
+            if (starting_rank_forward == 0)
+            {
+                for (std::size_t i = 0; i < backward_gap_array[0].size(); i++)
+                {
+                    if (backward_gap_array[0][i] > 0)
+                    {
+                        forward_gap_array[0][i] = backward_gap_array[0][i];
+                    }
+                }
+            }
+            starting_rank_backward = propagate_forward(ntk, forward_gap_array, backward_gap_array, starting_rank_forward, is_negative);
+            is_negative = false;
 
-            fill_gap_array_zeros(ntk, backward_gap_array);
-
-        }*/
+            // fill_gap_array_zeros(ntk, backward_gap_array);
+        }
 
         for (int i = 0; i < forward_gap_array.size(); i++)
         {

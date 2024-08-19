@@ -73,8 +73,6 @@ TEST_CASE("Case buf", "[orthogonal-planar]")
     v_ntk.create_po(f6);
     v_ntk.create_po(f6);
 
-
-
     network_balancing_params ps;
     ps.unify_outputs = true;
 
