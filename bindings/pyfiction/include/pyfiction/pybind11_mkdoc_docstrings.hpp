@@ -6320,6 +6320,8 @@ static const char *__doc_fiction_detail_orthogonal_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_planar_impl = R"doc()doc";
 
+static const char *__doc_fiction_detail_orthogonal_planar_impl_ntk = R"doc()doc";
+
 static const char *__doc_fiction_detail_orthogonal_planar_impl_orthogonal_planar_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_planar_impl_po_counter = R"doc()doc";
