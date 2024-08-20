@@ -192,15 +192,14 @@ TEST_CASE("Test blueprints", "[orthogonal-planar]")
 {
     using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
 
-    auto maj = blueprints::maj4_network<mockturtle::names_view<mockturtle::aig_network>>();
+    auto maj = blueprints::and_or_network<mockturtle::names_view<mockturtle::aig_network>>();
 
     auto maj_t = convert_network<technology_network>(maj);
-    auto maj_tec = fanout_substitution<technology_network>(maj_t);
 
     network_balancing_params ps;
     ps.unify_outputs = true;
 
-    const auto maj_tec_b = network_balancing<technology_network>(fanout_substitution<technology_network>(maj_tec), ps);
+    const auto maj_tec_b = network_balancing<technology_network>(fanout_substitution<technology_network>(maj_t), ps);
 
     auto planarized_maj = fiction::node_duplication_planarization<technology_network>(maj_tec_b);
 
@@ -208,7 +207,7 @@ TEST_CASE("Test blueprints", "[orthogonal-planar]")
 
     debug::write_dot_layout(layout);
 
-    debug::write_dot_network(planarized_maj);
+    debug::write_dot_network(maj_tec_b);
 }
 
 TEST_CASE("Print layout", "[orthogonal-planar]")

@@ -992,12 +992,6 @@ class orthogonal_planar_impl
 
                                 if(prec_pos.x > pre_t.x && prec_pos.y > pre_t.y)
                                 {
-                                    const auto fo = ntk.fanout(pre);
-                                    int        max_value_index =
-                                        std::max_element(fo.begin(), fo.end(), [&](const auto& a, const auto& b)
-                                                         { return ntk.rank_position(a) < ntk.rank_position(b); }) -
-                                        fo.begin();
-
                                     pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {prec_pos.x, prec_pos.y + 1}));
                                 }
 
