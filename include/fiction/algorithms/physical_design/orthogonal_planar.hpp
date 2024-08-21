@@ -26,6 +26,7 @@
 #include <algorithm>
 #include <optional>
 #include <set>
+#include <unordered_map>
 #include <vector>
 
 #if (PROGRESS_BARS)
@@ -668,10 +669,28 @@ uint32_t propagate_backward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_arra
 
     for (uint32_t r = starting_rank; r <= ntk.depth(); r--)
     {
+        // if the node are pos
+        if (r == ntk.depth() - 1)
+        {
+            std::unordered_map<typename Ntk::node, int> node_counts;
+
+            ntk.foreach_po([&node_counts](auto po) {
+                               node_counts[po]++;
+                           });
+
+            ntk.foreach_node_in_rank(r + 1, [&ntk, &node_counts, &bw_gap_array, &r](const auto& n) {
+                                         if(ntk.is_fanout(n))
+                                         {
+                                             assert(ntk.is_po(n) && node_counts[n] == 2);
+                                             bw_gap_array[r + 1][ntk.rank_position(n)] += 1;
+                                             std::cout << "this node is a multi output node" << n << "\n";
+                                         }
+                                     });
+        }
         int orientation = 0;
         ntk.foreach_node_in_rank(
             r,
-            [&ntk, &bw_gap_array, &last_visited_node, &r, &orientation](const auto& n)
+            [&ntk, &bw_gap_array, &fw_gap_array, &last_visited_node, &r, &orientation](const auto& n)
             {
                 const auto fo = ntk.fanout(n);
                 // fi of buffer/inv
@@ -734,6 +753,16 @@ uint32_t propagate_backward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_arra
                     // chain starts here
                     if (ntk.rank_position(n) != 0 && last_visited_node != fo[0])
                     {
+                        if (fw_gap_array[r][ntk.rank_position(n) - 1] > 0)
+                        {
+                            // shift gap from fw_propagation to the left
+                            // if (orientation == 2 && ntk.rank_position(n) != 0)
+                            if (orientation != 0 && ntk.rank_position(n) != 0)
+                            {
+                                bw_gap_array[r][ntk.rank_position(n) - 1] -=
+                                    fw_gap_array[r][ntk.rank_position(n)];
+                            }
+                        }
                         if (orientation == 2)
                         {
                             // array[r + 1, rank(fo[0]-1)] += 1
@@ -806,9 +835,8 @@ class orthogonal_planar_impl
         // propagate forward
         // if a gap is negative: return this level as starting_rank_backward
         // set every gap in this line to 0 and propagate backwards
-        // stop backward propagation if there is no backwards gap in the level, that is bigger than the corresponding:
-        // return this level again as starting_rank_forward
-        // start again with forward propagation
+        // stop backward propagation if there is no backwards gap in the level, that is bigger than the
+        // corresponding: return this level again as starting_rank_forward start again with forward propagation
 
         bool             is_negative = false;
         std::vector<int> orientations(ntk.depth(), 0);
@@ -900,29 +928,23 @@ class orthogonal_planar_impl
         mockturtle::progress_bar bar{ctn.color_ntk.size(), "[i] arranging layout: |{0}|"};
 #endif
 
-        const auto first_pi_node = [this](const auto& r, const auto& gaps)
+        const auto first_pi_node = [this](const auto& gaps)
         {
             int level_size = 0;
-            if (r == 0)
-            {
-                level_size = std::accumulate(gaps.begin(), gaps.end() - 1, 0);
-            }
+
+            level_size = std::accumulate(gaps.begin(), gaps.end() - 1, 0);
+
             level_size += ntk.num_pis();
 
             return level_size - 1;
         };
 
         tile<Lyt> prec_pos{0, 0};
-        auto      pi_sz     = first_pi_node(0, forward_gap_array[0]);
+        auto      pi_sz     = first_pi_node(forward_gap_array[0]);
         tile<Lyt> first_pos = {pi_sz, 0};
 
         for (uint32_t lvl = 0; lvl < ntk.depth() + 1; lvl++)
         {
-            if (lvl  == 11)
-            {
-                std::cout << "Here\n";
-                // break;
-            }
             auto        level_gaps  = forward_gap_array[lvl];
             std::size_t r           = 0;
             auto        orientation = orientations[lvl];
@@ -944,7 +966,7 @@ class orthogonal_planar_impl
                             }
                             else
                             {
-                                int gap     = level_gaps[r];
+                                int gap     = level_gaps[r - 1];
                                 prec_pos    = {prec_pos.x - gap - 1, prec_pos.y + gap + 1};
                                 node2pos[n] = layout.move_node(pi2node[n], prec_pos);
                             }
@@ -972,27 +994,13 @@ class orthogonal_planar_impl
                             }
                             else
                             {
-                                /*if(ntk.is_fanout(pre))
+                                int gap  = level_gaps[r - 1];
+                                prec_pos = {prec_pos.x - gap - 1, prec_pos.y + gap + 1};
+
+                                if (prec_pos.x > pre_t.x && prec_pos.y > pre_t.y)
                                 {
-                                    const auto fo = ntk.fanout(pre);
-                                    int        max_value_index =
-                                        std::max_element(fo.begin(), fo.end(), [&](const auto& a, const auto& b)
-                                                         { return ntk.rank_position(a) < ntk.rank_position(b); }) -
-                                        fo.begin();
-
-                                    // if n is the south fanout and there are new lines, it gets routed over an edge
-                                    if (n == fo[max_value_index] && new_lines > 0)
-                                    {
-                                        pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {pre_t.x, pre_t.y + 2}));
-                                    }
-                                }*/
-
-                                int gap     = level_gaps[r - 1];
-                                prec_pos    = {prec_pos.x - gap - 1, prec_pos.y + gap + 1};
-
-                                if(prec_pos.x > pre_t.x && prec_pos.y > pre_t.y)
-                                {
-                                    pre_t = static_cast<tile<Lyt>>(wire_south(layout, pre_t, {prec_pos.x, prec_pos.y + 1}));
+                                    pre_t =
+                                        static_cast<tile<Lyt>>(wire_south(layout, pre_t, {prec_pos.x, prec_pos.y + 1}));
                                 }
 
                                 node2pos[n] = connect_and_place(layout, prec_pos, ntk, n, pre_t);
