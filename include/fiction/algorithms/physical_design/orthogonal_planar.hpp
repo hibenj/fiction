@@ -498,6 +498,7 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_array
 
     for (uint32_t r = starting_rank; r < ntk.depth(); r++)
     {
+        std::cout << "r: " << r << "\n";
         int orientation = 0;
         // identify_structures(ntk);
         ntk.foreach_node_in_rank(
@@ -635,11 +636,42 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_array
             });
         // compare for new lines
         fw_gap_array[r + 1].back() = std::max(fw_gap_array[r + 1].back(), bw_gap_array[r + 1].back());
+        // resolve multi output pos
+        if (r == ntk.depth() - 1)
+        {
+            const auto save_old = fw_gap_array[r + 1];
+            std::unordered_map<typename Ntk::node, int> node_counts;
+
+            ntk.foreach_po([&node_counts](auto po) {
+                               node_counts[po]++;
+                           });
+
+            ntk.foreach_node_in_rank(r + 1, [&ntk, &node_counts, &fw_gap_array, &r](const auto& n) {
+                                         if(ntk.is_fanout(n))
+                                         {
+                                             assert(ntk.is_po(n) && node_counts[n] == 2);
+                                             fw_gap_array[r + 1][ntk.rank_position(n)] -= 1;
+                                         }
+                                     });
+            is_negative = false;
+            for (std::size_t i = 0; i < fw_gap_array[r + 1].size() - 1; i++)
+            {
+                if (fw_gap_array[r + 1][i] < 0)
+                {
+                    is_negative = true;
+                    break;
+                }
+            }
+            if (!is_negative)
+            {
+                fw_gap_array[r + 1] = save_old;
+            }
+        }
         // if there is a negative gap, go to backward propagation
         is_negative = false;
         for (std::size_t i = 0; i < fw_gap_array[r + 1].size() - 1; i++)
         {
-            if (fw_gap_array[r + 1][i] == -1)
+            if (fw_gap_array[r + 1][i] < 0)
             {
                 is_negative = true;
                 break;
@@ -669,7 +701,7 @@ uint32_t propagate_backward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_arra
 
     for (uint32_t r = starting_rank; r <= ntk.depth(); r--)
     {
-        // if the node are pos
+        // resolve multi output pos
         if (r == ntk.depth() - 1)
         {
             std::unordered_map<typename Ntk::node, int> node_counts;
@@ -683,7 +715,6 @@ uint32_t propagate_backward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_arra
                                          {
                                              assert(ntk.is_po(n) && node_counts[n] == 2);
                                              bw_gap_array[r + 1][ntk.rank_position(n)] += 1;
-                                             std::cout << "this node is a multi output node" << n << "\n";
                                          }
                                      });
         }
