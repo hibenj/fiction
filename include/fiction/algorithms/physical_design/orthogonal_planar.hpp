@@ -14,6 +14,7 @@
 #include "fiction/utils/name_utils.hpp"
 #include "fiction/utils/network_utils.hpp"
 #include "fiction/utils/placement_utils.hpp"
+#include <fiction/algorithms/physical_design/orthogonal.hpp>
 
 #include <fmt/format.h>
 #include <mockturtle/traits.hpp>
@@ -36,436 +37,8 @@
 namespace fiction
 {
 
-/**
- * Parameters for the orthogonal physical design algorithm.
- */
-struct orthogonal_physical_design_params
-{
-    /**
-     * Number of clock phases to use. 3 and 4 are supported.
-     */
-    num_clks number_of_clock_phases = num_clks::FOUR;
-};
-
-struct orthogonal_physical_design_stats
-{
-    mockturtle::stopwatch<>::duration time_total{0};
-
-    uint64_t x_size{0ull}, y_size{0ull};
-    uint64_t num_gates{0ull}, num_wires{0ull};
-
-    void report(std::ostream& out = std::cout) const
-    {
-        out << fmt::format("[i] total time  = {:.2f} secs\n", mockturtle::to_seconds(time_total));
-        out << fmt::format("[i] layout size = {} × {}\n", x_size, y_size);
-        out << fmt::format("[i] num. gates  = {}\n", num_gates);
-        out << fmt::format("[i] num. wires  = {}\n", num_wires);
-    }
-};
-
-/**
- * 1. Find widest level
- * X. [Analyze network structure in order to llo network to get smaller]
- * 2. From the widest level place its FIs and FOs on the layout
- *
- *
- *
- */
-
 namespace detail
 {
-
-/**
- * Determine siblings of the given node. A sibling is a node that shares the same fan-in with n.
- * @param n Node to consider.
- * @return Siblings of n.
- */
-template <typename Ntk>
-std::vector<mockturtle::node<Ntk>> siblings(const Ntk& ntk, const mockturtle::node<Ntk> n) noexcept
-{
-    std::vector<mockturtle::node<Ntk>> sibs{};
-    ntk.foreach_fanin(n,
-                      [&ntk, &sibs, &n](const auto& fi)
-                      {
-                          // skip constants
-                          if (const auto fin = ntk.get_node(fi); !ntk.is_constant(fin))
-                          {
-                              ntk.foreach_fanout(fin,
-                                                 [&ntk, &sibs, &n](const auto& fon)
-                                                 {
-                                                     // do not consider constants or n itself
-                                                     if (!ntk.is_constant(fon) && (fon != n))
-                                                     {
-                                                         sibs.push_back(fon);
-                                                     }
-                                                 });
-                          }
-                      });
-
-    return sibs;
-}
-
-template <typename Ntk>
-struct coloring_container
-{
-    explicit coloring_container(const Ntk& ntk) :
-            color_ntk{ntk},
-            color_east{color_ntk.new_color()},
-            color_south{color_ntk.new_color()}
-    {}
-
-    out_of_place_edge_color_view<Ntk> color_ntk;
-
-    const uint32_t color_null = 0ul, color_east, color_south;
-
-    [[nodiscard]] uint32_t opposite_color(const uint32_t c) const noexcept
-    {
-        return c == color_east ? color_south : color_east;
-    }
-};
-
-template <typename Ntk>
-void recursively_paint_edges(const coloring_container<Ntk>&                             ctn,
-                             const mockturtle::edge<out_of_place_edge_color_view<Ntk>>& e, const uint32_t c) noexcept
-{
-    // exit condition: edge is already painted
-    if (ctn.color_ntk.edge_color(e) != ctn.color_null)
-    {
-        return;
-    }
-
-    // paint edge with given color
-    ctn.color_ntk.paint_edge(e, c);
-
-    // paint children edges
-    foreach_outgoing_edge(ctn.color_ntk, e.source,
-                          [&ctn, &e, &c](const auto& oe)
-                          {
-                              if (oe != e)
-                              {
-                                  recursively_paint_edges(ctn, oe, ctn.opposite_color(c));
-                              }
-                          });
-
-    // paint spouse edges
-    foreach_incoming_edge(ctn.color_ntk, e.target,
-                          [&ctn, &e, &c](const auto& ie)
-                          {
-                              if (ie != e)
-                              {
-                                  recursively_paint_edges(ctn, ie, c);
-                              }
-                          });
-}
-
-template <typename Ntk>
-coloring_container<Ntk> east_south_edge_coloring(const Ntk& ntk) noexcept
-{
-    coloring_container<Ntk> ctn{ntk};
-    mockturtle::topo_view   rtv{ntk};
-
-#if (PROGRESS_BARS)
-    // initialize a progress bar
-    mockturtle::progress_bar bar{static_cast<uint32_t>(ctn.color_ntk.num_gates()),
-                                 "[i] determining relative positions: |{0}|"};
-#endif
-
-    rtv.foreach_gate(
-        [&](const auto& n, [[maybe_unused]] const auto i)
-        {
-            const auto finc = fanin_edges(ctn.color_ntk, n);
-
-            // if any incoming edge is colored east, color them all east, and south otherwise
-            const auto color = std::any_of(finc.fanin_edges.cbegin(), finc.fanin_edges.cend(), [&ctn](const auto& fe)
-                                           { return ctn.color_ntk.edge_color(fe) == ctn.color_east; }) ?
-                                   ctn.color_east :
-                                   ctn.color_south;
-
-            std::for_each(finc.fanin_edges.cbegin(), finc.fanin_edges.cend(),
-                          [&ctn, &color](const auto& fe) { recursively_paint_edges(ctn, fe, color); });
-
-            // if all incoming edges are colored east, paint the node east as well
-            if (std::all_of(finc.fanin_edges.cbegin(), finc.fanin_edges.cend(),
-                            [&ctn](const auto& fe) { return ctn.color_ntk.edge_color(fe) == ctn.color_east; }))
-            {
-                ctn.color_ntk.paint(mockturtle::node<Ntk>{n}, ctn.color_east);
-            }
-            // else, if all incoming edges are colored south, paint the node south as well
-            else if (std::all_of(finc.fanin_edges.cbegin(), finc.fanin_edges.cend(),
-                                 [&ctn](const auto& fe) { return ctn.color_ntk.edge_color(fe) == ctn.color_south; }))
-            {
-                ctn.color_ntk.paint(mockturtle::node<Ntk>{n}, ctn.color_south);
-            }
-
-#if (PROGRESS_BARS)
-            // update progress
-            bar(i);
-#endif
-        });
-
-    return ctn;
-}
-
-template <typename Ntk>
-bool is_east_south_colored(const Ntk& ntk) noexcept
-{
-    bool is_properly_colored = true;
-    ntk.foreach_node(
-        [&ntk, &is_properly_colored](const auto& n)
-        {
-            if (!ntk.is_constant(n))
-            {
-                uint32_t clr = 0ul;
-                ntk.foreach_fanout(n,
-                                   [&ntk, &is_properly_colored, &clr](const auto& fon, const auto i)
-                                   {
-                                       // store color of first fanout
-                                       if (i == 0)
-                                       {
-                                           clr = ntk.color(fon);
-                                       }
-                                       // compare color of first fanout against all others
-                                       else if (clr == ntk.color(fon))
-                                       {
-                                           // since we are working with 3-graphs, this can only be executed if i == 1
-                                           is_properly_colored = false;
-                                       }
-
-                                       return is_properly_colored;
-                                   });
-            }
-            return is_properly_colored;
-        });
-
-    return is_properly_colored;
-}
-
-template <typename Ntk>
-uint32_t is_eastern_po_orientation_available(const coloring_container<Ntk>& ctn,
-                                             const mockturtle::node<Ntk>&   n) noexcept
-{
-    bool eastern_side_available = true;
-
-    // PO nodes can have a maximum of one other fanout
-    ctn.color_ntk.foreach_fanout(n,
-                                 [&ctn, &eastern_side_available](const auto& fon)
-                                 {
-                                     // if that fanout is colored east, no PO can be placed there
-                                     if (ctn.color_ntk.color(fon) == ctn.color_east)
-                                     {
-                                         eastern_side_available = false;
-                                     }
-                                     return false;
-                                 });
-
-    return eastern_side_available;
-}
-
-template <typename Lyt, typename Ntk>
-aspect_ratio<Lyt> determine_layout_size(const coloring_container<Ntk>& ctn,
-                                        const uint32_t                 num_multi_output_nodes) noexcept
-{
-#if (PROGRESS_BARS)
-    // initialize a progress bar
-    mockturtle::progress_bar bar{static_cast<uint32_t>(ctn.color_ntk.size()), "[i] determining layout size: |{0}|"};
-#endif
-
-    uint64_t x = 0ull, y = ctn.color_ntk.num_pis() - 1;
-    ctn.color_ntk.foreach_node(
-        [&](const auto& n, [[maybe_unused]] const auto i)
-        {
-            if (!ctn.color_ntk.is_constant(n))
-            {
-                if (ctn.color_ntk.is_pi(n))
-                {
-                    ctn.color_ntk.foreach_fanout(n,
-                                                 [&ctn, &x](const auto& fon)
-                                                 {
-                                                     if (ctn.color_ntk.color(fon) == ctn.color_south)
-                                                     {
-                                                         ++x;
-                                                     }
-                                                 });
-                }
-                else if (const auto clr = ctn.color_ntk.color(n); clr == ctn.color_east)
-                {
-                    ++x;
-                }
-                else if (clr == ctn.color_south)
-                {
-                    ++y;
-                }
-                else if (clr == ctn.color_null)
-                {
-                    ++x;
-                    ++y;
-                }
-
-                if (ctn.color_ntk.is_po(n))
-                {
-                    if (is_eastern_po_orientation_available(ctn, n))
-                    {
-                        ++x;
-                    }
-                    else
-                    {
-                        ++y;
-                    }
-                }
-            }
-
-#if (PROGRESS_BARS)
-            // update progress
-            bar(i);
-#endif
-        });
-
-    // for multi-output nodes, add another row
-    y += num_multi_output_nodes;
-
-    return {x, y, 1};
-}
-
-template <typename Lyt>
-mockturtle::signal<Lyt> wire_east(Lyt& lyt, const tile<Lyt>& src, const tile<Lyt>& dest)
-{
-    auto a = static_cast<mockturtle::signal<Lyt>>(src);
-
-    for (auto x = src.x + 1; x < dest.x; ++x)
-    {
-        auto t = tile<Lyt>{x, src.y, 0};
-        if (!lyt.is_empty_tile(t))  // crossing case
-        {
-            t = lyt.above(t);
-        }
-
-        a = lyt.create_buf(a, t);
-    }
-
-    return a;
-}
-
-template <typename Lyt>
-mockturtle::signal<Lyt> wire_south(Lyt& lyt, const tile<Lyt>& src, const tile<Lyt>& dest)
-{
-    auto a = static_cast<mockturtle::signal<Lyt>>(src);
-
-    for (auto y = src.y + 1; y < dest.y; ++y)
-    {
-        auto t = tile<Lyt>{src.x, y, 0};
-        if (!lyt.is_empty_tile(t))  // crossing case
-        {
-            t = lyt.above(t);
-        }
-
-        a = lyt.create_buf(a, t);
-    }
-
-    return a;
-}
-
-template <typename Lyt, typename Ntk>
-mockturtle::signal<Lyt> connect_and_place(Lyt& lyt, const tile<Lyt>& t, const Ntk& ntk, const mockturtle::node<Ntk>& n,
-                                          tile<Lyt> pre1_t, tile<Lyt> pre2_t,
-                                          const std::optional<bool>& c = std::nullopt)
-{
-    // make sure pre1_t is the northwards tile and pre2_t is the westwards one
-    if (pre2_t < pre1_t)
-    {
-        std::swap(pre1_t, pre2_t);
-    }
-
-    return place(lyt, t, ntk, n, wire_south(lyt, pre1_t, t), wire_east(lyt, pre2_t, t), c);
-}
-
-template <typename Lyt, typename Ntk>
-mockturtle::signal<Lyt> connect_and_place(Lyt& lyt, const tile<Lyt>& t, const Ntk& ntk, const mockturtle::node<Ntk>& n,
-                                          const tile<Lyt>& pre_t)
-{
-    if (lyt.is_westwards_of(t, pre_t))
-    {
-        return place(lyt, t, ntk, n, wire_east(lyt, pre_t, t));
-    }
-    if (lyt.is_northwards_of(t, pre_t))
-    {
-        return place(lyt, t, ntk, n, wire_south(lyt, pre_t, t));
-    }
-
-    assert(false);  // gates cannot be placed elsewhere
-    return {};      // fix -Wreturn-type warning
-}
-
-/**
- * Places the primary outputs (POs) in the layout.
- *
- * This function positions the POs within the provided layout. If a PO is a multi-output node (a fanout with two POs
- * connected to it), the second PO is automatically placed and connected below the first output.
- *
- * The positioning of multi-output nodes will follow this structure:
- *
- * F→=→...→O
- * ↓
- * =→=→...→O
- *
- * @tparam Lyt Desired gate-level layout type.
- * @tparam Ntk Network type that acts as specification.
- * @param layout Current gate-level layout.
- * @param ctn Contains the colored network.
- * @param po_counter Counter for POs.
- * @param node2pos Mapping from network nodes to layout signals, i.e., a pointer to their position in the layout. The
- * map is used to fetch location of the fanins. The `mockturtle::node_map` is not updated by this function.
- */
-template <typename Ntk, typename Lyt>
-void place_outputs(Lyt& layout, const coloring_container<Ntk>& ctn, uint32_t po_counter,
-                   const mockturtle::node_map<mockturtle::signal<Lyt>, decltype(ctn.color_ntk)>& node2pos)
-{
-    std::vector<mockturtle::node<Ntk>> output_nodes{};
-
-    ctn.color_ntk.foreach_po(
-        [&po_counter, &output_nodes, &node2pos, &ctn, &layout](const auto& po)
-        {
-            if (!ctn.color_ntk.is_constant(po))
-            {
-                const auto n_s     = node2pos[po];
-                auto       po_tile = static_cast<tile<Lyt>>(n_s);
-
-                const auto multi_output_node =
-                    std::find(output_nodes.cbegin(), output_nodes.cend(), po) != output_nodes.cend();
-
-                // determine PO orientation
-                if (!is_eastern_po_orientation_available(ctn, po) || multi_output_node)
-                {
-                    po_tile = static_cast<tile<Lyt>>(wire_south(layout, po_tile, {po_tile.x, po_tile.y + 2}));
-                }
-
-                // check if PO position is located at the border
-                if (layout.is_at_eastern_border({po_tile.x + 1, po_tile.y}) && !multi_output_node)
-                {
-                    ++po_tile.x;
-                    layout.create_po(n_s,
-                                     ctn.color_ntk.has_output_name(po_counter) ?
-                                         ctn.color_ntk.get_output_name(po_counter++) :
-                                         fmt::format("po{}", po_counter++),
-                                     po_tile);
-                }
-                // place PO at the border and connect it by wire segments
-                else
-                {
-                    const tile<Lyt> anker{po_tile};
-
-                    po_tile = layout.eastern_border_of(po_tile);
-
-                    layout.create_po(wire_east(layout, anker, po_tile),
-                                     ctn.color_ntk.has_output_name(po_counter) ?
-                                         ctn.color_ntk.get_output_name(po_counter++) :
-                                         fmt::format("po{}", po_counter++),
-                                     po_tile);
-                }
-
-                output_nodes.push_back(po);
-            }
-        });
-}
 
 template <typename Ntk>
 void fill_gap_array_zeros(Ntk& ntk, std::vector<std::vector<int>>& gap_array)
@@ -920,19 +493,16 @@ class orthogonal_planar_impl
 
         // measure run time
         mockturtle::stopwatch stop{pst.time_total};
-        // compute a coloring
-        const auto ctn = east_south_edge_coloring(ntk);
 
-        ntk.width();
 
-        mockturtle::node_map<mockturtle::signal<Lyt>, decltype(ctn.color_ntk)> node2pos{ctn.color_ntk};
+        mockturtle::node_map<mockturtle::signal<Lyt>, decltype(ntk)> node2pos{ntk};
 
         // find multi-output nodes
         std::vector<mockturtle::node<decltype(ntk)>> output_nodes{};
         std::vector<mockturtle::node<decltype(ntk)>> multi_output_nodes{};
         uint32_t                                     num_multi_output_nodes{0};
 
-        ctn.color_ntk.foreach_po(
+        ntk.foreach_po(
             [&](const auto& po)
             {
                 if (std::find(output_nodes.cbegin(), output_nodes.cend(), po) != output_nodes.cend())
@@ -949,7 +519,7 @@ class orthogonal_planar_impl
         Lyt layout{size_, twoddwave_clocking<Lyt>(ps.number_of_clock_phases)};
 
         // reserve PI nodes without positions
-        auto pi2node = reserve_input_nodes(layout, ctn.color_ntk);
+        auto pi2node = reserve_input_nodes(layout, ntk);
 
         // first x-pos to use for gates is 1 because PIs take up the 0th column
         tile<Lyt> latest_pos{1, 0};
@@ -1087,7 +657,7 @@ class orthogonal_planar_impl
         // place_outputs(layout, ctn, po_counter, node2pos);
 
         // restore possibly set signal names
-        restore_names(ctn.color_ntk, layout, node2pos);
+        restore_names(ntk, layout, node2pos);
 
         // statistical information
         pst.x_size    = layout.x() + 1;
