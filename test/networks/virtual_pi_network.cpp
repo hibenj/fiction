@@ -5,11 +5,14 @@
 #include <catch2/catch_template_test_macros.hpp>
 #include <catch2/catch_test_macros.hpp>
 
+#include <fiction/networks/views/extended_rank_view.hpp>
+
 #include <fiction/algorithms/verification/virtual_miter.hpp>
 #include <fiction/networks/technology_network.hpp>
 #include <fiction/networks/virtual_pi_network.hpp>
 
 #include <mockturtle/algorithms/equivalence_checking.hpp>
+#include <mockturtle/algorithms/miter.hpp>
 #include <mockturtle/networks/aig.hpp>
 #include <mockturtle/networks/xag.hpp>
 
@@ -42,10 +45,11 @@ TEST_CASE("Copy technology network and size consistency", "[virtual-pi-view]")
     CHECK(vpi.real_size() == 7);
     // This is the size with the virtual PIs
     CHECK(vpi.size() == 9);
-    vpi.remove_virtual_input_nodes();
+    const auto non_vpi = delete_virtual_pis(vpi);
     // After removing/remapping the virtual PIs to their real PIs the sizes are equal
-    CHECK(vpi.real_size() == vpi.size());
-    CHECK(vpi.size() == 7);
+    CHECK(non_vpi.real_size() == non_vpi.size());
+    CHECK(non_vpi.size() == vpi.size() - vpi.num_virtual_pis());
+    CHECK(non_vpi.size() == 7);
 }
 
 TEMPLATE_TEST_CASE("Copy networks and size consistency", "[virtual-pi-view]", mockturtle::aig_network,
@@ -76,13 +80,15 @@ TEMPLATE_TEST_CASE("Copy networks and size consistency", "[virtual-pi-view]", mo
     CHECK(vpi.real_size() == 6);
     // This is the size with the virtual PIs
     CHECK(vpi.size() == 8);
-    vpi.remove_virtual_input_nodes();
+    const auto non_vpi = delete_virtual_pis(vpi);
     // After removing/remapping the virtual PIs to their real PIs the sizes are equal
-    CHECK(vpi.real_size() == vpi.size());
-    CHECK(vpi.size() == 6);
+    CHECK(non_vpi.real_size() == non_vpi.size());
+    // Minus one, since AIG nodes get hashed when creating the new AIG
+    CHECK(non_vpi.size() == vpi.size() - vpi.num_virtual_pis() - 1);
+    CHECK(non_vpi.size() == 5);
 }
 
-TEST_CASE("Remove PIs from technology network and check equivalence", "[virtual-pi-view]")
+TEST_CASE("Check equivalence of an extended_rank view", "[virtual-pi-view]")
 {
     technology_network                     tec{};
     virtual_pi_network<technology_network> vpi{};
@@ -112,12 +118,11 @@ TEST_CASE("Remove PIs from technology network and check equivalence", "[virtual-
     tec.create_po(f2_t);
     tec.create_po(f3_t);
 
-    vpi.remove_virtual_input_nodes();
-    CHECK(vpi.real_size() == vpi.size());
-    CHECK(vpi.size() == tec.size());
+    auto ntk_r     = extended_rank_view(vpi);
 
     mockturtle::equivalence_checking_stats st;
-    const auto maybe_cec_m = mockturtle::equivalence_checking(*fiction::miter<technology_network>(tec, vpi), {}, &st);
+    const auto                             maybe_cec_m =
+        mockturtle::equivalence_checking(*fiction::virtual_miter<technology_network>(tec, ntk_r), {}, &st);
     REQUIRE(maybe_cec_m.has_value());
     CHECK(*maybe_cec_m == 1);
 }
@@ -153,12 +158,16 @@ TEMPLATE_TEST_CASE("Remove PIs and check equivalence", "[virtual-pi-view]", mock
     tec.create_po(f2_t);
     tec.create_po(f3_t);
 
-    vpi.remove_virtual_input_nodes();
-    CHECK(vpi.real_size() == vpi.size());
-    CHECK(vpi.size() == tec.size());
+    auto non_virt = delete_virtual_pis(vpi);
+    CHECK(non_virt.size() ==
+          vpi.size() - vpi.num_virtual_pis() - 2);  // When creating the AIG, the nodes will be hashed. Since all AND
+                                                    // nodes are the same, only one node will be created.
+
+    CHECK(non_virt.real_size() == non_virt.size());
 
     mockturtle::equivalence_checking_stats st;
-    const auto maybe_cec_m = mockturtle::equivalence_checking(*fiction::miter<technology_network>(tec, vpi), {}, &st);
+    const auto                             maybe_cec_m =
+        mockturtle::equivalence_checking(*mockturtle::miter<technology_network>(tec, non_virt), {}, &st);
     REQUIRE(maybe_cec_m.has_value());
     CHECK(*maybe_cec_m == 1);
 }
@@ -204,12 +213,12 @@ TEST_CASE("Remove PIs and check equivalence with different sizes", "[virtual-pi-
     vpi.create_po(f13);
     vpi.create_po(f14);
 
-    vpi.remove_virtual_input_nodes();
-    CHECK(vpi.real_size() == vpi.size());
-    CHECK(vpi.size() - 2 == tec.size());  // the -2 is due to the buffers
+    auto non_virt = delete_virtual_pis(vpi);
+    CHECK(non_virt.size() == vpi.size() - vpi.num_virtual_pis());
 
     mockturtle::equivalence_checking_stats st;
-    const auto maybe_cec_m = mockturtle::equivalence_checking(*fiction::miter<technology_network>(tec, vpi), {}, &st);
+    const auto                             maybe_cec_m =
+        mockturtle::equivalence_checking(*mockturtle::miter<technology_network>(tec, non_virt), {}, &st);
     REQUIRE(maybe_cec_m.has_value());
     CHECK(*maybe_cec_m == 1);
 }

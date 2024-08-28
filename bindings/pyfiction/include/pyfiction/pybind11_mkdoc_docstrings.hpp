@@ -23,32 +23,6 @@
 #endif
 
 
-static const char *__doc_extended_rank_view =
-R"doc(@class extended_rank_view<Ntk, true>
-
-If already a rank_interface exists only the depth_view constructor
-gets called.
-
-Template parameter ``Ntk``:
-    - The network type.)doc";
-
-static const char *__doc_extended_rank_view_2 =
-R"doc(Deduction guide for `extended_rank_view'
-
-Template parameter ``T``:
-    Network type deduced from the construction context of
-    `extended_rank_view`.)doc";
-
-static const char *__doc_extended_rank_view_3 =
-R"doc(Deduction guide for `extended_rank_view` with two constructor
-arguments
-
-Template parameter ``T``:
-    Network type deduced from the construction context of
-    `extended_rank_view`.)doc";
-
-static const char *__doc_extended_rank_view_extended_rank_view = R"doc()doc";
-
 static const char *__doc_fiction_a_star =
 R"doc(The A* path finding algorithm for shortest loop-less paths between a
 given source and target coordinate in a layout. This function
@@ -1965,11 +1939,21 @@ Returns:
     Integer representing the SiDB's charge state.)doc";
 
 static const char *__doc_fiction_check_planarity =
-R"doc(Checks if a logic network is planar. To perform this check, the
-network must have ranks assigned.
+R"doc(Checks if a logic network is planar for a network that is path
+balanced and has ranks assigned.
 
 If the network is not balanced, an exception is thrown. To balance the
 network, insert buffers to divide multi-level edges.
+
+It checks if the network represented by the variable `ntk` is planar.
+The network is planar if, for any edge with starting point :math:`m`
+and endpoint :math:`n` (represented by the node ranks), there is never
+another edge with starting point :math:`m' > m` and endpoint :math:`n'
+< n`, or vice versa. When iterating through the ranks of one level,
+the endpoints are always increasing. Therefore, only the starting
+points need to be checked. Thus, the highest connected starting point
+in the fan-in gives a border :math:`m_{\text{max}}` for every
+subsequent edge.
 
 Template parameter ``Ntk``:
     Logic network type.
@@ -1978,10 +1962,7 @@ Parameter ``ntk``:
     The logic network to check for planarity.
 
 Returns:
-    `true` if the network is planar, `false` otherwise.
-
-Throws:
-    std::runtime_error if the network is not balanced.)doc";
+    `true` if the network is planar, `false` otherwise.)doc";
 
 static const char *__doc_fiction_check_planarity_impl = R"doc()doc";
 
@@ -1993,13 +1974,14 @@ static const char *__doc_fiction_check_planarity_impl_run =
 R"doc(Checks if a given network is planar.
 
 This function checks if the network represented by the variable `ntk`
-is planar. The network is planar if for any edge with starting point m
-and endpoint n (represented by the node ranks), there is never another
-edge with starting point m_ > m and endpoint n_ < n, or vice versa.
-When iterating through the ranks of one level, the endpoints are
-always increasing. Therefore, only the starting points need to be
-checked. Thus, the highest connected starting point in the fan-in
-gives a border m_max for every subsequent edge.
+is planar. The network is planar if, for any edge with starting point
+:math:`m` and endpoint :math:`n` (represented by the node ranks),
+there is never another edge with starting point :math:`m' > m` and
+endpoint :math:`n' < n`, or vice versa. When iterating through the
+ranks of one level, the endpoints are always increasing. Therefore,
+only the starting points need to be checked. Thus, the highest
+connected starting point in the fan-in gives a border
+:math:`m_{\text{max}}` for every subsequent edge.
 
 Returns:
     `true` if the network is planar, `false` otherwise.)doc";
@@ -3391,6 +3373,20 @@ Parameter ``neutral_defect_spacing_overwrite``:
 Returns:
     A pair of uint16_t values representing the number of horizontal
     and vertical SiDBs affected by the given defect type.)doc";
+
+static const char *__doc_fiction_delete_virtual_pis =
+R"doc(Deletes virtual primary inputs from a network. This can mainly be used
+for equivalence checking. If the network does not have any virtual PIs
+stored, the network is returned.
+
+Template parameter ``Ntk``:
+    The type of network.
+
+Parameter ``ntk``:
+    The input network.
+
+Returns:
+    The resulting network after virtual primary inputs are deleted.)doc";
 
 static const char *__doc_fiction_dependent_cell_mode = R"doc(An enumeration of modes for the dependent cell.)doc";
 
@@ -6427,34 +6423,23 @@ it is a primary input. If a non-primary input is found, the
 `f_final_level` parameter is set to false and the loop is exited.
 
 Parameter ``v_next_level``:
-    The vector of nodes to be checked
-
-Parameter ``f_final_level``:
-    A reference to a boolean indicating if the vector contains only
-    primary inputs)doc";
+    The vector of nodes to be checked.)doc";
 
 static const char *__doc_fiction_detail_node_duplication_planarization_impl_compute_node_order_next_level =
 R"doc(Computes the order of nodes in the next level based on delay
-
-Parameter ``next_level``:
-    The vector to store the nodes in the next level
 
 This function computes the order of nodes in the next level based on
 their delay in the H-graph of the level. It selects the path with the
 least delay from the current level pairs and follows it via fanin
 relations. The nodes are inserted into the next level vector in the
-order they are encountered.)doc";
+order they are encountered.
+
+Parameter ``next_level``:
+    The vector to store the nodes in the next level.)doc";
 
 static const char *__doc_fiction_detail_node_duplication_planarization_impl_compute_slice_delays =
 R"doc(Computes the delay in a given slice (each possible order of
-node_pairs) of an H-graph
-
-Parameter ``nd``:
-    Node in the H-graph
-
-Parameter ``border_pis``:
-    A boolean indicating whether the input PIs (Primary Inputs) should
-    be propagated to the next level
+node_pairs) of an H-graph.
 
 This function iterates over the fanins of the given node and computes
 the delay for all possible orders of these nodes that form a
@@ -6469,26 +6454,26 @@ updated.
 The processed node_pairs are pushed back to the 'lvl_pairs' data
 member for subsequent delay calculations.
 
-Throws:
-    std::runtime_error if no combinations (possible node_pairs) are
-    found, which might suggest a dangling node)doc";
+Parameter ``nd``:
+    Node in the H-graph.
 
-static const char *__doc_fiction_detail_node_duplication_planarization_impl_insert_if_unique =
-R"doc(Inserts a node into a vector if it is unique
+Parameter ``border_pis``:
+    A boolean indicating whether the input PIs (Primary Inputs) should
+    be propagated to the next level.)doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_impl_insert_if_not_first =
+R"doc(Inserts a node into a vector if it is unique.
 
 This function inserts a node into a vector only if the vector is empty
 or the node is not equal to the first element of the vector. If the
 vector is not empty and the node is equal to the first element, it
 does nothing.
 
-Template parameter ``Ntk``:
-    The network type
-
 Parameter ``node``:
-    The node to be inserted
+    The node to be inserted.
 
 Parameter ``vec``:
-    The vector to insert the node into)doc";
+    The vector to insert the node into.)doc";
 
 static const char *__doc_fiction_detail_node_duplication_planarization_impl_lvl_pairs = R"doc()doc";
 
@@ -6501,10 +6486,7 @@ static const char *__doc_fiction_detail_node_duplication_planarization_impl_ps =
 static const char *__doc_fiction_detail_node_duplication_planarization_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_node_pair =
-R"doc(A structure representing a pair of nodes in an H-graph
-
-Template parameter ``Ntk``:
-    Network type for the nodes in the pair
+R"doc(A structure representing a pair of nodes in an H-graph.
 
 The nodes stored in this struct describe the fanin-edges of a node in
 an H-graph. A node pair object holds two nodes, which are saved in the
@@ -6515,26 +6497,26 @@ second node in 'pair'. The order of 'middle_nodes' is arbitrary as
 they cannot be further connected to any other nodes. For the
 planarization, only the nodes inside the 'pair' are relevant.
 
-@note The edges connecting to the nodes in 'pair' effectively block
-the 'middle_nodes'.)doc";
+Template parameter ``Ntk``:
+    Network type for the nodes in the pair.)doc";
 
-static const char *__doc_fiction_detail_node_pair_delay = R"doc(Specifies the delay value for the node)doc";
+static const char *__doc_fiction_detail_node_pair_delay = R"doc(Specifies the delay value for the node.)doc";
 
 static const char *__doc_fiction_detail_node_pair_fanin_pair =
 R"doc(Shared pointer to another instance of node_pair detailing fanin-edge
-alignment)doc";
+alignment.)doc";
 
 static const char *__doc_fiction_detail_node_pair_node_pair =
-R"doc(node_pair constructor
+R"doc(Standard constructor.
 
 Parameter ``node1``:
-    The first node of the fanin-edged node
+    The first node of the fanin-edged node.
 
 Parameter ``node2``:
-    The second node of the fanin-edged node
+    The second node of the fanin-edged node.
 
 Parameter ``delayValue``:
-    The delay value for the node)doc";
+    The delay value for the node.)doc";
 
 static const char *__doc_fiction_detail_on_the_fly_circuit_design_impl = R"doc()doc";
 
@@ -9176,6 +9158,32 @@ R"doc(*QuickExact* is also an exact simulation engine that requires
 exponential runtime, but it scales a lot better than ExGS due to its
 effective search-space pruning.)doc";
 
+static const char *__doc_fiction_extended_rank_view =
+R"doc(@class extended_rank_view<Ntk, true>
+
+If already a rank_interface exists only the depth_view constructor
+gets called.
+
+Template parameter ``Ntk``:
+    The network type.)doc";
+
+static const char *__doc_fiction_extended_rank_view_2 =
+R"doc(Deduction guide for `extended_rank_view'
+
+Template parameter ``T``:
+    Network type deduced from the construction context of
+    `extended_rank_view`.)doc";
+
+static const char *__doc_fiction_extended_rank_view_3 =
+R"doc(Deduction guide for `extended_rank_view` with two constructor
+arguments
+
+Template parameter ``T``:
+    Network type deduced from the construction context of
+    `extended_rank_view`.)doc";
+
+static const char *__doc_fiction_extended_rank_view_extended_rank_view = R"doc()doc";
+
 static const char *__doc_fiction_extract_routing_objectives =
 R"doc(Extracts all routing objectives from the given layout. To this end,
 all routing paths in the layout are traversed, starting at each PI.
@@ -11360,6 +11368,8 @@ Returns:
 
 static const char *__doc_fiction_gray_code_iterator_start_number = R"doc(Start number of the iteration.)doc";
 
+static const char *__doc_fiction_handle_virtual_pis = R"doc()doc";
+
 static const char *__doc_fiction_has_above = R"doc()doc";
 
 static const char *__doc_fiction_has_assign_charge_state = R"doc()doc";
@@ -11392,6 +11402,8 @@ static const char *__doc_fiction_has_foreach_incoming_clocked_zone = R"doc()doc"
 
 static const char *__doc_fiction_has_foreach_outgoing_clocked_zone = R"doc()doc";
 
+static const char *__doc_fiction_has_foreach_real_pi = R"doc()doc";
+
 static const char *__doc_fiction_has_foreach_sidb_defect = R"doc()doc";
 
 static const char *__doc_fiction_has_foreach_tile = R"doc()doc";
@@ -11403,6 +11415,8 @@ static const char *__doc_fiction_has_get_functional_implementations = R"doc()doc
 static const char *__doc_fiction_has_get_gate_ports = R"doc()doc";
 
 static const char *__doc_fiction_has_get_layout_name = R"doc()doc";
+
+static const char *__doc_fiction_has_get_real_pi = R"doc()doc";
 
 static const char *__doc_fiction_has_get_sidb_defect = R"doc()doc";
 
@@ -11501,6 +11515,8 @@ static const char *__doc_fiction_has_north_east = R"doc()doc";
 static const char *__doc_fiction_has_north_west = R"doc()doc";
 
 static const char *__doc_fiction_has_num_real_pis = R"doc()doc";
+
+static const char *__doc_fiction_has_num_virtual_pis = R"doc()doc";
 
 static const char *__doc_fiction_has_ordinal_operations = R"doc()doc";
 
@@ -13014,20 +13030,6 @@ static const char *__doc_fiction_missing_sidb_position_exception_missing_sidb_po
 
 static const char *__doc_fiction_missing_sidb_position_exception_where = R"doc()doc";
 
-static const char *__doc_fiction_miter =
-R"doc(! Creates a combinational miter from two networks.
-
-This method combines two networks that have the same number of primary
-inputs and the same number of primary outputs into a miter. The miter
-has the same number of inputs and one primary output. This output is
-the OR of XORs of all primary output pairs. In other words, the miter
-outputs 1 for all input assignments in which the two input networks
-differ.
-
-All networks may have different types. The method returns an optional,
-which is `nullopt`, whenever the two input networks don't match in
-their number of primary inputs and primary outputs.)doc";
-
 static const char *__doc_fiction_network_balancing =
 R"doc(Balances a logic network with buffer nodes that compute the identity
 function. For this purpose, `create_buf` is utilized. Therefore,
@@ -13112,29 +13114,9 @@ Parameter ``file``:
 Parameter ``rfun``:
     The actual parsing function.)doc";
 
-static const char *__doc_fiction_node_duplication_params = R"doc(Parameters for the node duplication algorithm.)doc";
-
-static const char *__doc_fiction_node_duplication_params_random_output_order =
-R"doc(The output order determines the starting layer for this algorithm. If
-this option is turned off, the output order remains the same as in the
-provided network. If it is turned on, the outputs are ordered
-randomly.)doc";
-
 static const char *__doc_fiction_node_duplication_planarization =
 R"doc(Implements a planarization mechanism for networks using a H-Graph
 strategy for node duplication.
-
-Template parameter ``NtkDest``:
-    Destination network type
-
-Template parameter ``NtkSrc``:
-    Source network type
-
-Parameter ``ntk_src``:
-    Source network to be utilized for the planarization
-
-Parameter ``ps``:
-    Node duplication parameters used in the computation
 
 The planarization achieved by this function solves the Node
 Duplication Crossing Minimization (NDCE) problem by finding the
@@ -13149,11 +13131,31 @@ H-graph, traversing from the POs towards the Primary Inputs (PIs).
 
 Returns:
     A view of the planarized virtual_pi_network created in the format
-    of extended_rank_view
+    of extended_rank_view.
+
+Template parameter ``NtkDest``:
+    Destination network type.
+
+Template parameter ``NtkSrc``:
+    Source network type.
+
+Parameter ``ntk_src``:
+    Source network to be utilized for the planarization.
+
+Parameter ``ps``:
+    Node duplication parameters used in the computation.
 
 Throws:
     std::runtime_error if input network not balanced, if no node
-    combinations are found or if the created network is non-planar)doc";
+    combinations are found or if the created network is non-planar.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_params = R"doc(Parameters for the node duplication algorithm.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_params_random_output_order =
+R"doc(The output order determines the starting layer for this algorithm. If
+this option is turned off, the output order remains the same as in the
+provided network. If it is turned on, the outputs are ordered
+randomly.)doc";
 
 static const char *__doc_fiction_normalize_layout_coordinates =
 R"doc(A new layout is constructed and returned that is equivalent to the
@@ -17242,19 +17244,46 @@ static const char *__doc_fiction_vertical_shift_cartesian =
 R"doc(\verbatim +-------+ | | | +-------+ | | | +-------+ | | | +-------+
 \endverbatim)doc";
 
+static const char *__doc_fiction_virtual_miter =
+R"doc(This method combines two networks to a combinational miter like a
+mockturtle::miter. Additionally, either of the input networks can be a
+network with virtual inputs, which are duplicated PIs. In this case
+the duplicated PIs are deleted and all edges connecting to them are
+remapped on their originating PI.
+
+Therefore, the miter has the same number of inputs and one primary
+output. This output is the OR of XORs of all primary output pairs. In
+other words, the miter outputs 1 for all input assignments in which
+the two input networks differ.
+
+All networks may have different types. The method returns an optional,
+which is `nullopt`, whenever the two input networks don't match in
+their number of primary inputs and primary outputs.)doc";
+
 static const char *__doc_fiction_virtual_pi_network = R"doc()doc";
+
+static const char *__doc_fiction_virtual_pi_network_clone = R"doc(Clones the virtual_pi_network object.)doc";
 
 static const char *__doc_fiction_virtual_pi_network_virtual_pi_network =
 R"doc(Default constructor for the `virtual_pi_network` class. Initializes
 `_storage` as a shared pointer.)doc";
 
-static const char *__doc_fiction_virtual_pi_network_virtual_pi_network_2 =
-R"doc(Copy constructor for the `virtual_pi_network` class. Given a network
-`ntk`, constructs a new `virtual_pi_network` as a clone of `ntk`.
-Initializes `_storage` as a shared pointer.
+static const char *__doc_fiction_virtual_pi_network_virtual_pi_network_2 = R"doc(Copy constructor for the `virtual_pi_network` class.)doc";
+
+static const char *__doc_fiction_virtual_pi_network_virtual_pi_network_3 =
+R"doc(Constructor for the `virtual_pi_network` class that takes a network as
+input. Unlike other network types a virtual_pi_network can be created
+on top of any network. It initializes the base class `Ntk` with a
+clone of the provided network and creates a shared pointer to a
+`virtual_storage` object.
+
+Template parameter ``Ntk``:
+    Network type.
 
 Parameter ``ntk``:
-    The network to clone into this object.)doc";
+    Input network.)doc";
+
+static const char *__doc_fiction_virtual_pi_network_virtual_pi_network_4 = R"doc()doc";
 
 static const char *__doc_fiction_virtual_storage = R"doc()doc";
 
