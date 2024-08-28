@@ -6905,8 +6905,6 @@ static const char *__doc_fiction_detail_orthogonal_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_planar_impl = R"doc()doc";
 
-static const char *__doc_fiction_detail_orthogonal_planar_impl_ntk = R"doc()doc";
-
 static const char *__doc_fiction_detail_orthogonal_planar_impl_orthogonal_planar_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_planar_impl_po_counter = R"doc()doc";
@@ -7492,6 +7490,8 @@ R"doc(Enum indicating if primary inputs (PIs) can be placed at the top or
 left.)doc";
 
 static const char *__doc_fiction_detail_search_space_graph_planar = R"doc(Create planar layouts.)doc";
+
+static const char *__doc_fiction_detail_start_orientation = R"doc()doc";
 
 static const char *__doc_fiction_detail_sweep_parameter_to_string =
 R"doc(Converts a sweep parameter to a string representation. This is used to
