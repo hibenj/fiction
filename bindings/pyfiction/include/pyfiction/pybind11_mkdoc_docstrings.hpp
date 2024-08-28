@@ -4040,10 +4040,6 @@ static const char *__doc_fiction_detail_connect_and_place = R"doc()doc";
 
 static const char *__doc_fiction_detail_connect_and_place_2 = R"doc()doc";
 
-static const char *__doc_fiction_detail_connect_and_place_3 = R"doc()doc";
-
-static const char *__doc_fiction_detail_connect_and_place_4 = R"doc()doc";
-
 static const char *__doc_fiction_detail_convert_array =
 R"doc(Based on https://stackoverflow.com/questions/57756557/initializing-a-
 stdarray-with-a-constant-value)doc";
@@ -4327,8 +4323,6 @@ static const char *__doc_fiction_detail_determine_clocking_impl_stats = R"doc(St
 
 static const char *__doc_fiction_detail_determine_layout_size = R"doc()doc";
 
-static const char *__doc_fiction_detail_determine_layout_size_2 = R"doc()doc";
-
 static const char *__doc_fiction_detail_determine_new_coord =
 R"doc(This function calculates the new coordinates of a tile after adjusting
 for wire deletion based on the specified offset and search direction.
@@ -4475,8 +4469,6 @@ Parameter ``status``:
     The operational status of the provided layout.)doc";
 
 static const char *__doc_fiction_detail_east_south_edge_coloring = R"doc()doc";
-
-static const char *__doc_fiction_detail_east_south_edge_coloring_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_enumerate_all_paths_impl = R"doc()doc";
 
@@ -6067,11 +6059,7 @@ static const char *__doc_fiction_detail_is_balanced_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_is_east_south_colored = R"doc()doc";
 
-static const char *__doc_fiction_detail_is_east_south_colored_2 = R"doc()doc";
-
 static const char *__doc_fiction_detail_is_eastern_po_orientation_available = R"doc()doc";
-
-static const char *__doc_fiction_detail_is_eastern_po_orientation_available_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_is_fanout_substituted_impl = R"doc()doc";
 
@@ -6972,39 +6960,6 @@ Parameter ``node2pos``:
     the fanins. The `mockturtle::node_map` is not updated by this
     function.)doc";
 
-static const char *__doc_fiction_detail_place_outputs_2 =
-R"doc(Places the primary outputs (POs) in the layout.
-
-This function positions the POs within the provided layout. If a PO is
-a multi-output node (a fanout with two POs connected to it), the
-second PO is automatically placed and connected below the first
-output.
-
-The positioning of multi-output nodes will follow this structure:
-
-F→=→...→O ↓ =→=→...→O
-
-Template parameter ``Lyt``:
-    Desired gate-level layout type.
-
-Template parameter ``Ntk``:
-    Network type that acts as specification.
-
-Parameter ``layout``:
-    Current gate-level layout.
-
-Parameter ``ctn``:
-    Contains the colored network.
-
-Parameter ``po_counter``:
-    Counter for POs.
-
-Parameter ``node2pos``:
-    Mapping from network nodes to layout signals, i.e., a pointer to
-    their position in the layout. The map is used to fetch location of
-    the fanins. The `mockturtle::node_map` is not updated by this
-    function.)doc";
-
 static const char *__doc_fiction_detail_placement_info =
 R"doc(Struct to hold information necessary for gate placement during layout
 generation for one vertex.
@@ -7362,8 +7317,6 @@ Parameter ``cell``:
 
 static const char *__doc_fiction_detail_recursively_paint_edges = R"doc()doc";
 
-static const char *__doc_fiction_detail_recursively_paint_edges_2 = R"doc()doc";
-
 static const char *__doc_fiction_detail_sat_clocking_handler = R"doc()doc";
 
 static const char *__doc_fiction_detail_sat_clocking_handler_assign_clock_numbers =
@@ -7684,11 +7637,7 @@ Parameter ``to_delete``:
 
 static const char *__doc_fiction_detail_wire_east = R"doc()doc";
 
-static const char *__doc_fiction_detail_wire_east_2 = R"doc()doc";
-
 static const char *__doc_fiction_detail_wire_south = R"doc()doc";
-
-static const char *__doc_fiction_detail_wire_south_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_wiring_reduction_impl = R"doc()doc";
 
@@ -13918,39 +13867,21 @@ Returns:
 
 static const char *__doc_fiction_orthogonal_physical_design_params = R"doc(Parameters for the orthogonal physical design algorithm.)doc";
 
-static const char *__doc_fiction_orthogonal_physical_design_params_2 = R"doc(Parameters for the orthogonal physical design algorithm.)doc";
-
 static const char *__doc_fiction_orthogonal_physical_design_params_number_of_clock_phases = R"doc(Number of clock phases to use. 3 and 4 are supported.)doc";
-
-static const char *__doc_fiction_orthogonal_physical_design_params_number_of_clock_phases_2 = R"doc(Number of clock phases to use. 3 and 4 are supported.)doc";
 
 static const char *__doc_fiction_orthogonal_physical_design_stats = R"doc()doc";
 
-static const char *__doc_fiction_orthogonal_physical_design_stats_2 = R"doc()doc";
-
 static const char *__doc_fiction_orthogonal_physical_design_stats_duration = R"doc()doc";
-
-static const char *__doc_fiction_orthogonal_physical_design_stats_duration_2 = R"doc()doc";
 
 static const char *__doc_fiction_orthogonal_physical_design_stats_num_gates = R"doc()doc";
 
-static const char *__doc_fiction_orthogonal_physical_design_stats_num_gates_2 = R"doc()doc";
-
 static const char *__doc_fiction_orthogonal_physical_design_stats_num_wires = R"doc()doc";
-
-static const char *__doc_fiction_orthogonal_physical_design_stats_num_wires_2 = R"doc()doc";
 
 static const char *__doc_fiction_orthogonal_physical_design_stats_report = R"doc()doc";
 
-static const char *__doc_fiction_orthogonal_physical_design_stats_report_2 = R"doc()doc";
-
 static const char *__doc_fiction_orthogonal_physical_design_stats_x_size = R"doc()doc";
 
-static const char *__doc_fiction_orthogonal_physical_design_stats_x_size_2 = R"doc()doc";
-
 static const char *__doc_fiction_orthogonal_physical_design_stats_y_size = R"doc()doc";
-
-static const char *__doc_fiction_orthogonal_physical_design_stats_y_size_2 = R"doc()doc";
 
 static const char *__doc_fiction_orthogonal_planar = R"doc(Description)doc";
 
