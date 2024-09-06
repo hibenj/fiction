@@ -448,6 +448,9 @@ class orthogonal_planar_impl
 
     Lyt run()
     {
+        // measure run time
+        mockturtle::stopwatch stop{pst.time_total};
+        //
         using node = typename Ntk::node;
 
         uint32_t starting_rank_forward  = 0;
@@ -491,12 +494,10 @@ class orthogonal_planar_impl
             }
             starting_rank_backward = propagate_forward(ntk, forward_gap_array, backward_gap_array,
                                                        starting_rank_forward, is_negative, orientations);
-            // is_negative = false;
-
-            // fill_gap_array_zeros(ntk, backward_gap_array);
         }
 
-        for (int i = 0; i < forward_gap_array.size(); i++)
+        // Debug Output
+        /*for (int i = 0; i < forward_gap_array.size(); i++)
         {
             for (int j = 0; j < forward_gap_array[i].size(); j++)
             {
@@ -512,31 +513,11 @@ class orthogonal_planar_impl
                 std::cout << backward_gap_array[i][j] << ',';
             }
             std::cout << "\n";
-        }
-
-        // measure run time
-        mockturtle::stopwatch stop{pst.time_total};
+        }*/
 
         mockturtle::node_map<mockturtle::signal<Lyt>, decltype(ntk)> node2pos{ntk};
 
-        // find multi-output nodes
-        std::vector<mockturtle::node<decltype(ntk)>> output_nodes{};
-        std::vector<mockturtle::node<decltype(ntk)>> multi_output_nodes{};
-        uint32_t                                     num_multi_output_nodes{0};
-
-        ntk.foreach_po(
-            [&](const auto& po)
-            {
-                if (std::find(output_nodes.cbegin(), output_nodes.cend(), po) != output_nodes.cend())
-                {
-                    multi_output_nodes.push_back(po);
-                    ++num_multi_output_nodes;
-                }
-
-                output_nodes.push_back(po);
-            });
-
-        aspect_ratio<Lyt> size_ = {70, 36};
+        aspect_ratio<Lyt> size_ = {0, 0};
         // instantiate the layout
         Lyt layout{size_, twoddwave_clocking<Lyt>(ps.number_of_clock_phases)};
 
@@ -695,7 +676,6 @@ class orthogonal_planar_impl
                         }
                     }
                     ++r;
-                    fiction::debug::write_dot_layout(layout);
                 });
         }
         std::unordered_map<int, int> countMap;

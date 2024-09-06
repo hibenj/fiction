@@ -274,14 +274,14 @@ TEST_CASE("Print layout two", "[orthogonal-planar]")
 
     extended_rank_view aig_r(fo_ntk);
 
-    std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
-    std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
+    std::vector<mockturtle::aig_network::node> nodes_rank0{7, 6, 9, 11};
+    std::vector<mockturtle::aig_network::node> nodes_rank1{8, 10, 12};
 
-    /*aig_r.modify_rank(0, nodes_rank0);
-    aig_r.modify_rank(0, nodes_rank0);*/
+    aig_r.modify_rank(1, nodes_rank0);
+    aig_r.modify_rank(2, nodes_rank1);
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
     debug::write_dot_layout(layout);
-    // debug::write_dot_network(fo_ntk);
+    debug::write_dot_network(fo_ntk);
 }
