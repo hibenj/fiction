@@ -170,7 +170,7 @@ int main()  // NOLINT
                               width_after_optimization, height_after_optimization, area, area_after_optimization,
                               mockturtle::to_seconds(orthogonal_planar_stats.time_total),
                               mockturtle::to_seconds(post_layout_optimization_stats.time_total), improv,
-                              static_cast<bool>(cec_m), eq_result, eq_result_plo);
+                              cec_m.value(), eq_result, eq_result_plo);
 
         orthogonal_planar_exp.save();
         orthogonal_planar_exp.table();

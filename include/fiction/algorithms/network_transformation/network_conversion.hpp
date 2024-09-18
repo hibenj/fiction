@@ -145,6 +145,14 @@ class convert_network_impl<NtkDest, NtkSrc, false>
                         return true;
                     }
                 }
+                if constexpr (mockturtle::has_is_not_v<TopoNtkSrc> && mockturtle::has_create_not_v<NtkDest>)
+                {
+                    if (ntk.is_not(g))
+                    {
+                        old2new[g] = ntk_dest.create_not(children[0]);
+                        return true;
+                    }
+                }
                 if constexpr (fiction::has_is_buf_v<TopoNtkSrc> && mockturtle::has_create_buf_v<NtkDest>)
                 {
                     if (ntk.is_buf(g))
