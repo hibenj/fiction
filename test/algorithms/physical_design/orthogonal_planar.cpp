@@ -89,8 +89,8 @@ TEST_CASE("Case buf", "[orthogonal-planar]")
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
-    debug::write_dot_layout(layout);
-    debug::write_dot_network(fo_ntk);
+    /*debug::write_dot_layout(layout);
+    debug::write_dot_network(fo_ntk);*/
 }
 
 TEST_CASE("And gaps", "[orthogonal-planar]")

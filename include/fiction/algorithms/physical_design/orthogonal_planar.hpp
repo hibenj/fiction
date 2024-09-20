@@ -171,10 +171,10 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_array
                     }
 
                     // check if between the fanouts there is a gap (this gap comes from backward propagation)
-                    if (fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] > 0)
+                    /*if (fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] > 0)
                     {
                         std::cout << "gap between fos\n";
-                    }
+                    }*/
 
                     if (bw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])] >
                         fw_gap_array[r + 1][ntk.rank_position(fo[1 - max_value_index])])
