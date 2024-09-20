@@ -59,6 +59,7 @@ int main()  // NOLINT
     for (const auto& entry :
          std::filesystem::directory_iterator("/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93"))
     {
+        continue;
         fmt::print("[i] processing {}\n", entry.path().filename().string());
 
         /*if ( "sqrt8ml.v" != entry.path().filename().string())
@@ -223,12 +224,11 @@ int main()  // NOLINT
     fiction::debug::write_dot_network(_b, "t_b");
     fiction::debug::write_dot_network(planarized_b, "network_b");*/
 
-    static constexpr const uint64_t bench_select = (fiction_experiments::fontes18);  // fiction_experiments::iscas85 & ~
+    static constexpr const uint64_t bench_select = (fiction_experiments::iscas85);  // fiction_experiments::iscas85 & ~
     // fiction_experiments::trindade16 | fiction_experiments::fontes18 | fiction_experiments::epfl |
     // fiction_experiments::iscas85 static constexpr const uint64_t bench_select =
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
-        continue;
         const auto benchmark_network = read_ntk<fiction::tec_nt>(benchmark);
 
         fiction::network_balancing_params ps;
@@ -253,7 +253,7 @@ int main()  // NOLINT
         const auto _b = fiction::network_balancing<fiction::technology_network>(
             fiction::fanout_substitution<fiction::technology_network>(benchmark_network), ps);
 
-        if (_b.size() > 15000)
+        if (_b.size() > 10000)
         {
             /*wiring_reduction_exp(benchmark, benchmark_network.num_pis(), 0, benchmark_network.num_pos(),
                                  benchmark_network.num_gates(), _b.num_gates(), _b.num_gates(), 0, 0, "TEST");
@@ -266,7 +266,7 @@ int main()  // NOLINT
 
         const auto is_planar = fiction::check_planarity(planarized_b);
 
-        if (planarized_b.size() > 30000)
+        if (planarized_b.size() > 20000)
         {
             wiring_reduction_exp(benchmark, benchmark_network.num_pis(), planarized_b.num_virtual_pis(), benchmark_network.num_pos(),
                                  benchmark_network.num_gates(), _b.num_gates(), planarized_b.num_gates(), is_planar, 0, 0);
