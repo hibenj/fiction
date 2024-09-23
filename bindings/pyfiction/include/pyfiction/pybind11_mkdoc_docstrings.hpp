@@ -5473,6 +5473,10 @@ static const char *__doc_fiction_detail_fanout_substitution_impl_ps = R"doc()doc
 
 static const char *__doc_fiction_detail_fanout_substitution_impl_run = R"doc()doc";
 
+static const char *__doc_fiction_detail_fill_gap_array_zeros = R"doc()doc";
+
+static const char *__doc_fiction_detail_fill_gap_array_zeros_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_find_key_with_tolerance =
 R"doc(This function searches for a floating-point value specified by the
 `key` in the provided map `map`, applying a tolerance specified by
@@ -7166,6 +7170,18 @@ static const char *__doc_fiction_detail_orthogonal_impl_pst = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_impl_run = R"doc()doc";
 
+static const char *__doc_fiction_detail_orthogonal_planar_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_orthogonal_planar_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_po_counter = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_ps = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_pst = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_run = R"doc()doc";
+
 static const char *__doc_fiction_detail_pi_locations = R"doc(This enum class indicates the allowed positions for PIs.)doc";
 
 static const char *__doc_fiction_detail_pi_locations_LEFT = R"doc(Flag indicating if primary inputs (PIs) can be placed at the left.)doc";
@@ -7265,6 +7281,10 @@ Parameter ``item``:
 
 Parameter ``priority``:
     The priority of the element.)doc";
+
+static const char *__doc_fiction_detail_propagate_backward = R"doc()doc";
+
+static const char *__doc_fiction_detail_propagate_forward = R"doc()doc";
 
 static const char *__doc_fiction_detail_qca_energy_dissipation_impl = R"doc()doc";
 
@@ -7739,6 +7759,8 @@ R"doc(Enum indicating if primary inputs (PIs) can be placed at the top or
 left.)doc";
 
 static const char *__doc_fiction_detail_search_space_graph_planar = R"doc(Create planar layouts.)doc";
+
+static const char *__doc_fiction_detail_start_orientation = R"doc()doc";
 
 static const char *__doc_fiction_detail_sweep_parameter_to_string =
 R"doc(Converts a sweep parameter to a string representation. This is used to
@@ -14192,6 +14214,8 @@ static const char *__doc_fiction_orthogonal_physical_design_stats_report = R"doc
 static const char *__doc_fiction_orthogonal_physical_design_stats_x_size = R"doc()doc";
 
 static const char *__doc_fiction_orthogonal_physical_design_stats_y_size = R"doc()doc";
+
+static const char *__doc_fiction_orthogonal_planar = R"doc(Description)doc";
 
 static const char *__doc_fiction_out_of_cell_names_exception = R"doc()doc";
 
