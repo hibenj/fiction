@@ -885,6 +885,56 @@ static const char *__doc_fiction_bounding_box_2d_x_size = R"doc(The horizontal s
 
 static const char *__doc_fiction_bounding_box_2d_y_size = R"doc(The vertical size of the bounding box in layout coordinates.)doc";
 
+static const char *__doc_fiction_branching_signal_container =
+R"doc(A container class to help identify layout locations of branching nodes
+like fanouts. When a node from a network is to placed in a layout,
+fetching the node's fanins and looking for their locations in the
+layout does not work properly when branching nodes like fanouts are
+involved that got extended by wire nodes. This container solves that
+issue.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Template parameter ``fanout_size``:
+    Maximum fanout size possible in the layout and/or the network.)doc";
+
+static const char *__doc_fiction_branching_signal_container_branches = R"doc(Storage for all branches.)doc";
+
+static const char *__doc_fiction_branching_signal_container_branching_signal = R"doc(Branch type.)doc";
+
+static const char *__doc_fiction_branching_signal_container_branching_signal_branching_signal = R"doc()doc";
+
+static const char *__doc_fiction_branching_signal_container_branching_signal_lyt_signal = R"doc()doc";
+
+static const char *__doc_fiction_branching_signal_container_branching_signal_ntk_node = R"doc()doc";
+
+static const char *__doc_fiction_branching_signal_container_operator_array =
+R"doc(Accesses the branching container to find the location of a given node
+`n`. Returns the signal to that location if it was already stored or
+the default signal, otherwise.
+
+Parameter ``n``:
+    Node whose branching position is desired.
+
+Returns:
+    Signal to `n`'s layout location or the default signal if it wasn't
+    found.)doc";
+
+static const char *__doc_fiction_branching_signal_container_update_branch =
+R"doc(Updates the given node's branch by another layout signal, thereby,
+creating a new branch or updating the position of an existing one,
+e.g., if further wire segments were moving the head of the branch.
+
+Parameter ``ntk_node``:
+    Node whose branch is to be updated.
+
+Parameter ``lyt_signal``:
+    New signal pointing to the end of the branch.)doc";
+
 static const char *__doc_fiction_calculate_energy_and_state_type =
 R"doc(This function takes in an SiDB energy distribution. For each charge
 distribution, the state type is determined (i.e. erroneous,
@@ -6170,8 +6220,6 @@ static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_max_pl
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_ntk = R"doc(The network to be placed and routed.)doc";
 
-static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_num_evaluated_paths = R"doc(Count evaluated paths in the search space graphs.)doc";
-
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_num_search_space_graphs = R"doc(Number of search space graphs.)doc";
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_num_search_space_graphs_high_efficiency = R"doc(In high-efficiency mode, only 2 search space graphs are used)doc";
@@ -6276,6 +6324,14 @@ static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_start 
 
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_timeout = R"doc(Timeout limit (in ms).)doc";
 
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_timeout_limit_reached = R"doc(Timeout limit reached.)doc";
+
+static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_update_stats =
+R"doc(This function updates statistical metrics.
+
+Parameter ``best_lyt``:
+    The new best layout found.)doc";
+
 static const char *__doc_fiction_detail_graph_oriented_layout_design_impl_valid_layout =
 R"doc(Validates the given layout based on the nodes in the network and their
 mappings in the node dictionary. It checks if the placement of nodes
@@ -6312,6 +6368,16 @@ Parameter ``lyt``:
 
 Parameter ``old_pos``:
     Old position of the gate to be moved.
+
+Parameter ``start``:
+    The start time in milliseconds.
+
+Parameter ``timeout``:
+    The timeout limit in milliseconds.
+
+Parameter ``timeout_limit_reached``:
+    Reference to a boolean flag that is set to `true` if the timeout
+    is reached.
 
 Parameter ``planar_optimization``:
     Only allow relocation if a crossing-free wiring can be found.
@@ -7220,6 +7286,10 @@ static const char *__doc_fiction_detail_post_layout_optimization_impl_pst = R"do
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl_run = R"doc()doc";
 
+static const char *__doc_fiction_detail_post_layout_optimization_impl_start = R"doc(Start time.)doc";
+
+static const char *__doc_fiction_detail_post_layout_optimization_impl_timeout_limit_reached = R"doc(Timeout limit reached.)doc";
+
 static const char *__doc_fiction_detail_priority_queue =
 R"doc(A priority queue class for managing elements with associated
 priorities. The elements are stored in a priority queue, with the
@@ -7848,6 +7918,25 @@ Constructs topological view on another network.)doc";
 
 static const char *__doc_fiction_detail_topo_view_co_to_ci_update_topo = R"doc()doc";
 
+static const char *__doc_fiction_detail_update_timeout =
+R"doc(Calculates the elapsed milliseconds since the `start` time, sets the
+`timeout_limit_reached` flag if the timeout is exceeded, and returns
+the remaining time.
+
+Parameter ``start``:
+    The start time in milliseconds.
+
+Parameter ``timeout``:
+    The timeout limit in milliseconds.
+
+Parameter ``timeout_limit_reached``:
+    Reference to a boolean flag that is set to `true` if the timeout
+    is reached.
+
+Returns:
+    Remaining time in milliseconds before timeout, or `0` if timeout
+    has been reached.)doc";
+
 static const char *__doc_fiction_detail_update_to_delete_list =
 R"doc(Update the to-delete list based on a possible path in a
 wiring_reduction_layout.
@@ -7894,9 +7983,15 @@ static const char *__doc_fiction_detail_wiring_reduction_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_wiring_reduction_impl_plyt = R"doc(The 2DDWave-clocked layout whose wiring is to be reduced.)doc";
 
+static const char *__doc_fiction_detail_wiring_reduction_impl_ps = R"doc(Wiring reduction parameters.)doc";
+
 static const char *__doc_fiction_detail_wiring_reduction_impl_pst = R"doc(Statistics about the wiring_reduction process.)doc";
 
 static const char *__doc_fiction_detail_wiring_reduction_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_wiring_reduction_impl_start = R"doc(Start time.)doc";
+
+static const char *__doc_fiction_detail_wiring_reduction_impl_timeout_limit_reached = R"doc(Timeout limit reached.)doc";
 
 static const char *__doc_fiction_detail_wiring_reduction_impl_wiring_reduction_impl = R"doc()doc";
 
@@ -9403,6 +9498,20 @@ Parameter ``lyt``:
 
 Returns:
     List of all routing objectives in the given layout.)doc";
+
+static const char *__doc_fiction_fanin_container =
+R"doc(Container that stores fanins of a node in a network, including whether
+one of them is a constant.
+
+Note that this container assumes that each node has a maximum of one
+constant fanin.
+
+Template parameter ``Ntk``:
+    `mockturtle` network type.)doc";
+
+static const char *__doc_fiction_fanin_container_constant_fanin =
+R"doc(Has a value if a fanin node is constant. In that case, it represents
+the constant value.)doc";
 
 static const char *__doc_fiction_fanin_edge_container =
 R"doc(Container that stores fanin edges of a node in a network, including
@@ -11312,6 +11421,28 @@ substitution strategies, PI placements, and other parameters. This
 wider exploration increases the chance of finding optimal layouts but
 also extends runtime. When a solution is found in any graph, its cost
 is used to prune the remaining graphs.)doc";
+
+static const char *__doc_fiction_graph_oriented_layout_design_params_enable_multithreading =
+R"doc(BETA feature: Flag to enable or disable multithreading during the
+execution of the layout design algorithm.
+
+When set to `true`, the algorithm will utilize multiple threads to
+process different search space graphs in parallel, improving
+performance by distributing the workload across available CPU cores.
+If set to `false`, the algorithm will run sequentially on a single
+thread.
+
+Only recommended for `HIGH_EFFORT` and `HIGHEST_EFFORT` modes and
+complex networks (> 100 nodes).
+
+Enabling multithreading can significantly speed up the algorithm,
+especially when using multiple search space graphs and dealing with
+complex networks, by concurrently expanding them. However, it may
+introduce additional overhead for thread synchronization and can
+increase memory usage. It is therefore not recommended for small input
+networks.
+
+Default value: `false`)doc";
 
 static const char *__doc_fiction_graph_oriented_layout_design_params_mode = R"doc(The effort mode used. Defaults to HIGH_EFFORT.)doc";
 
@@ -14341,6 +14472,158 @@ static const char *__doc_fiction_path_set_add = R"doc()doc";
 static const char *__doc_fiction_path_set_contains = R"doc()doc";
 
 static const char *__doc_fiction_place =
+R"doc(Place 0-input gates.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``lyt``:
+    Gate-level layout in which to place a 0-input gate.
+
+Parameter ``t``:
+    Tile in `lyt` to place the gate onto.
+
+Parameter ``ntk``:
+    Network whose node is to be placed.
+
+Parameter ``n``:
+    Node in `ntk` to place onto `t` in `lyt`.
+
+Returns:
+    Signal pointing to the placed gate in `lyt`.)doc";
+
+static const char *__doc_fiction_place_2 =
+R"doc(Place 1-input gates.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``lyt``:
+    Gate-level layout in which to place a 1-input gate.
+
+Parameter ``t``:
+    Tile in `lyt` to place the gate onto.
+
+Parameter ``ntk``:
+    Network whose node is to be placed.
+
+Parameter ``n``:
+    Node in `ntk` to place onto `t` in `lyt`.
+
+Parameter ``a``:
+    Incoming signal to the newly placed gate in `lyt`.
+
+Returns:
+    Signal pointing to the placed gate in `lyt`.)doc";
+
+static const char *__doc_fiction_place_3 =
+R"doc(Place 2-input gates.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``lyt``:
+    Gate-level layout in which to place a 2-input gate.
+
+Parameter ``t``:
+    Tile in `lyt` to place the gate onto.
+
+Parameter ``ntk``:
+    Network whose node is to be placed.
+
+Parameter ``n``:
+    Node in `ntk` to place onto `t` in `lyt`.
+
+Parameter ``a``:
+    First incoming signal to the newly placed gate in `lyt`.
+
+Parameter ``b``:
+    Second incoming signal to the newly placed gate in `lyt`.
+
+Parameter ``c``:
+    Third optional incoming constant value signal to the newly placed
+    gate in `lyt`. Might change the gate function when set, e.g., from
+    a MAJ to an AND if `c == false`.
+
+Returns:
+    Signal pointing to the placed gate in `lyt`.)doc";
+
+static const char *__doc_fiction_place_4 =
+R"doc(Place 3-input gates.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``lyt``:
+    Gate-level layout in which to place a 3-input gate.
+
+Parameter ``t``:
+    Tile in `lyt` to place the gate onto.
+
+Parameter ``ntk``:
+    Network whose node is to be placed.
+
+Parameter ``n``:
+    Node in `ntk` to place onto `t` in `lyt`.
+
+Parameter ``a``:
+    First incoming signal to the newly placed gate in `lyt`.
+
+Parameter ``b``:
+    Second incoming signal to the newly placed gate in `lyt`.
+
+Parameter ``c``:
+    Third incoming signal to the newly placed gate in `lyt`.
+
+Returns:
+    Signal pointing to the placed gate in `lyt`.)doc";
+
+static const char *__doc_fiction_place_5 =
+R"doc(Place any gate from a network. This function automatically identifies
+the arity of the passed node and fetches its incoming signals from the
+given network and a provided `mockturtle::node_map`. This function
+does not update the `mockturtle::node_map`.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``lyt``:
+    Gate-level layout in which to place any gate.
+
+Parameter ``t``:
+    Tile in `lyt` to place the gate onto.
+
+Parameter ``ntk``:
+    Network whose node is to be placed.
+
+Parameter ``n``:
+    Node in `ntk` to place onto `t` in `lyt`.
+
+Parameter ``node2pos``:
+    Mapping from network nodes to layout signals, i.e., a pointer to
+    their position in the layout. The map is used to fetch location of
+    the fanins. The `mockturtle::node_map` is not updated by this
+    function.
+
+Returns:
+    Signal to the newly placed gate in `lyt`.)doc";
+
+static const char *__doc_fiction_place_6 =
 R"doc(Place any gate from a network. This function automatically identifies
 the arity of the passed node and fetches its incoming signals from the
 given network and a provided branching_signal_container
@@ -14589,6 +14872,14 @@ static const char *__doc_fiction_post_layout_optimization_params_planar_optimiza
 R"doc(Disable the creation of crossings during optimization. If set to true,
 gates will only be relocated if a crossing-free wiring is found.
 Defaults to false.)doc";
+
+static const char *__doc_fiction_post_layout_optimization_params_timeout =
+R"doc(Timeout limit (in ms). Specifies the maximum allowed time in
+milliseconds for the optimization process. For large layouts, the
+actual execution time may slightly exceed this limit because it's
+impractical to check the timeout at every algorithm step and the
+functional correctness has to be ensured by completing essential
+algorithm steps.)doc";
 
 static const char *__doc_fiction_post_layout_optimization_stats =
 R"doc(This struct stores statistics about the post-layout optimization
@@ -17786,9 +18077,21 @@ Template parameter ``Lyt``:
 Parameter ``lyt``:
     The 2DDWave-clocked layout whose wiring is to be reduced.
 
+Parameter ``ps``:
+    Parameters.
+
 Parameter ``pst``:
-    Pointer to a `wiring_reduction_stats` object to record runtime
-    statistics.)doc";
+    Statistics.)doc";
+
+static const char *__doc_fiction_wiring_reduction_params = R"doc(Parameters for the wiring reduction algorithm.)doc";
+
+static const char *__doc_fiction_wiring_reduction_params_timeout =
+R"doc(Timeout limit (in ms). Specifies the maximum allowed time in
+milliseconds for the optimization process. For large layouts, the
+actual execution time may slightly exceed this limit because it's
+impractical to check the timeout at every algorithm step and the
+functional correctness has to be ensured by completing essential
+algorithm steps.)doc";
 
 static const char *__doc_fiction_wiring_reduction_stats = R"doc(This struct stores statistics about the wiring reduction process.)doc";
 
@@ -18376,6 +18679,12 @@ static const char *__doc_fmt_formatter_format_2 = R"doc()doc";
 static const char *__doc_fmt_formatter_parse = R"doc()doc";
 
 static const char *__doc_fmt_formatter_parse_2 = R"doc()doc";
+
+static const char *__doc_fmt_unnamed_struct_at_home_runner_work_fiction_fiction_include_fiction_layouts_coordinates_hpp_1090_8 = R"doc()doc";
+
+static const char *__doc_fmt_unnamed_struct_at_home_runner_work_fiction_fiction_include_fiction_layouts_coordinates_hpp_1106_8 = R"doc()doc";
+
+static const char *__doc_fmt_unnamed_struct_at_home_runner_work_fiction_fiction_include_fiction_technology_cell_ports_hpp_263_8 = R"doc()doc";
 
 static const char *__doc_mockturtle_detail_foreach_element_if_transform = R"doc()doc";
 
