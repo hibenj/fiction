@@ -6,6 +6,7 @@
 
 #include "fiction/algorithms/network_transformation/network_balancing.hpp"
 #include "fiction/algorithms/network_transformation/node_duplication_planarization.hpp"
+#include "fiction/algorithms/physical_design/apply_gate_library.hpp"
 #include "fiction/algorithms/physical_design/graph_oriented_layout_design.hpp"  // graph-oriented layout design algorithm
 #include "fiction/algorithms/physical_design/orthogonal.hpp"  // graph-oriented layout design algorithm
 #include "fiction/algorithms/verification/design_rule_violations.hpp"
@@ -13,6 +14,7 @@
 #include "fiction/algorithms/verification/virtual_miter.hpp"
 #include "fiction/io/network_reader.hpp"  // read networks from files
 #include "fiction/io/print_layout.hpp"
+#include "fiction/io/write_svg_layout.hpp"
 #include "fiction/layouts/bounding_box.hpp"  // calculate area of generated layouts
 #include "fiction/layouts/clocked_layout.hpp"
 #include "fiction/layouts/gate_level_layout.hpp"
@@ -48,6 +50,9 @@ int main()  // NOLINT
 {
     using gate_lyt =
         fiction::gate_level_layout<fiction::clocked_layout<fiction::tile_based_layout<fiction::cartesian_layout<>>>>;
+    using qca_cell_level_layout =
+        fiction::cell_level_layout<fiction::qca_technology,
+                                   fiction::clocked_layout<fiction::cartesian_layout<fiction::offset::ucoord_t>>>;
 
     experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
                             uint64_t, double, double, float, bool, bool, bool, bool>
@@ -73,13 +78,14 @@ int main()  // NOLINT
     fiction::orthogonal_physical_design_stats orthogonal_planar_stats{};
     fiction::post_layout_optimization_stats   post_layout_optimization_stats{};
     fiction::post_layout_optimization_params  params{};
+    params.max_gate_relocations = 0;
 
     // For IWLS benchmarks
     int x = 0;
     for (const auto& entry :
          std::filesystem::directory_iterator("/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93"))
     {
-        continue;
+        // continue;
         fmt::print("[i] processing {}\n", entry.path().filename().string());
 
         if ( "C432.v" == entry.path().filename().string())
@@ -91,6 +97,10 @@ int main()  // NOLINT
             continue;
         }
         if ( "apex1.v" == entry.path().filename().string())
+        {
+            continue;
+        }
+        if ( "term1.v" == entry.path().filename().string())
         {
             continue;
         }
@@ -130,7 +140,7 @@ int main()  // NOLINT
 
         auto planarized_b = fiction::node_duplication_planarization<fiction::technology_network>(_b);
 
-        if (planarized_b.size() > 20000)
+        if (planarized_b.num_gates() < 200000 || planarized_b.num_gates() > 300000)
         {
             continue;
         }
@@ -149,12 +159,12 @@ int main()  // NOLINT
             planar_layout = true;
         }
 
-        gate_level_layout.num_crossings();
-
         fiction::gate_level_drv_params ps{};
         fiction::gate_level_drv_stats  st{};
 
         fiction::gate_level_drvs(gate_level_layout, ps, &st);
+        std::cout << st.report;
+        std::cout << "\n";
 
         // check equivalence for the planar layout
         const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
@@ -170,23 +180,53 @@ int main()  // NOLINT
         // Ortho part
         fiction::orthogonal_physical_design_stats stats{};
 
-        auto layout = fiction::orthogonal<gate_lyt>(planarized_b, {}, &stats);
+        // calculate bounding box
+        const auto bounding_box = fiction::bounding_box_2d(gate_level_layout);
 
-        const auto miter_o = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
-        bool       eq_o;
-        if (miter_o)
+        const auto width  = bounding_box.get_x_size() + 1;
+        const auto height = bounding_box.get_y_size() + 1;
+        const auto area   = width * height;
+
+        fiction::gate_level_drv_params ps_post{};
+        fiction::gate_level_drv_stats  st_post{};
+
+        fiction::gate_level_drvs(gate_level_layout, ps_post, &st_post);
+        // fiction::print_gate_level_layout(std::cout, gate_level_layout);
+
+        // const auto layout_copy = gate_level_layout.clone();
+        if (width * height < 100000)
         {
-            mockturtle::equivalence_checking_stats st;
-
-            const auto ce = mockturtle::equivalence_checking(*miter_o, {}, &st);
-            eq_o            = ce.value();
+            fiction::post_layout_optimization(gate_level_layout, params, &post_layout_optimization_stats);
         }
-        std::cout << "Eq: " << eq_o << '\n';
+
+        /*auto ortho_cell_layout_post =
+            fiction::apply_gate_library<qca_cell_level_layout, fiction::qca_one_library>(gate_level_layout);
+        fiction::write_qca_layout_svg(ortho_cell_layout_post, "optimized_cell_lyt");*/
+
+        // calculate bounding box
+        const auto bounding_box_after_optimization = fiction::bounding_box_2d(gate_level_layout);
+
+        const auto width_after_optimization  = bounding_box_after_optimization.get_x_size() + 1;
+        const auto height_after_optimization = bounding_box_after_optimization.get_y_size() + 1;
+        const auto area_after_optimization   = width_after_optimization * height_after_optimization;
+
+        const float improv = 100 * static_cast<float>((area - area_after_optimization)) / static_cast<float>(area);
+
+        // check equivalence
+        const auto miter_post = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
+        bool eq_post;
+        if (miter_post)
+        {
+            mockturtle::equivalence_checking_stats st_post;
+
+            const auto ce = mockturtle::equivalence_checking(*miter_post, {}, &st_post);
+            eq_post = ce.value();
+        }
 
         orthogonal_planar_exp(
-            entry.path().filename().string(), planarized_b.num_pis(), planarized_b.num_pos(), planarized_b.num_gates(), gate_level_layout.x(),
-            gate_level_layout.y(), 0, 0, 0, 0, mockturtle::to_seconds(orthogonal_planar_stats.time_total),
-            mockturtle::to_seconds(post_layout_optimization_stats.time_total), 0, planar_layout, cec_m.value(), eq, 0);
+            entry.path().filename().string(), planarized_b.num_pis(), planarized_b.num_pos(), planarized_b.num_gates(), width,
+            height,  width_after_optimization, height_after_optimization, area, area_after_optimization, mockturtle::to_seconds(orthogonal_planar_stats.time_total),
+            mockturtle::to_seconds(post_layout_optimization_stats.time_total), improv, planar_layout, cec_m.value(), eq, eq_post);
 
         orthogonal_planar_exp.save();
         orthogonal_planar_exp.table();
@@ -195,13 +235,14 @@ int main()  // NOLINT
     }
 
     // For all fiction benchmarks
-    static constexpr const uint64_t bench_select = (fiction_experiments::mux21);
+    static constexpr const uint64_t bench_select = (fiction_experiments::trindade16 | fiction_experiments::fontes18 );
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
-        // auto                              benchmark_network = read_ntk<fiction::tec_nt>(benchmark);
+        continue;
+        auto                              benchmark_network = read_ntk<fiction::tec_nt>(benchmark);
 
-        fiction::technology_network benchmark_network;
+        /*fiction::technology_network benchmark_network;
         const auto pi0 = benchmark_network.create_pi();
         const auto pi1 = benchmark_network.create_pi();
         const auto pi2 = benchmark_network.create_pi();
@@ -221,9 +262,9 @@ int main()  // NOLINT
         benchmark_network.create_po(a2);
         benchmark_network.create_po(a3);
         benchmark_network.create_po(a4);
-        benchmark_network.create_po(o0);
+        benchmark_network.create_po(o0);*/
 
-        fiction::debug::write_dot_network(benchmark_network, "original_ntk");
+        // fiction::debug::write_dot_network(benchmark_network, "original_ntk");
 
         fiction::network_balancing_params b_ps;
         b_ps.unify_outputs = true;
@@ -246,7 +287,7 @@ int main()  // NOLINT
         const auto _b = fiction::network_balancing<fiction::technology_network>(
             fiction::fanout_substitution<fiction::technology_network>(benchmark_network), b_ps);
 
-        fiction::debug::write_dot_network(_b, "balanced_ntk");
+        // fiction::debug::write_dot_network(_b, "balanced_ntk");
 
         if (_b.size() > 10000)
         {
@@ -255,7 +296,7 @@ int main()  // NOLINT
 
         auto planarized_b = fiction::node_duplication_planarization<fiction::technology_network>(_b);
 
-        fiction::debug::write_dot_network(planarized_b, "planarized_ntk");
+        // fiction::debug::write_dot_network(planarized_b, "planarized_ntk");
 
         if (planarized_b.size() > 100000)
         {
@@ -281,6 +322,8 @@ int main()  // NOLINT
 
         fiction::gate_level_drvs(gate_level_layout, ps_p, &st_p);
 
+        // fiction::debug::write_dot_layout(gate_level_layout);
+
         // check equivalence for the planar layout
         const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
         bool       eq = false;
@@ -292,25 +335,13 @@ int main()  // NOLINT
             eq            = ce.value();
         }
 
+        /*auto ortho_cell_layout =
+            fiction::apply_gate_library<qca_cell_level_layout, fiction::qca_one_library>(gate_level_layout);
+        fiction::write_qca_layout_svg(ortho_cell_layout, "cell_lyt");*/
+
         /*fiction::debug::write_dot_network(network, "ntk_b");
         fiction::debug::write_dot_layout(gate_level_layout);*/
-        fiction::debug::write_dot_layout(gate_level_layout, "planarized_lyt");
-
-        // Ortho part
-        fiction::orthogonal_physical_design_stats stats{};
-
-        auto layout = fiction::orthogonal<gate_lyt>(planarized_b, {}, &stats);
-
-        const auto miter_o = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
-        bool       eq_o = false;
-        if (miter_o)
-        {
-            mockturtle::equivalence_checking_stats st;
-
-            const auto ce = mockturtle::equivalence_checking(*miter_o, {}, &st);
-            eq_o            = ce.value();
-        }
-        std::cout << "Eq: " << eq_o << '\n';
+        // fiction::debug::write_dot_layout(gate_level_layout, "planarized_lyt");
 
         // Counter example
         /*std::cout << eq_s.impl_drv_stats.report;
@@ -335,7 +366,9 @@ int main()  // NOLINT
         // const auto layout_copy = gate_level_layout.clone();
         fiction::post_layout_optimization(gate_level_layout, params, &post_layout_optimization_stats);
 
-        fiction::debug::write_dot_layout(gate_level_layout, "optimized_lyt");
+        /*auto ortho_cell_layout_post =
+            fiction::apply_gate_library<qca_cell_level_layout, fiction::qca_one_library>(gate_level_layout);
+        fiction::write_qca_layout_svg(ortho_cell_layout_post, "optimized_cell_lyt");*/
 
         // calculate bounding box
         const auto bounding_box_after_optimization = fiction::bounding_box_2d(gate_level_layout);
