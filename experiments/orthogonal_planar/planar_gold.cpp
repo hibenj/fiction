@@ -69,7 +69,7 @@ int main()  // NOLINT
     fiction::post_layout_optimization_params params{};
     params.planar_optimization = true;
     fiction::graph_oriented_layout_design_params graph_oriented_layout_design_params{};
-    graph_oriented_layout_design_params.mode = fiction::graph_oriented_layout_design_params::effort_mode::HIGH_EFFORT;
+    graph_oriented_layout_design_params.mode = fiction::graph_oriented_layout_design_params::effort_mode::HIGHEST_EFFORT;
     graph_oriented_layout_design_params.verbose          = true;
     graph_oriented_layout_design_params.return_first     = true;
     graph_oriented_layout_design_params.timeout = 100000;
@@ -80,7 +80,7 @@ int main()  // NOLINT
     for (const auto& entry :
          std::filesystem::directory_iterator("/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93"))
     {
-        // continue;
+        continue;
         fmt::print("[i] processing {}\n", entry.path().filename().string());
 
         if ( "C432.v" == entry.path().filename().string())

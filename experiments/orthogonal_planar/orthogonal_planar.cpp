@@ -79,13 +79,14 @@ int main()  // NOLINT
     fiction::post_layout_optimization_stats   post_layout_optimization_stats{};
     fiction::post_layout_optimization_params  params{};
     params.max_gate_relocations = 0;
+    params.timeout = 100000;
 
     // For IWLS benchmarks
     int x = 0;
     for (const auto& entry :
          std::filesystem::directory_iterator("/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93"))
     {
-        // continue;
+        continue;
         fmt::print("[i] processing {}\n", entry.path().filename().string());
 
         if ( "C432.v" == entry.path().filename().string())
@@ -140,7 +141,7 @@ int main()  // NOLINT
 
         auto planarized_b = fiction::node_duplication_planarization<fiction::technology_network>(_b);
 
-        if (planarized_b.num_gates() < 200000 || planarized_b.num_gates() > 300000)
+        if (planarized_b.num_gates() > 200000)
         {
             continue;
         }
@@ -162,9 +163,9 @@ int main()  // NOLINT
         fiction::gate_level_drv_params ps{};
         fiction::gate_level_drv_stats  st{};
 
-        fiction::gate_level_drvs(gate_level_layout, ps, &st);
+        /*fiction::gate_level_drvs(gate_level_layout, ps, &st);
         std::cout << st.report;
-        std::cout << "\n";
+        std::cout << "\n";*/
 
         // check equivalence for the planar layout
         const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
@@ -190,14 +191,13 @@ int main()  // NOLINT
         fiction::gate_level_drv_params ps_post{};
         fiction::gate_level_drv_stats  st_post{};
 
-        fiction::gate_level_drvs(gate_level_layout, ps_post, &st_post);
+        // fiction::gate_level_drvs(gate_level_layout, ps_post, &st_post);
         // fiction::print_gate_level_layout(std::cout, gate_level_layout);
 
         // const auto layout_copy = gate_level_layout.clone();
-        if (width * height < 100000)
-        {
-            fiction::post_layout_optimization(gate_level_layout, params, &post_layout_optimization_stats);
-        }
+
+        fiction::post_layout_optimization(gate_level_layout, params, &post_layout_optimization_stats);
+
 
         /*auto ortho_cell_layout_post =
             fiction::apply_gate_library<qca_cell_level_layout, fiction::qca_one_library>(gate_level_layout);
@@ -239,7 +239,7 @@ int main()  // NOLINT
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
-        continue;
+        // continue;
         auto                              benchmark_network = read_ntk<fiction::tec_nt>(benchmark);
 
         /*fiction::technology_network benchmark_network;
@@ -269,20 +269,20 @@ int main()  // NOLINT
         fiction::network_balancing_params b_ps;
         b_ps.unify_outputs = true;
 
-        bool cont = false;
+        /*bool cont = false;
         benchmark_network.foreach_pi(
             [&benchmark_network, &cont](auto pi)
             {
                 if (benchmark_network.is_po(pi))
                 {
                     cont = true;
-                    // std::cout << "Pi is Po\n";
+                    std::cout << "Pi is Po\n";
                 }
             });
         if (cont)
         {
             continue;
-        }
+        }*/
 
         const auto _b = fiction::network_balancing<fiction::technology_network>(
             fiction::fanout_substitution<fiction::technology_network>(benchmark_network), b_ps);
