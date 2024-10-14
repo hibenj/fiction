@@ -1078,7 +1078,8 @@ class wiring_reduction_impl
         bool found_wires = true;
 
         // lambda to update the timeout status and calculate remaining time
-        auto update_timeout = [&]() -> void
+        auto update_timeout = [start = this->start, &ps = this->ps,
+                               &timeout_limit_reached = this->timeout_limit_reached]() -> void
         {
             const auto current_time = std::chrono::high_resolution_clock::now();
             const auto elapsed_ms   = static_cast<uint64_t>(
@@ -1130,14 +1131,12 @@ class wiring_reduction_impl
                     // update the remaining timeout after processing the path
                     update_timeout();
 
-                    if (timeout_limit_reached)
+                    if (!timeout_limit_reached)
                     {
-                        break;
+                        // get the next possible path for wire deletion
+                        possible_path = get_path(wiring_reduction_lyt, {0, 0},
+                                                 {wiring_reduction_lyt.x(), wiring_reduction_lyt.y()});
                     }
-
-                    // get the next possible path for wire deletion
-                    possible_path =
-                        get_path(wiring_reduction_lyt, {0, 0}, {wiring_reduction_lyt.x(), wiring_reduction_lyt.y()});
                 }
 
                 if (!to_delete.empty())
