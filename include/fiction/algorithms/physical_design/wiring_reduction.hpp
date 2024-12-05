@@ -1037,12 +1037,10 @@ void delete_wires(Lyt& lyt, WiringReductionLyt& wiring_reduction_layout,
     }
 
     // calculate bounding box for optimized layout size
-    const auto bounding_box            = bounding_box_2d(lyt);
-    const auto optimized_layout_width  = bounding_box.get_x_size();
-    const auto optimized_layout_height = bounding_box.get_y_size();
+    const auto bounding_box = bounding_box_2d(lyt);
 
     // resize the layout to the optimized size
-    lyt.resize({optimized_layout_width, optimized_layout_height, lyt.z()});
+    lyt.resize({bounding_box.get_max().x, bounding_box.get_max().y, lyt.z()});
 }
 
 template <typename Lyt>
@@ -1078,8 +1076,8 @@ class wiring_reduction_impl
         bool found_wires = true;
 
         // lambda to update the timeout status and calculate remaining time
-        auto update_timeout = [start = this->start, &ps = this->ps,
-                               &timeout_limit_reached = this->timeout_limit_reached]() -> void
+        const auto update_timeout = [start = this->start, &ps = this->ps,
+                                     &timeout_limit_reached = this->timeout_limit_reached]() noexcept -> void
         {
             const auto current_time = std::chrono::high_resolution_clock::now();
             const auto elapsed_ms   = static_cast<uint64_t>(
