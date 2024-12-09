@@ -31,6 +31,61 @@
 
 namespace fiction
 {
+// for testing
+template <typename Ntk>
+Ntk check_for_fanout_edge_case(const Ntk& original_ntk)
+{
+    std::vector<std::vector<mockturtle::node<Ntk>>> rank_array;
+
+    for (int level = 0; level < original_ntk.depth() + 1; level++)
+    {
+        std::vector<mockturtle::node<Ntk>> rank_vector;
+        for (int rank = 0; rank < original_ntk.rank_width(level); ++rank)
+        {
+            rank_vector.push_back(original_ntk.at_rank_position(level, rank));
+        }
+        rank_array.push_back(rank_vector);
+    }
+
+    auto                  ntk     = extended_rank_view(original_ntk.clone());
+    bool                  fo_flag = false;
+    mockturtle::node<Ntk> fo_node{};
+    ntk.foreach_node(
+        [&](const auto& n)
+        {
+            if (ntk.is_and(n))
+            {
+                auto fc = fanins(ntk, n);
+                // auto sub_signal = ntk.create_or(fc.fanin_nodes[0], fc.fanin_nodes[1]);
+                // ntk.substitute_node(n, sub_signal);
+            }
+            /*if (ntk.is_fanout(n))
+            {
+                if (fo_flag)
+                {
+                    const auto fos0 = fanouts(ntk, n);
+                    const auto fos1 = fanouts(ntk, fo_node);
+                    std::cout << ntk.is_po(n) << std::endl;
+                    std::cout << fos0.size() << fos1.size() << "Edge Case\n";
+                    // assert(fos0.size() == 2 && fos1.size() == 2);
+                    if(fos0[0] == fos1[0])
+                    {
+
+                }
+                }
+                else
+                {
+                    fo_node = n;
+                    fo_flag = true;
+                }
+            }
+            else
+            {
+                fo_flag = false;
+            }*/
+        });
+    return ntk;
+}
 
 namespace detail
 {
@@ -569,14 +624,14 @@ class orthogonal_planar_impl
                             }
                             else
                             {
-                                int gap     = level_gaps[r - 1];
-                                prec_pos    = {prec_pos.x - gap - 1, prec_pos.y + gap + 1};
+                                int gap  = level_gaps[r - 1];
+                                prec_pos = {prec_pos.x - gap - 1, prec_pos.y + gap + 1};
                                 // node2pos[n] = layout.move_node(pi2node[n], prec_pos);
-                                if(prec_pos.x == 0)
+                                if (prec_pos.x == 0)
                                 {
                                     node2pos[n] = layout.move_node(pi2node[n], prec_pos);
                                 }
-                                else if(prec_pos.x < (first_pos.x / 2))
+                                else if (prec_pos.x < (first_pos.x / 2))
                                 {
                                     node2pos[n] = layout.move_node(pi2node[n], {0, prec_pos.y});
 
@@ -590,7 +645,6 @@ class orthogonal_planar_impl
                                     node2pos[n] =
                                         layout.create_buf(wire_south(layout, {prec_pos.x, 0}, prec_pos), prec_pos);
                                 }
-
                             }
                         }
                         // if n has only one fanin
@@ -679,20 +733,21 @@ class orthogonal_planar_impl
                 });
         }
         std::unordered_map<int, int> countMap;
-        int add_line = 0;
+        int                          add_line = 0;
         // the number of outputs on a node is limited to 2, due to fanout substitution
         ntk.foreach_po(
             [&](const auto& po)
             {
                 if (!ntk.is_constant(po))
                 {
-                    const auto      n_s     = node2pos[po];
-                    auto            po_tile = static_cast<tile<Lyt>>(n_s);
-                    if (countMap[po] < 2) // Check if the count is less than 2
+                    const auto n_s     = node2pos[po];
+                    auto       po_tile = static_cast<tile<Lyt>>(n_s);
+                    if (countMap[po] < 2)  // Check if the count is less than 2
                     {
                         // Adjust the position based on whether it's the first or second occurrence
-                        if (countMap[po] == 1) {
-                            if(po_tile.y == prec_pos.y)
+                        if (countMap[po] == 1)
+                        {
+                            if (po_tile.y == prec_pos.y)
                             {
                                 add_line = 1;
                             }
@@ -751,6 +806,9 @@ Lyt orthogonal_planar(const Ntk& ntk, orthogonal_physical_design_params ps = {},
     static_assert(mockturtle::is_network_type_v<Ntk>,
                   "Ntk is not a network type");  // Ntk is being converted to a topology_network anyway, therefore,
                                                  // this is the only relevant check here
+
+    // check for the edge case
+    const auto ntk2 = check_for_fanout_edge_case(ntk);
 
     // check for input degree
     if (has_high_degree_fanin_nodes(ntk, 2))

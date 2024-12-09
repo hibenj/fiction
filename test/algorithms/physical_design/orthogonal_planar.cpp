@@ -89,8 +89,51 @@ TEST_CASE("Case buf", "[orthogonal-planar]")
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
-    /*debug::write_dot_layout(layout);
-    debug::write_dot_network(fo_ntk);*/
+    debug::write_dot_layout(layout);
+    debug::write_dot_network(fo_ntk);
+}
+
+// New test case
+TEST_CASE("Edge case", "[orthogonal-planar]")
+{
+    using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
+
+    virtual_pi_network<technology_network> v_ntk{};
+
+    const auto x1 = v_ntk.create_pi();
+    const auto x2 = v_ntk.create_pi();
+    const auto x3 = v_ntk.create_virtual_pi(x1);
+    const auto x4 = v_ntk.create_virtual_pi(x2);
+
+    const auto f1 = v_ntk.create_and(x1, x2);
+    const auto n1 = v_ntk.create_not(x2);
+    const auto n2 = v_ntk.create_not(x3);
+    const auto f2 = v_ntk.create_and(n1, n2);
+    const auto f3 = v_ntk.create_and(x3, x4);
+
+    v_ntk.create_po(f1);
+    v_ntk.create_po(f2);
+    v_ntk.create_po(f3);
+
+    network_balancing_params ps;
+    ps.unify_outputs = true;
+
+    const auto fo_ntk = network_balancing<technology_network>(fanout_substitution<technology_network>(v_ntk), ps);
+
+    extended_rank_view aig_r(fo_ntk);
+
+    std::vector<mockturtle::aig_network::node> nodes_rank1{7, 6, 10, 13};
+    std::vector<mockturtle::aig_network::node> nodes_rank2{8, 9, 11, 14};
+    std::vector<mockturtle::aig_network::node> nodes_rank3{15, 12, 16};
+
+    aig_r.modify_rank(1, nodes_rank1);
+    aig_r.modify_rank(2, nodes_rank2);
+    aig_r.modify_rank(3, nodes_rank3);
+
+    const auto layout = orthogonal_planar<gate_layout>(aig_r);
+
+    debug::write_dot_layout(layout);
+    debug::write_dot_network(fo_ntk);
 }
 
 TEST_CASE("And gaps", "[orthogonal-planar]")

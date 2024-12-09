@@ -274,7 +274,7 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
      *
      * @return Width of the rank.
      */
-    uint32_t rank_width(const uint32_t level) noexcept
+    uint32_t rank_width(const uint32_t level) const noexcept
     {
         auto& rank = ranks[level];
         return rank.size();
