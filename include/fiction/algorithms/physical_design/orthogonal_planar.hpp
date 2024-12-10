@@ -20,6 +20,7 @@
 #include <mockturtle/utils/node_map.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
 #include <mockturtle/views/fanout_view.hpp>
+#include <mockturtle/views/rank_view.hpp>
 
 #include <algorithm>
 #include <unordered_map>
@@ -47,7 +48,7 @@ Ntk check_for_fanout_edge_case(const Ntk& original_ntk)
         rank_array.push_back(rank_vector);
     }
 
-    auto                  ntk     = extended_rank_view(original_ntk.clone());
+    auto                  ntk     = original_ntk.clone();
     bool                  fo_flag = false;
     mockturtle::node<Ntk> fo_node{};
     ntk.foreach_node(
@@ -55,9 +56,10 @@ Ntk check_for_fanout_edge_case(const Ntk& original_ntk)
         {
             if (ntk.is_and(n))
             {
-                auto fc = fanins(ntk, n);
-                // auto sub_signal = ntk.create_or(fc.fanin_nodes[0], fc.fanin_nodes[1]);
-                // ntk.substitute_node(n, sub_signal);
+                // std::cout << "is_and\n";
+                auto fc         = fanins(ntk, n);
+                auto sub_signal = ntk.create_or(fc.fanin_nodes[0], fc.fanin_nodes[1]);
+                ntk.substitute_node(n, sub_signal);
             }
             /*if (ntk.is_fanout(n))
             {
@@ -84,7 +86,21 @@ Ntk check_for_fanout_edge_case(const Ntk& original_ntk)
                 fo_flag = false;
             }*/
         });
-    return ntk;
+    ntk = cleanup_dangling(ntk);
+    ntk.foreach_node(
+        [&](const auto& n)
+        {
+            if (ntk.is_and(n))
+            {
+                std::cout << "is_and\n";
+            }
+            if (ntk.is_or(n))
+            {
+                std::cout << "is_or\n";
+            }
+        });
+    auto ntk_ret = extended_rank_view(original_ntk.clone());
+    return ntk_ret;
 }
 
 namespace detail

@@ -5,6 +5,7 @@
 
 #include "fiction/algorithms/network_transformation/fanout_substitution.hpp"
 #include "fiction/algorithms/network_transformation/network_balancing.hpp"
+#include "fiction/algorithms/network_transformation/network_conversion.hpp"
 #include "fiction/algorithms/network_transformation/node_duplication_planarization.hpp"
 #include "fiction/networks/views/extended_rank_view.hpp"
 #include "fiction/utils/debug/network_writer.hpp"
@@ -79,10 +80,10 @@ TEST_CASE("Case buf", "[orthogonal-planar]")
 
     const auto fo_ntk = network_balancing<technology_network>(fanout_substitution<technology_network>(v_ntk), ps);
 
-    extended_rank_view aig_r(fo_ntk);
+    const extended_rank_view aig_r(fo_ntk);
 
-    std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
-    std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
+    const std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
+    const std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
 
     /*aig_r.modify_rank(0, nodes_rank0);
     aig_r.modify_rank(0, nodes_rank0);*/
@@ -122,9 +123,9 @@ TEST_CASE("Edge case", "[orthogonal-planar]")
 
     extended_rank_view aig_r(fo_ntk);
 
-    std::vector<mockturtle::aig_network::node> nodes_rank1{7, 6, 10, 13};
-    std::vector<mockturtle::aig_network::node> nodes_rank2{8, 9, 11, 14};
-    std::vector<mockturtle::aig_network::node> nodes_rank3{15, 12, 16};
+    const std::vector<mockturtle::aig_network::node> nodes_rank1{7, 6, 10, 13};
+    const std::vector<mockturtle::aig_network::node> nodes_rank2{8, 9, 11, 14};
+    const std::vector<mockturtle::aig_network::node> nodes_rank3{15, 12, 16};
 
     aig_r.modify_rank(1, nodes_rank1);
     aig_r.modify_rank(2, nodes_rank2);
@@ -134,6 +135,19 @@ TEST_CASE("Edge case", "[orthogonal-planar]")
 
     debug::write_dot_layout(layout);
     debug::write_dot_network(fo_ntk);
+
+    technology_network t{};
+    const auto p1 = t.create_pi();
+    const auto p2 = t.create_pi();
+    const auto a1 = t.create_and(p1, p2);
+    t.create_po(a1);
+
+    auto fc         = fanins(t, a1);
+    std::cout << "Size: " << t.size() << "\n";
+    auto sub_signal = t.create_or(fc.fanin_nodes[0], fc.fanin_nodes[1]);
+    t.substitute_node(a1, sub_signal);
+    t = cleanup_dangling(t);
+    std::cout << "Size: " << t.size() << "\n";
 }
 
 TEST_CASE("And gaps", "[orthogonal-planar]")
@@ -166,10 +180,10 @@ TEST_CASE("And gaps", "[orthogonal-planar]")
 
     const auto fo_ntk = network_balancing<technology_network>(fanout_substitution<technology_network>(v_ntk), ps);
 
-    extended_rank_view aig_r(fo_ntk);
+    const extended_rank_view aig_r(fo_ntk);
 
-    std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
-    std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
+    const std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
+    const std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
 
     /*aig_r.modify_rank(0, nodes_rank0);
     aig_r.modify_rank(0, nodes_rank0);*/
@@ -217,10 +231,10 @@ TEST_CASE("Fo to And gaps", "[orthogonal-planar]")
 
     const auto fo_ntk = network_balancing<technology_network>(fanout_substitution<technology_network>(v_ntk), ps);
 
-    extended_rank_view aig_r(fo_ntk);
+    const extended_rank_view aig_r(fo_ntk);
 
-    std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
-    std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
+    const std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
+    const std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
 
     /*aig_r.modify_rank(0, nodes_rank0);
     aig_r.modify_rank(0, nodes_rank0);*/
