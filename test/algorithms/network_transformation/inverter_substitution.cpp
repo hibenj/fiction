@@ -97,10 +97,4 @@ TEST_CASE("Propagating AND/OR inverter substitution, [inverter-substitution]")
     const detail::operation_mode mode = detail::operation_mode::AND_OR_ONLY;
     auto substituted_network = inverter_substitution(tec, mode);
     fiction::debug::write_dot_network(substituted_network, "ntk_sub");
-    auto substituted_network_2 = inverter_substitution(substituted_network, mode);
-    fiction::debug::write_dot_network(substituted_network_2, "ntk_sub_2");
-
-    /*const auto depth =  mockturtle::depth_view<technology_network>(substituted_network);
-    const auto d = fiction::convert_network<technology_network>(depth);
-    fiction::debug::write_dot_network(d, "ntk_sub_2");*/
 }

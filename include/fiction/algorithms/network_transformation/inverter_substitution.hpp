@@ -177,6 +177,12 @@ class inverter_substitution_impl
         }
     }
 
+    // check if optimizations were made
+    [[nodiscard]] bool is_rerun() const
+    {
+        return rerun;
+    }
+
     Ntk run()
     {
         auto  init     = mockturtle::initialize_copy_network<Ntk>(ntk);
@@ -196,7 +202,6 @@ class inverter_substitution_impl
                 for (const auto& pair : delayed_nodes) {
                     const auto& arr = pair.second;
                     if (std::find(arr.begin(), arr.end(), g) != arr.end()) {
-                        std::cout << "Gate not placed: " << g << std::endl;
                         return true;
                     }
                 }
@@ -209,10 +214,6 @@ class inverter_substitution_impl
                 connect_children_to_gates_affected<TopoNtkSrc>(ntk_dest, old2new, g, children);
                 if (delayed_nodes.find(g) != delayed_nodes.end())
                 {
-                    std::cout << "Gate connected: " << g << std::endl;
-                    std::cout << "Gate placed: " << delayed_nodes[g][0] << std::endl;
-                    std::cout << "Gate placed: " << delayed_nodes[g][1] << std::endl;
-                    std::cout << "Gate placed: " << delayed_nodes[g][2] << std::endl;
                     const auto children0 = gather_fanin_signals<TopoNtkSrc>(delayed_nodes[g][0], old2new);
                     connect_children_to_gates_affected<TopoNtkSrc>(ntk_dest, old2new, delayed_nodes[g][0], children0);
                     const auto children1 = gather_fanin_signals<TopoNtkSrc>(delayed_nodes[g][1], old2new);
@@ -321,12 +322,6 @@ class inverter_substitution_impl
      * The operation mode of inverter substitution.
      * */
     detail::operation_mode mode;
-
-    // check if optimizations were made
-    [[nodiscard]] bool is_rerun() const
-    {
-        return rerun;
-    }
 
     template <typename NtkSrc>
     auto gather_fanin_signals(const typename Ntk::node&                              n,
@@ -555,11 +550,11 @@ Ntk inverter_substitution(const Ntk& ntk, detail::operation_mode mode = detail::
 
     assert(ntk.is_combinational() && "Network has to be combinational");
 
-    auto                                    result = ntk;
+    /*auto                                    result = ntk;
     detail::inverter_substitution_impl<Ntk> p{result, mode};
-    result = p.run();
+    result = p.run();*/
 
-    /*bool run    = true;
+    bool run    = true;
     auto result = ntk;
     while (run)
     {
@@ -570,7 +565,7 @@ Ntk inverter_substitution(const Ntk& ntk, detail::operation_mode mode = detail::
         }
         result = p.run();
         run    = p.is_rerun();
-    }*/
+    }
 
     return result;
 }
