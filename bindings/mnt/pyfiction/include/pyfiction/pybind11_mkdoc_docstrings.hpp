@@ -4467,6 +4467,37 @@ static const char *__doc_fiction_detail_connect_and_place = R"doc()doc";
 
 static const char *__doc_fiction_detail_connect_and_place_2 = R"doc()doc";
 
+static const char *__doc_fiction_detail_connect_children_to_gates_unaffected =
+R"doc(This function connects gates that aren't affected by the inverter
+substitution. It means that all the gates without any fan-ins or fan-
+outs impacted by the inverter substitution retain their functionality
+and are subsequently connected to their children.
+
+Template parameter ``Ntk``:
+    Type of the input logic network.
+
+Template parameter ``NtkDest``:
+    Type of the returned logic network.
+
+Parameter ``ntk``:
+    Input network.
+
+Parameter ``ntk_dest``:
+    Output network.
+
+Parameter ``old2new``:
+    `node_map` to assign the nodes of the old network to the new
+    network.
+
+Parameter ``children``:
+    Children of the current gate.
+
+Parameter ``g``:
+    Currently viewed gate.
+
+Returns:
+    'true' iff the assignment was successful.)doc";
+
 static const char *__doc_fiction_detail_contains_parameter_point = R"doc(Forward-declaration for `operational_domain`.)doc";
 
 static const char *__doc_fiction_detail_contains_parameter_point_2 =
@@ -6809,6 +6840,26 @@ Parameter ``place_info``:
 Parameter ``ssg``:
     The search space graph.)doc";
 
+static const char *__doc_fiction_detail_inverter_substitution_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_connect_children_to_gates_affected = R"doc()doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_fo_ntk = R"doc(This is a fan-out view of the network 'ntk'.)doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_gather_fanin_signals = R"doc()doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_inverter_substitution_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_is_rerun = R"doc()doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_mode = R"doc(The operation mode of inverter substitution.)doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_ntk = R"doc(A topologically ordered input logic network.)doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_rerun = R"doc(An indicator to check if optimizations can be applied or not.)doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_run = R"doc()doc";
+
 static const char *__doc_fiction_detail_is_balanced_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_is_balanced_impl_balanced = R"doc()doc";
@@ -7346,6 +7397,14 @@ static const char *__doc_fiction_detail_on_the_fly_circuit_design_impl_on_the_fl
 static const char *__doc_fiction_detail_on_the_fly_circuit_design_impl_params = R"doc(Parameters for the on-the-fly circuit design.)doc";
 
 static const char *__doc_fiction_detail_on_the_fly_circuit_design_impl_stats = R"doc(Statistics for the on-the-fly circuit design.)doc";
+
+static const char *__doc_fiction_detail_operation_mode = R"doc()doc";
+
+static const char *__doc_fiction_detail_operation_mode_ALL_NODES = R"doc()doc";
+
+static const char *__doc_fiction_detail_operation_mode_AND_OR_ONLY = R"doc()doc";
+
+static const char *__doc_fiction_detail_operation_mode_FO_ONLY = R"doc()doc";
 
 static const char *__doc_fiction_detail_operational_domain_impl = R"doc()doc";
 
@@ -13705,6 +13764,22 @@ Returns:
     A vector of inverse levels for each node where
     `ntk.node_to_index(n)` is the position where `n`'s inverse level
     is stored.)doc";
+
+static const char *__doc_fiction_inverter_substitution =
+R"doc(A network optimization algorithm that substitutes inverters at the
+outputs of all fan-out nodes with one single inverter at their inputs.
+Thereby, the total number of inverters is reduced. This is part of the
+Signal Distribution Networks I: Input Ordering.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``ntk``:
+    The input logic network whose inverter count is to be optimized.
+
+Returns:
+    A network that is logically equivalent to `ntk`, but with an
+    optimized inverter count.)doc";
 
 static const char *__doc_fiction_is_balanced =
 R"doc(Checks if a logic network is properly path-balanced with regard to the
