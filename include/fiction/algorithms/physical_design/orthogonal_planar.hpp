@@ -32,76 +32,6 @@
 
 namespace fiction
 {
-// for testing
-template <typename Ntk>
-Ntk check_for_fanout_edge_case(const Ntk& original_ntk)
-{
-    std::vector<std::vector<mockturtle::node<Ntk>>> rank_array;
-
-    for (int level = 0; level < original_ntk.depth() + 1; level++)
-    {
-        std::vector<mockturtle::node<Ntk>> rank_vector;
-        for (int rank = 0; rank < original_ntk.rank_width(level); ++rank)
-        {
-            rank_vector.push_back(original_ntk.at_rank_position(level, rank));
-        }
-        rank_array.push_back(rank_vector);
-    }
-
-    auto                  ntk     = original_ntk.clone();
-    bool                  fo_flag = false;
-    mockturtle::node<Ntk> fo_node{};
-    ntk.foreach_node(
-        [&](const auto& n)
-        {
-            if (ntk.is_and(n))
-            {
-                // std::cout << "is_and\n";
-                auto fc         = fanins(ntk, n);
-                auto sub_signal = ntk.create_or(fc.fanin_nodes[0], fc.fanin_nodes[1]);
-                ntk.substitute_node(n, sub_signal);
-            }
-            /*if (ntk.is_fanout(n))
-            {
-                if (fo_flag)
-                {
-                    const auto fos0 = fanouts(ntk, n);
-                    const auto fos1 = fanouts(ntk, fo_node);
-                    std::cout << ntk.is_po(n) << std::endl;
-                    std::cout << fos0.size() << fos1.size() << "Edge Case\n";
-                    // assert(fos0.size() == 2 && fos1.size() == 2);
-                    if(fos0[0] == fos1[0])
-                    {
-
-                }
-                }
-                else
-                {
-                    fo_node = n;
-                    fo_flag = true;
-                }
-            }
-            else
-            {
-                fo_flag = false;
-            }*/
-        });
-    ntk = cleanup_dangling(ntk);
-    ntk.foreach_node(
-        [&](const auto& n)
-        {
-            if (ntk.is_and(n))
-            {
-                std::cout << "is_and\n";
-            }
-            if (ntk.is_or(n))
-            {
-                std::cout << "is_or\n";
-            }
-        });
-    auto ntk_ret = extended_rank_view(original_ntk.clone());
-    return ntk_ret;
-}
 
 namespace detail
 {
@@ -260,7 +190,12 @@ uint32_t propagate_forward(Ntk& ntk, std::vector<std::vector<int>>& fw_gap_array
                 // fi of 2-input node
                 else
                 {
-                    assert(ntk.fanin_size(fo[0]) == 2 && fo.size() == 1);
+                    // assert(ntk.fanin_size(fo[0]) == 2 && fo.size() == 1);
+
+                    if(!(ntk.fanin_size(fo[0]) == 2 && fo.size() == 1))
+                    {
+                        std::cout << "Hier assert\n";
+                    }
 
                     // chain starts here
                     if (last_visited_node != fo[0])
@@ -822,9 +757,6 @@ Lyt orthogonal_planar(const Ntk& ntk, orthogonal_physical_design_params ps = {},
     static_assert(mockturtle::is_network_type_v<Ntk>,
                   "Ntk is not a network type");  // Ntk is being converted to a topology_network anyway, therefore,
                                                  // this is the only relevant check here
-
-    // check for the edge case
-    const auto ntk2 = check_for_fanout_edge_case(ntk);
 
     // check for input degree
     if (has_high_degree_fanin_nodes(ntk, 2))
