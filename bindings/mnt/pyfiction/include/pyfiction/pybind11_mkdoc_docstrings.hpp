@@ -2347,8 +2347,6 @@ Template parameter ``Dist``:
 
 static const char *__doc_fiction_chebyshev_distance_functor_chebyshev_distance_functor = R"doc()doc";
 
-static const char *__doc_fiction_check_for_fanout_edge_case = R"doc()doc";
-
 static const char *__doc_fiction_check_planarity =
 R"doc(Checks if a logic network is planar for a network that is path
 balanced and has ranks assigned.
