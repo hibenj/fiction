@@ -5,15 +5,15 @@
 #ifndef FICTION_EXTENDED_RANK_VIEW_HPP
 #define FICTION_EXTENDED_RANK_VIEW_HPP
 
+#include <fiction/networks/views/depth_view.hpp>
+
 #include <mockturtle/networks/detail/foreach.hpp>
 #include <mockturtle/traits.hpp>
-#include <mockturtle/utils/node_map.hpp>
-#include <mockturtle/views/depth_view.hpp>
 
 #include <algorithm>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
-#include <memory>
 #include <utility>
 #include <vector>
 
@@ -38,7 +38,7 @@ namespace fiction
  *
  * @tparam Ntk The network type.
  * @tparam has_rank_interface Boolean flag checked compile-time, determines if the provided Ntk supports the rank
- * interface
+ * interface.
  */
 template <class Ntk, bool has_rank_interface =
                          mockturtle::has_rank_position_v<Ntk> && mockturtle::has_at_rank_position_v<Ntk> &&
@@ -55,10 +55,10 @@ class extended_rank_view
  * @tparam Ntk The network type.
  */
 template <class Ntk>
-class extended_rank_view<Ntk, true> : public mockturtle::depth_view<Ntk>
+class extended_rank_view<Ntk, true> : public fiction::depth_view<Ntk>
 {
   public:
-    extended_rank_view(const Ntk& ntk) : mockturtle::depth_view<Ntk>(ntk) {}
+    explicit extended_rank_view(const Ntk& ntk) : fiction::depth_view<Ntk>(ntk) {}
 };
 
 /**
@@ -69,7 +69,7 @@ class extended_rank_view<Ntk, true> : public mockturtle::depth_view<Ntk>
  * @tparam Ntk The network type.
  */
 template <class Ntk>
-class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
+class extended_rank_view<Ntk, false> : public fiction::depth_view<Ntk>
 {
   public:
     static constexpr bool is_topologically_sorted = true;
@@ -78,11 +78,11 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
     using signal                                  = typename Ntk::signal;
 
     /**
-     * Default constructor.
-     * Constructs an empty extended_rank_view object, initializes base class and class variables, and verifies that the
-     * Network Type (Ntk) needs to support certain methods.
+     * Default constructor for `extended_rank_view`.
+     * Initializes an empty `extended_rank_view` object, sets up base class properties,
+     * and ensures that the network type (Ntk) satisfies required interface methods.
      */
-    explicit extended_rank_view() : mockturtle::depth_view<Ntk>(), rank_pos{*this}, ranks{}, max_rank_width{0}
+    explicit extended_rank_view() : fiction::depth_view<Ntk>(), ranks{}, max_rank_width{0}
     {
         static_assert(mockturtle::is_network_type_v<Ntk>, "Ntk is not a network type");
         static_assert(mockturtle::has_foreach_node_v<Ntk>, "Ntk does not implement the foreach_node method");
@@ -91,19 +91,19 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
         static_assert(mockturtle::has_is_ci_v<Ntk>, "Ntk does not implement the is_ci method");
         static_assert(mockturtle::has_is_constant_v<Ntk>, "Ntk does not implement the is_constant method");
 
-        add_event = Ntk::events().register_add_event([this](auto const& n) { on_add(n); });
+        rank_pos.rehash(this->size());
     }
 
     /**
-     * Constructs an extended_rank_view from an existing network.
-     * Calls the base class constructor with the provided network, initializes class members, and registers network
-     * events. Also, it ensures that the Network Type (Ntk) needs to support certain methods.
+     * Constructs an `extended_rank_view` from an existing network.
+     * Invokes the base class constructor with the provided network, initializes class-specific members,
+     * and registers necessary network events. Ensures that the network type (Ntk) satisfies required
+     * interface methods.
      *
-     * @param ntk Reference to the network.
+     * @param ntk A reference to the network object.
      */
     explicit extended_rank_view(const Ntk& ntk) :
-            mockturtle::depth_view<Ntk>{ntk},
-            rank_pos{ntk},
+            fiction::depth_view<Ntk>{ntk},
             ranks{this->depth() + 1},
             max_rank_width{0}
     {
@@ -114,20 +114,19 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
         static_assert(mockturtle::has_is_ci_v<Ntk>, "Ntk does not implement the is_ci method");
         static_assert(mockturtle::has_is_constant_v<Ntk>, "Ntk does not implement the is_constant method");
 
-        init_ranks();
+        rank_pos.rehash(this->size());
 
-        add_event = Ntk::events().register_add_event([this](auto const& n) { on_add(n); });
+        init_ranks();
     }
 
     /**
-     * Constructs an extended_rank_view from an existing network and a specific initial rank configuration.
+     * Constructs an `extended_rank_view` from an existing network and a specific initial rank configuration.
      *
      * @param ntk Reference to the network.
      * @param ranks A vector of vectors specifying initial ranks for the nodes within the network.
      */
     explicit extended_rank_view(const Ntk& ntk, const std::vector<std::vector<node>>& ranks) :
-            mockturtle::depth_view<Ntk>{ntk},
-            rank_pos{ntk},
+            fiction::depth_view<Ntk>{ntk},
             ranks{this->depth() + 1},
             max_rank_width{0}
     {
@@ -138,24 +137,22 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
         static_assert(mockturtle::has_is_ci_v<Ntk>, "Ntk does not implement the is_ci method");
         static_assert(mockturtle::has_is_constant_v<Ntk>, "Ntk does not implement the is_constant method");
 
-        init_ranks(ranks);
+        rank_pos.rehash(this->size());
 
-        add_event = Ntk::events().register_add_event([this](auto const& n) { on_add(n); });
+        init_ranks(ranks);
     }
 
     /**
-     * Copy constructor creates a new extended_rank_view by copying the content of another extended_rank_view.
+     * Copy constructor creates a new `extended_rank_view` by copying the content of another `extended_rank_view`.
      *
-     * @param other The other extended_rank_view object to be copied.
+     * @param other The other `extended_rank_view` object to be copied.
      */
     extended_rank_view(const extended_rank_view<Ntk, false>& other) :
-            mockturtle::depth_view<Ntk>(other),
+            fiction::depth_view<Ntk>(other),
             rank_pos{other.rank_pos},
             ranks{other.ranks},
             max_rank_width{other.max_rank_width}
-    {
-        add_event = Ntk::events().register_add_event([this](auto const& n) { on_add(n); });
-    }
+    {}
 
     /**
      * Overloaded assignment operator for copying `extended_rank_view` content of another `extended_rank_view` object.
@@ -165,8 +162,11 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
      */
     extended_rank_view<Ntk, false>& operator=(const extended_rank_view<Ntk, false>& other)
     {
-        /* delete the event of this network */
-        Ntk::events().release_add_event(add_event);
+        // Check for self-assignment
+        if (this == &other)
+        {
+            return *this;
+        }
 
         /* update the base class */
         this->_storage = other._storage;
@@ -177,19 +177,14 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
         ranks          = other.ranks;
         max_rank_width = other.max_rank_width;
 
-        /* register new event in the other network */
-        add_event = Ntk::events().register_add_event([this](auto const& n) { on_add(n); });
-
         return *this;
     }
 
     /**
-     * Destructor for extended_rank_view.
+     * Destructor for `extended_rank_view`.
      */
-    ~extended_rank_view()
-    {
-        Ntk::events().release_add_event(add_event);
-    }
+    ~extended_rank_view() = default;
+
     /**
      * Returns the rank position of a node.
      *
@@ -200,7 +195,7 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
     {
         assert(!this->is_constant(n) && "node must not be constant");
 
-        return rank_pos[n];
+        return rank_pos.at(n);
     }
 
     /**
@@ -208,7 +203,7 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
      *
      * @return A boolean indicating whether the ranks and rank positions are valid (true) or not (false).
      */
-    bool check_validity() const noexcept
+    [[nodiscard]] bool check_validity() const noexcept
     {
         for (std::size_t i = 0; i < ranks.size(); ++i)
         {
@@ -222,7 +217,7 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
                     return false;
                 }
                 // Check if the rank_pos is not in ascending order
-                if (rank_pos[n] != expected_rank_pos)
+                if (rank_pos.at(n) != expected_rank_pos)
                 {
                     return false;
                 }
@@ -265,7 +260,7 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
      *
      * @return Width of the widest rank in the network.
      */
-    uint32_t width() const noexcept
+    [[nodiscard]] uint32_t width() const noexcept
     {
         return max_rank_width;
     }
@@ -277,7 +272,7 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
     uint32_t rank_width(const uint32_t level) noexcept
     {
         auto& rank = ranks[level];
-        return rank.size();
+        return static_cast<uint32_t>(rank.size());
     }
     /**
      * Swaps the positions of two nodes in the same rank.
@@ -398,9 +393,9 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
         std::vector<node> pis{};
         pis.reserve(this->num_pis());
 
-        mockturtle::depth_view<Ntk>::foreach_pi([&pis](auto const& pi) { pis.push_back(pi); });
+        fiction::depth_view<Ntk>::foreach_pi([&pis](auto const& pi) { pis.push_back(pi); });
         std::sort(pis.begin(), pis.end(),
-                  [this](auto const& n1, auto const& n2) { return rank_pos[n1] < rank_pos[n2]; });
+                  [this](auto const& n1, auto const& n2) { return rank_pos.at(n1) < rank_pos.at(n2); });
         mockturtle::detail::foreach_element(pis.cbegin(), pis.cend(), std::forward<Fn>(fn));
     }
     /**
@@ -417,9 +412,9 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
         std::vector<node> pis{};
         pis.reserve(this->num_pis());
 
-        mockturtle::depth_view<Ntk>::foreach_ci([&pis](auto const& pi) { pis.push_back(pi); });
+        fiction::depth_view<Ntk>::foreach_ci([&pis](auto const& pi) { pis.push_back(pi); });
         std::sort(pis.begin(), pis.end(),
-                  [this](auto const& n1, auto const& n2) { return rank_pos[n1] < rank_pos[n2]; });
+                  [this](auto const& n1, auto const& n2) { return rank_pos.at(n1) < rank_pos.at(n2); });
         mockturtle::detail::foreach_element(pis.cbegin(), pis.cend(), std::forward<Fn>(fn));
     }
     /**
@@ -429,18 +424,36 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
      */
     signal create_pi()
     {
-        auto const n = mockturtle::depth_view<Ntk>::create_pi();
-        this->resize_levels();
-        on_add(this->get_node(n));
+        auto const n = fiction::depth_view<Ntk>::create_pi();
         return n;
     }
 
-  private:
-    mockturtle::node_map<uint32_t, Ntk> rank_pos;
-    std::vector<std::vector<node>>      ranks;
-    uint32_t                            max_rank_width;
+    /**
+     * Update the ranks in the `extended_rank_view`.
+     */
+    void update_ranks()
+    {
+        this->update_levels();
+        rank_pos.clear();
+        rank_pos.rehash(this->size());
+        ranks.clear();
+        ranks.resize(this->depth() + 1);
+        init_ranks();
+    }
 
-    std::shared_ptr<typename mockturtle::network_events<Ntk>::add_event_type> add_event;
+  private:
+    /**
+     * Hashmap assigning ranks to nodes.
+     */
+    phmap::flat_hash_map<node, uint32_t> rank_pos;
+    /**
+     * The nodes stored in an rank array.
+     */
+    std::vector<std::vector<node>>       ranks;
+    /**
+     * The maximum rank width in the network.
+     */
+    uint32_t                             max_rank_width;
 
     /**
      * Inserts a node into the rank and updates the rank position, ranks, and max rank width accordingly.
@@ -450,26 +463,9 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
     void insert_in_rank(const node& n)
     {
         auto& rank  = ranks[this->level(n)];
-        rank_pos[n] = rank.size();
+        rank_pos[n] = static_cast<uint32_t>(rank.size());
         rank.push_back(n);
         max_rank_width = std::max(max_rank_width, static_cast<uint32_t>(rank.size()));
-    }
-
-    /**
-     * Adds a new node to the skip list.
-     *
-     * @param n The node to be added.
-     */
-    void on_add(const node& n) noexcept
-    {
-        if (this->level(n) >= ranks.size())
-        {
-            // add sufficient ranks to store the new node
-            ranks.insert(ranks.end(), this->level(n) - ranks.size() + 1, {});
-        }
-        rank_pos.resize();
-
-        insert_in_rank(n);
     }
 
     /**
@@ -480,7 +476,7 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
      */
     void init_ranks() noexcept
     {
-        mockturtle::depth_view<Ntk>::foreach_node(
+        fiction::depth_view<Ntk>::foreach_node(
             [this](auto const& n)
             {
                 if (!this->is_constant(n))
@@ -500,7 +496,7 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
     {
         assert(rank_level < ranks.size());
         auto& rank  = ranks[rank_level];
-        rank_pos[n] = rank.size();
+        rank_pos[n] = static_cast<uint32_t>(rank.size());
         rank.push_back(n);
         max_rank_width = std::max(max_rank_width, static_cast<uint32_t>(rank.size()));
     }
@@ -527,7 +523,7 @@ class extended_rank_view<Ntk, false> : public mockturtle::depth_view<Ntk>
 };
 
 /**
- * Deduction guide for `extended_rank_view'
+ * Deduction guide for `extended_rank_view'.
  *
  * @tparam T Network type deduced from the construction context of `extended_rank_view`.
  */
@@ -535,7 +531,7 @@ template <class T>
 extended_rank_view(const T&) -> extended_rank_view<T>;
 
 /**
- * Deduction guide for `extended_rank_view` with two constructor arguments
+ * Deduction guide for `extended_rank_view` with two constructor arguments.
  *
  * @tparam T Network type deduced from the construction context of `extended_rank_view`.
  */
