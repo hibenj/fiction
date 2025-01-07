@@ -381,20 +381,31 @@ class node_duplication_planarization_impl
     {}
 
     /**
-     * Computes the delay in a given slice (each possible order of node_pairs) of an H-graph.
+     * The H-graph represents all possible orderings of node pairs within a single network level.
+     * A "slice" is created by adding all possible combinations of a `node_pair` to the H-graph of the level.
+     * These combinations are formed by selecting pairs of nodes from the fan-ins of the input node:
+     * - If the input node has only one fan-in, it is treated as a single combination.
+     * - If the input node has two fan-ins, there are two possible combinations.
      *
-     * This function iterates over the fanins of the given node and computes the delay for all possible orders
-     * of these nodes that form a node_pair. The delay computation depends on the node's connections and position
-     * within the graph. If there is a connection between two node_pairs, the delay is incremented by 1. If not,
-     * the delay is incremented by 2. Default delay for the first node is 1. If a node_pair doesn't have a connection
-     * and its delay (when increased by two) is less than the existing delay, then this node_pair's delay is updated.
+     * Each `node_pair` consists of a first and second element. The objective is to find an ordering of node pairs that
+     * maximizes the instances where the first element of a node_pair matches the second element of the preceding
+     * node_pair. This ordering is given as a linked list.
      *
-     * The processed node_pairs are pushed back to the 'lvl_pairs' data member for subsequent delay calculations.
+     * This function computes the optimal ordering by calculating delays as follows:
+     * - All combinations of node pairs are iteratively added to a linked list.
+     * - For each combination, the first element of the current node_pair is compared with the last element of the
+     * preceding node_pairs.
+     * - If a connection exists between two node_pairs, the delay increases by 1; otherwise, it increases by 2. The
+     * default delay for the first node is 1.
+     * - If a node_pair lacks a connection, and its updated delay (increased by 2) is less than the existing delay, the
+     * node_pair's delay is updated accordingly.
+     *
+     * Processed node_pairs are stored in the `lvl_pairs` member for subsequent delay calculations.
      *
      * @param nd Node in the H-graph.
      * @param border_pis A boolean indicating whether the input PIs (Primary Inputs) should be propagated to the next
-     * level.
      */
+
     void compute_slice_delays(const mockturtle::node<Ntk>& nd)
     {
         // Pis need to be propagated into the next level, since they have to be connected without crossings
@@ -413,6 +424,7 @@ class node_duplication_planarization_impl
                           });
 
         assert(fis.empty() == 0 && "Node is a buffered PI that is a PO");
+
         // Compute the combinations in one slice
         auto combinations = calculate_pairs<Ntk>(fis);
         assert(!combinations.empty() && "Combinations are empty. There might be a dangling node");
@@ -440,10 +452,9 @@ class node_duplication_planarization_impl
                     }
                     else if (node_pair_last.delay + 2 == node_pair_cur.delay)
                     {
-                        // ToDo: If order doesnt matter, decide on a minimal crossing view (implement mincross.c from
-                        // graphviz)
+                        // ToDo: If order doesnt matter, decide on minimal crossing view (mincross.c from graphviz)
 
-                        // this solves equal paths, if they are connected in the next layer via a fanout
+                        // This solves equal path delays, if they are connected in the next layer via a fanout
                         const auto fc0 = fanins(ntk, node_pair_last.pair.first);
                         if (node_pair_last.fanin_pair != nullptr)
                         {
@@ -481,7 +492,7 @@ class node_duplication_planarization_impl
      *
      * `This function inserts a node into a vector only if the vector is empty or the node is not equal to the first
      * element of the vector. If the vector is not empty and the node is equal to the first element, it does nothing.
-     * An exception occurs if the node was skipped on the previous insertion attempt due to `vec.front() != node`; in
+     * An exception occurs if the node was skipped on the previous insertion attempt due to `vec.front() == node`; in
      * that case, the node will be inserted this time.
      *
      * @param node The node to be inserted.
@@ -510,11 +521,13 @@ class node_duplication_planarization_impl
     }
 
     /**
-     * Computes the order of nodes in the next level based on the shortest path (delay) in the H-graph of the level.
+     * Computes the order of nodes in the next level based on the delay (shortest path) in the H-graph of the level.
      *
      * This function computes the order of nodes in the next level based on their delay in the H-graph of the level. It
      * selects the path with the least delay from the current level pairs and follows it via fanin relations. The nodes
      * are inserted into the next level vector in the order they are encountered.
+     *
+     * @return The order of nodes in `next_level`
      */
     std::vector<mockturtle::node<Ntk>> compute_node_order()
     {
@@ -590,6 +603,7 @@ class node_duplication_planarization_impl
     [[nodiscard]] extended_rank_view<virtual_pi_network<Ntk>>
     run(std::vector<std::vector<mockturtle::node<Ntk>>>& ntk_lvls_new)
     {
+        // Initialize the POs
         std::vector<mockturtle::node<Ntk>> pos{};
         pos.reserve(ntk.num_pos());
         ntk.foreach_po(
@@ -612,54 +626,59 @@ class node_duplication_planarization_impl
         }
 
         // save the nodes of the next level
-        std::vector<mockturtle::node<Ntk>> v_level{};
-        v_level.reserve(pos.size());
+        std::vector<mockturtle::node<Ntk>> next_level{};
+        next_level.reserve(pos.size());
+
         // Process the first level
         for (const auto& po : pos)
         {
-            // Recalculate the levels to start from the pos
             fis.clear();
             compute_slice_delays(po);
-            v_level.push_back(po);
+            next_level.push_back(po);
         }
 
-        ntk_lvls.push_back(v_level);
-        v_level.clear();
+        ntk_lvls.push_back(next_level);
+        next_level.clear();
 
-        v_level = compute_node_order();
+        next_level = compute_node_order();
 
-        bool f_final_level = check_final_level(v_level);
+        // check if the final/PI level is reached
+        bool f_final_level = check_final_level(next_level);
 
         // Process all other levels
-        while (!v_level.empty() && !f_final_level)
+        while (!next_level.empty() && !f_final_level)
         {
-            // Push the level to the network
-            ntk_lvls.push_back(v_level);
+            // Push the level to the node array
+            ntk_lvls.push_back(next_level);
             lvl_pairs.clear();
+
             // Store the nodes of the next level
-            for (const auto& cur_node : v_level)
+            for (const auto& cur_node : next_level)
             {
                 fis.clear();
+
                 // There is one slice in the H-Graph for each node in the level
                 compute_slice_delays(cur_node);
             }
             // Clear before starting computations on the next level
-            v_level.clear();
+            next_level.clear();
             // Compute the next level
-            v_level = compute_node_order();
+            next_level = compute_node_order();
             // Check if we are at the final level
-            f_final_level = check_final_level(v_level);
+            f_final_level = check_final_level(next_level);
         }
         // Push the final level (PIs)
         if (f_final_level)
         {
-            ntk_lvls.push_back(v_level);
+            ntk_lvls.push_back(next_level);
         }
 
         // create virtual pi network
         const auto virtual_ntk = create_virtual_pi_ntk_from_duplicated_nodes(ntk, ntk_lvls, ntk_lvls_new);
+
         // the ntk_levels were created in reverse order
         std::reverse(ntk_lvls_new.begin(), ntk_lvls_new.end());
+
         // assign the ranks in the virtual network based on ntk_lvls_new
         return extended_rank_view(virtual_ntk, ntk_lvls_new);
     }
@@ -699,12 +718,12 @@ class node_duplication_planarization_impl
  * each level is found. The function constructs an H-graph that captures edge relations between two levels within the
  * graph and computes the shortest x-y paths on the H-graph, traversing from the POs towards the Primary Inputs (PIs).
  *
- * @return A view of the planarized virtual_pi_network created in the format of extended_rank_view.
- *
  * @tparam NtkDest Destination network type.
  * @tparam NtkSrc Source network type.
  * @param ntk_src Source network to be utilized for the planarization.
  * @param ps Node duplication parameters used in the computation.
+ *
+ * @return A view of the planarized virtual_pi_network created in the format of extended_rank_view.
  */
 template <typename NtkSrc>
 [[nodiscard]] extended_rank_view<virtual_pi_network<NtkSrc>>

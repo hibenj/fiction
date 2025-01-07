@@ -6,7 +6,6 @@
 
 #include "fiction/algorithms/network_transformation/fanout_substitution.hpp"
 #include "fiction/algorithms/network_transformation/network_balancing.hpp"
-#include "fiction/utils/debug/network_writer.hpp"
 
 #include <fiction/algorithms/network_transformation/node_duplication_planarization.hpp>
 #include <fiction/algorithms/verification/virtual_miter.hpp>
