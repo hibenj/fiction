@@ -10,13 +10,14 @@
 #include "fiction/networks/virtual_pi_network.hpp"
 
 #include <mockturtle/traits.hpp>
+#include <mockturtle/utils/node_map.hpp>
 
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <optional>
 #include <random>
 #include <unordered_map>
 #include <utility>
@@ -92,11 +93,11 @@ struct node_pair
      *
      * @param node1 The first node of the fanin-edged node.
      * @param node2 The second node of the fanin-edged node.
-     * @param delayValue The delay value for the node.
+     * @param delay_value The delay value for the node.
      */
-    node_pair(mockturtle::node<Ntk> node1, mockturtle::node<Ntk> node2, uint64_t delayValue) :
+    node_pair(mockturtle::node<Ntk> node1, mockturtle::node<Ntk> node2, uint64_t delay_value) :
             pair(node1, node2),
-            delay(delayValue),
+            delay(delay_value),
             fanin_pair(nullptr)
     {}
 };
@@ -110,35 +111,32 @@ struct node_pair
  * A map (old2new) is created where old nodes from source network are mapped to new nodes in destination network.
  * A destination network is created as a virtual_pi_network<NtkSrc>.
  *
- * @tparam NtkSrc Type of the source network.
+ * @tparam Ntk Type of the network.
  * @param src The source network.
  *
  * @return A pair of the destination network and a node map from the source to the destination network.
  */
-template <typename NtkSrc>
-std::pair<virtual_pi_network<NtkSrc>,
-          mockturtle::node_map<std::vector<mockturtle::signal<virtual_pi_network<NtkSrc>>>, NtkSrc>>
-initialize_copy_network_virtual(NtkSrc const& src)
+template <typename Ntk>
+std::pair<virtual_pi_network<Ntk>, mockturtle::node_map<std::vector<mockturtle::signal<virtual_pi_network<Ntk>>>, Ntk>>
+initialize_copy_network_virtual(Ntk const& src)
 {
-    static_assert(mockturtle::is_network_type_v<virtual_pi_network<NtkSrc>>, "NtkDest is not a network type");
-    static_assert(mockturtle::is_network_type_v<NtkSrc>, "NtkSrc is not a network type");
+    static_assert(mockturtle::is_network_type_v<virtual_pi_network<Ntk>>, "Ntk is not a network type");
+    static_assert(mockturtle::is_network_type_v<Ntk>, "Ntk is not a network type");
+    static_assert(mockturtle::has_get_constant_v<virtual_pi_network<Ntk>>,
+                  "Ntk does not implement the get_constant method");
+    static_assert(mockturtle::has_create_pi_v<virtual_pi_network<Ntk>>, "Ntk does not implement the create_pi method");
+    static_assert(mockturtle::has_is_pi_v<virtual_pi_network<Ntk>>, "Ntk does not implement the is_pi method");
+    static_assert(mockturtle::has_create_not_v<virtual_pi_network<Ntk>>,
+                  "Ntk does not implement the create_not method");
+    static_assert(mockturtle::has_get_constant_v<Ntk>, "Ntk does not implement the get_constant method");
+    static_assert(mockturtle::has_get_node_v<Ntk>, "Ntk does not implement the get_node method");
+    static_assert(mockturtle::has_foreach_pi_v<Ntk>, "Ntk does not implement the foreach_pi method");
+    static_assert(mockturtle::has_foreach_po_v<Ntk>, "Ntk does not implement the foreach_po method");
+    static_assert(mockturtle::has_is_complemented_v<Ntk>, "Ntk does not implement the is_complemented method");
+    static_assert(mockturtle::has_foreach_fanin_v<Ntk>, "Ntk does not implement the foreach_fanin method");
 
-    static_assert(mockturtle::has_get_constant_v<virtual_pi_network<NtkSrc>>,
-                  "NtkDest does not implement the get_constant method");
-    static_assert(mockturtle::has_create_pi_v<virtual_pi_network<NtkSrc>>,
-                  "NtkDest does not implement the create_pi method");
-    static_assert(mockturtle::has_is_pi_v<virtual_pi_network<NtkSrc>>, "NtkDest does not implement the is_pi method");
-    static_assert(mockturtle::has_create_not_v<virtual_pi_network<NtkSrc>>,
-                  "NtkDest does not implement the create_not method");
-    static_assert(mockturtle::has_get_constant_v<NtkSrc>, "NtkSrc does not implement the get_constant method");
-    static_assert(mockturtle::has_get_node_v<NtkSrc>, "NtkSrc does not implement the get_node method");
-    static_assert(mockturtle::has_foreach_pi_v<NtkSrc>, "NtkSrc does not implement the foreach_pi method");
-    static_assert(mockturtle::has_foreach_po_v<NtkSrc>, "NtkSrc does not implement the foreach_po method");
-    static_assert(mockturtle::has_is_complemented_v<NtkSrc>, "NtkSrc does not implement the is_complemented method");
-    static_assert(mockturtle::has_foreach_fanin_v<NtkSrc>, "NtkSrc does not implement the foreach_fanin method");
-
-    mockturtle::node_map<std::vector<mockturtle::signal<virtual_pi_network<NtkSrc>>>, NtkSrc> old2new(src);
-    virtual_pi_network<NtkSrc>                                                                dest;
+    mockturtle::node_map<std::vector<mockturtle::signal<virtual_pi_network<Ntk>>>, Ntk> old2new(src);
+    virtual_pi_network<Ntk>                                                             dest;
 
     old2new[src.get_constant(false)].push_back(dest.get_constant(false));
     if (src.get_node(src.get_constant(true)) != src.get_node(src.get_constant(false)))
@@ -148,6 +146,82 @@ initialize_copy_network_virtual(NtkSrc const& src)
     src.foreach_pi([&](auto const& n) { old2new[n].push_back(dest.create_pi()); });
     return {dest, old2new};
 }
+
+/**
+ * The function gather_fanin_signals collects the fanin data for node n from the original ntk.
+ * For each node n there are the possible fanin candidates old2new_v[fn], which are the original node and all
+ * the nodes which are duplicates of this node.
+ *
+ * lvl[node_index] gives the current iterator at where the edge can be connected. To get the right signal,
+ * all nodes at old2new[n] need to be viewed. Match lvl[node_index] against all entries in old2new[n],
+ * then try lvl[node_index+1] then try lvl[node_index+2].
+ *
+ * @param n Variable to process.
+ * @param lvl Level to process.
+ * @param edge_it Iterator for edge.
+ * @return Vector of fanins in the virtual_pi_network connected to the processed node.
+ */
+template <typename Ntk, typename NtkDest>
+std::vector<mockturtle::signal<Ntk>>
+gather_fanin_signals(Ntk& ntk, NtkDest& ntk_dest_v, mockturtle::node<Ntk> n,
+                     mockturtle::node_map<std::vector<mockturtle::signal<Ntk>>, Ntk>& old2new_v,
+                     std::vector<mockturtle::node<Ntk>>& lvl, std::size_t& node_index)
+{
+    // Initialize variables
+    std::vector<mockturtle::signal<Ntk>> children{};
+    children.reserve(ntk.fanin_size(n));
+    std::size_t local_node_index = 0;
+
+    ntk.foreach_fanin(
+        n,
+        [&n, &ntk, &ntk_dest_v, &lvl, &old2new_v, &children, &node_index, &local_node_index](const auto& f,
+                                                                                             const auto  i)
+        {
+            // Get the vector of duplicated nodes of the original fan-in node fn.
+            const auto fn           = ntk.get_node(f);
+            auto       tgt_signal_v = old2new_v[fn];
+
+            assert(node_index < lvl.size() && "The fanin iterator is out of scope");
+
+            // The range indicates the number of candidate fan-ins.
+            std::size_t range = ntk.fanin_size(n) + 1;
+
+            // Iterate through the candidate fan-ins. If a candidate fan-in matches the original fan-in or is a
+            // duplicate of it, add it to the children of the node n.
+            std::size_t end_index = std::min(node_index + range, lvl.size());
+            for (std::size_t j = node_index; j < end_index; ++j)
+            {
+                // get the node from the newly generated network.
+                auto node_at_index = lvl[j];
+
+                // Check if the candidate matches the original fan-in or a duplicate.
+                // Also, verify if the candidate has already reached its fan-out limit.
+                if ((std::find(tgt_signal_v.cbegin(), tgt_signal_v.cend(), node_at_index) != tgt_signal_v.cend()) &&
+                    (ntk_dest_v.fanout_size(node_at_index) < ntk.fanout_size(fn)))
+                {
+                    // Set the local node_index.
+                    if (i == 0)
+                    {
+                        local_node_index = j;
+                    }
+                    else
+                    {
+                        local_node_index = std::max(local_node_index, j);
+                    }
+
+                    // Add the matched candidate fan-in to the children.
+                    children.emplace_back(node_at_index);
+                    break;
+                }
+            }
+        });
+
+    // Set the node_index.
+    node_index = local_node_index;
+
+    // Return the children of the node.
+    return children;
+};
 
 /**
  * Constructs a planar `virtual_pi_network` based on the `ntk_lvls` array, which holds the ranks of the duplicated nodes
@@ -179,93 +253,23 @@ create_virtual_pi_ntk_from_duplicated_nodes(Ntk& ntk, std::vector<std::vector<mo
     auto& ntk_dest_v = init_v.first;
     auto& old2new_v  = init_v.second;
 
-    /**
-     * The function gather_fanin_signals collects the fanin data for node n from the original ntk.
-     * For each node n there are the possible fanin candidates old2new_v[fn], which are the original node and all
-     * the nodes which are duplicates of this node.
-     *
-     * lvl[edge_it] gives the current iterator at where the edge can be connected. To get the right signal,
-     * all nodes at old2new[n] need to be viewed. Match lvl[edge_it] against all entries in old2new[n],
-     * then try lvl[edge_it+1] then try lvl[edge_it+2].
-     *
-     * @param n Variable to process.
-     * @param lvl Level to process.
-     * @param edge_it Iterator for edge.
-     * @return Vector of fanins in the virtual_pi_network connected to the processed node.
-     */
-    const auto gather_fanin_signals = [&](const auto& n, const auto& lvl, std::size_t& edge_it)
-    {
-        std::vector<typename Ntk::signal> children{};
-        const auto                        edge_it_int = edge_it;
-
-#ifndef NDEBUG
-        // Useful Debug parameter to check that fanins need to be adjacent.
-        int64_t first_fi_edge_it = -1;
-#endif
-
-        ntk.foreach_fanin(n,
-                          [&](const auto& f)
-                          {
-                              const auto fn           = ntk.get_node(f);
-                              auto       tgt_signal_v = old2new_v[fn];
-
-                              assert(edge_it_int < lvl.size() && "The fanin iterator is out of scope");
-
-                              bool break_loop = false;
-                              for (const auto& possible_node : tgt_signal_v)
-                              {
-                                  uint8_t max_fanout = 2;
-                                  if (ntk_dest_v.is_pi(possible_node))
-                                  {
-                                      max_fanout = 1;
-                                  }
-                                  const auto it = ntk.fanin_size(n) + 1;
-                                  if (ntk.fanin_size(n) == children.size())
-                                  {
-                                      break;
-                                  }
-                                  for (std::size_t i = 0; i < it; i++)
-                                  {
-                                      if (edge_it_int + i < lvl.size() && lvl[edge_it_int + i] == possible_node &&
-                                          ntk_dest_v.fanout_size(possible_node) < max_fanout)
-                                      {
-#ifndef NDEBUG
-                                          if (first_fi_edge_it != -1)
-                                          {
-                                              if (!ntk.is_maj(n))
-                                              {
-                                                  assert(edge_it_int + i == first_fi_edge_it + 1 ||
-                                                         edge_it_int + i == first_fi_edge_it - 1);
-                                              }
-                                          }
-                                          first_fi_edge_it = static_cast<int>(edge_it_int + i);
-#endif
-                                          children.emplace_back(possible_node);
-                                          if (edge_it_int + i > edge_it)
-                                          {
-                                              edge_it = edge_it_int + i;
-                                          }
-                                          break_loop = true;
-                                          break;
-                                      }
-                                  }
-                                  if (break_loop)
-                                  {
-                                      break;
-                                  }
-                              }
-                          });
-        return children;
-    };
-
-    std::size_t edge_it = 0;
     for (std::size_t i = ntk_lvls.size(); i-- > 0;)
     {
-        edge_it             = 0;
-        const auto& lvl     = ntk_lvls[i];
-        auto&       lvl_new = ntk_lvls_new[i];
+        // The index of the node in the current node level.
+        std::size_t node_index = 0;
+
+        // The current node level with duplicated nodes.
+        // Example vector: {3, 2, 3}
+        const auto& lvl = ntk_lvls[i];
+
+        // The current node level in the new network, where duplicated nodes are created as new nodes.
+        // Example vector {3, 2, 4}
+        auto& lvl_new = ntk_lvls_new[i];
+
+        // Create a node in the new network for each node contained in 'lvl'.
         for (const auto& nd : lvl)
         {
+            // If the node is a PI create virtual PIs for duplicates.
             if (ntk.is_pi(nd))
             {
                 if (node_status[nd])
@@ -282,7 +286,9 @@ create_virtual_pi_ntk_from_duplicated_nodes(Ntk& ntk, std::vector<std::vector<mo
             }
             else
             {
-                const auto children = gather_fanin_signals(nd, ntk_lvls_new[i + 1], edge_it);
+                const auto children =
+                    gather_fanin_signals(ntk, ntk_dest_v, nd, old2new_v, ntk_lvls_new[i + 1], node_index);
+
                 assert(!children.empty() && "The node has to have children");
 
                 const auto& new_node = ntk_dest_v.create_node(children, ntk.node_function(nd));
@@ -296,9 +302,10 @@ create_virtual_pi_ntk_from_duplicated_nodes(Ntk& ntk, std::vector<std::vector<mo
         [&ntk, &ntk_dest_v, &old2new_v](const auto& po)
         {
             const auto tgt_signal_v = old2new_v[ntk.get_node(po)];
-            // POs do not get duplicated since the algorithm starts at the POs and duplicates other nodes according
-            // to their order
+
+            // POs are not duplicated as the algorithm starts at POs and duplicates other nodes based on their order
             assert(tgt_signal_v.size() == 1 && "Multiple nodes mapped to PO");
+
             const auto tgt_signal = tgt_signal_v[0];
 
             const auto tgt_po = ntk.is_complemented(po) ? ntk_dest_v.create_not(tgt_signal) : tgt_signal;
@@ -405,7 +412,7 @@ class node_duplication_planarization_impl
                               }
                           });
 
-        assert(!fis.size() == 0 && "Node is a buffered PI that is a PO");
+        assert(fis.empty() == 0 && "Node is a buffered PI that is a PO");
         // Compute the combinations in one slice
         auto combinations = calculate_pairs<Ntk>(fis);
         assert(!combinations.empty() && "Combinations are empty. There might be a dangling node");
@@ -704,7 +711,6 @@ template <typename NtkSrc>
 node_duplication_planarization(const NtkSrc& ntk_src, const node_duplication_planarization_params& ps = {})
 {
     static_assert(mockturtle::is_network_type_v<NtkSrc>, "NtkSrc is not a network type");
-    // ToDo: This might also be implemented, so that it works for all Ntk types
     static_assert(mockturtle::has_create_node_v<NtkSrc>, "NtkSrc does not implement the create_node function");
 
     assert(is_balanced(ntk_src) && "Networks have to be balanced for this duplication");
