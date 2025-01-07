@@ -4,7 +4,9 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "fiction/algorithms/network_transformation/fanout_substitution.hpp"
 #include "fiction/algorithms/network_transformation/network_balancing.hpp"
+#include "fiction/utils/debug/network_writer.hpp"
 
 #include <fiction/algorithms/network_transformation/node_duplication_planarization.hpp>
 #include <fiction/algorithms/verification/virtual_miter.hpp>
@@ -35,7 +37,8 @@ TEST_CASE("Planarize technology ntk", "[node-duplication-planarization]")
     network_balancing_params ps;
     ps.unify_outputs = true;
 
-    const auto tec_b = network_balancing<technology_network>(tec, ps);
+    const auto tec_b = fiction::network_balancing<fiction::technology_network>(
+        fiction::fanout_substitution<fiction::technology_network>(tec), ps);
 
     const auto vpi_r = mockturtle::rank_view(tec_b);
 
@@ -69,7 +72,8 @@ TEST_CASE("Planarize ntk with 3-ary node", "[node-duplication-planarization]")
     network_balancing_params ps;
     ps.unify_outputs = true;
 
-    const auto tec_b = network_balancing<technology_network>(tec, ps);
+    const auto tec_b = fiction::network_balancing<fiction::technology_network>(
+        fiction::fanout_substitution<fiction::technology_network>(tec), ps);
 
     const auto vpi_r = mockturtle::rank_view(tec_b);
 
@@ -103,7 +107,8 @@ TEST_CASE("Buffer AIG and planarize technology_network", "[node-duplication-plan
     network_balancing_params ps;
     ps.unify_outputs = true;
 
-    const auto aig_b = network_balancing<technology_network>(aig, ps);
+    const auto aig_b = fiction::network_balancing<fiction::technology_network>(
+        fiction::fanout_substitution<fiction::technology_network>(aig), ps);
 
     const auto vpi_r = mockturtle::rank_view(aig_b);
 
@@ -130,7 +135,8 @@ TEST_CASE("Buffer AIG and planarize technology_network 2", "[node-duplication-pl
     network_balancing_params ps;
     ps.unify_outputs = true;
 
-    const auto aig_b = network_balancing<technology_network>(aig, ps);
+    const auto aig_b = fiction::network_balancing<fiction::technology_network>(
+        fiction::fanout_substitution<fiction::technology_network>(aig), ps);
 
     const auto vpi_r = mockturtle::rank_view(aig_b);
 
@@ -160,7 +166,8 @@ TEST_CASE("Planarize multi output network", "[node-duplication-planarization]")
     network_balancing_params ps;
     ps.unify_outputs = true;
 
-    const auto aig_b = network_balancing<technology_network>(aig, ps);
+    const auto aig_b = fiction::network_balancing<fiction::technology_network>(
+        fiction::fanout_substitution<fiction::technology_network>(aig), ps);
 
     const auto vpi_r = mockturtle::rank_view(aig_b);
 

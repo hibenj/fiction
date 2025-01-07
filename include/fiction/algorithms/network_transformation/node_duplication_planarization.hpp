@@ -214,6 +214,11 @@ create_virtual_pi_ntk_from_duplicated_nodes(Ntk& ntk, std::vector<std::vector<mo
                               bool break_loop = false;
                               for (const auto& possible_node : tgt_signal_v)
                               {
+                                  uint8_t max_fanout = 2;
+                                  if (ntk_dest_v.is_pi(possible_node))
+                                  {
+                                      max_fanout = 1;
+                                  }
                                   const auto it = ntk.fanin_size(n) + 1;
                                   if (ntk.fanin_size(n) == children.size())
                                   {
@@ -222,7 +227,7 @@ create_virtual_pi_ntk_from_duplicated_nodes(Ntk& ntk, std::vector<std::vector<mo
                                   for (std::size_t i = 0; i < it; i++)
                                   {
                                       if (edge_it_int + i < lvl.size() && lvl[edge_it_int + i] == possible_node &&
-                                          ntk_dest_v.fanout_size(possible_node) < 2)
+                                          ntk_dest_v.fanout_size(possible_node) < max_fanout)
                                       {
 #ifndef NDEBUG
                                           if (first_fi_edge_it != -1)
@@ -534,6 +539,10 @@ class node_duplication_planarization_impl
             while (fanin_combination)
             {
                 // Insert the terminal node
+                if (ntk.is_pi(fanin_combination->pair.second))
+                {
+                    saturated_fanout_flag = 1;
+                }
                 insert_if_not_first(fanin_combination->pair.second, next_level, saturated_fanout_flag, 0);
 
                 // Insert middle_nodes
