@@ -7376,28 +7376,38 @@ static const char *__doc_fiction_detail_new_gate_location_SRC = R"doc(Check if t
 static const char *__doc_fiction_detail_node_duplication_planarization_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_node_duplication_planarization_impl_compute_slice_delays =
-R"doc(Computes the delay in a given slice (each possible order of
-node_pairs) of an H-graph.
+R"doc(The H-graph represents all possible orderings of node pairs within a
+single network level. A "slice" is created by adding all possible
+combinations of a `node_pair` to the H-graph of the level. These
+combinations are formed by selecting pairs of nodes from the fan-ins
+of the input node: - If the input node has only one fan-in, it is
+treated as a single combination. - If the input node has two fan-ins,
+there are two possible combinations.
 
-This function iterates over the fanins of the given node and computes
-the delay for all possible orders of these nodes that form a
-node_pair. The delay computation depends on the node's connections and
-position within the graph. If there is a connection between two
-node_pairs, the delay is incremented by 1. If not, the delay is
-incremented by 2. Default delay for the first node is 1. If a
-node_pair doesn't have a connection and its delay (when increased by
-two) is less than the existing delay, then this node_pair's delay is
-updated.
+Each `node_pair` consists of a first and second element. The objective
+is to find an ordering of node pairs that maximizes the instances
+where the first element of a node_pair matches the second element of
+the preceding node_pair. This ordering is given as a linked list.
 
-The processed node_pairs are pushed back to the 'lvl_pairs' data
-member for subsequent delay calculations.
+This function computes the optimal ordering by calculating delays as
+follows: - All combinations of node pairs are iteratively added to a
+linked list. - For each combination, the first element of the current
+node_pair is compared with the last element of the preceding
+node_pairs. - If a connection exists between two node_pairs, the delay
+increases by 1; otherwise, it increases by 2. The default delay for
+the first node is 1. - If a node_pair lacks a connection, and its
+updated delay (increased by 2) is less than the existing delay, the
+node_pair's delay is updated accordingly.
+
+Processed node_pairs are stored in the `lvl_pairs` member for
+subsequent delay calculations.
 
 Parameter ``nd``:
     Node in the H-graph.
 
 Parameter ``border_pis``:
     A boolean indicating whether the input PIs (Primary Inputs) should
-    be propagated to the next level.)doc";
+    be propagated to the next)doc";
 
 static const char *__doc_fiction_detail_node_duplication_planarization_impl_insert_if_not_first =
 R"doc(Inserts a node into a vector if it is unique.
@@ -7406,7 +7416,7 @@ R"doc(Inserts a node into a vector if it is unique.
 empty or the node is not equal to the first element of the vector. If
 the vector is not empty and the node is equal to the first element, it
 does nothing. An exception occurs if the node was skipped on the
-previous insertion attempt due to `vec.front() != node`; in that case,
+previous insertion attempt due to `vec.front() == node`; in that case,
 the node will be inserted this time.
 
 Parameter ``node``:
@@ -14511,10 +14521,6 @@ between two levels within the graph and computes the shortest x-y
 paths on the H-graph, traversing from the POs towards the Primary
 Inputs (PIs).
 
-Returns:
-    A view of the planarized virtual_pi_network created in the format
-    of extended_rank_view.
-
 Template parameter ``NtkDest``:
     Destination network type.
 
@@ -14525,7 +14531,11 @@ Parameter ``ntk_src``:
     Source network to be utilized for the planarization.
 
 Parameter ``ps``:
-    Node duplication parameters used in the computation.)doc";
+    Node duplication parameters used in the computation.
+
+Returns:
+    A view of the planarized virtual_pi_network created in the format
+    of extended_rank_view.)doc";
 
 static const char *__doc_fiction_node_duplication_planarization_params = R"doc(Parameters for the node duplication algorithm.)doc";
 
