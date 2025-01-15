@@ -84,8 +84,8 @@ TEST_CASE("Case buf", "[orthogonal-planar]")
     std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
     std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
 
-    /*aig_r.modify_rank(0, nodes_rank0);
-    aig_r.modify_rank(0, nodes_rank0);*/
+    /*aig_r.set_ranks(0, nodes_rank0);
+    aig_r.set_ranks(0, nodes_rank0);*/
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
@@ -128,8 +128,8 @@ TEST_CASE("And gaps", "[orthogonal-planar]")
     std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
     std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
 
-    /*aig_r.modify_rank(0, nodes_rank0);
-    aig_r.modify_rank(0, nodes_rank0);*/
+    /*aig_r.set_ranks(0, nodes_rank0);
+    aig_r.set_ranks(0, nodes_rank0);*/
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
@@ -179,8 +179,8 @@ TEST_CASE("Fo to And gaps", "[orthogonal-planar]")
     std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
     std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
 
-    /*aig_r.modify_rank(0, nodes_rank0);
-    aig_r.modify_rank(0, nodes_rank0);*/
+    /*aig_r.set_ranks(0, nodes_rank0);
+    aig_r.set_ranks(0, nodes_rank0);*/
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
@@ -239,8 +239,8 @@ TEST_CASE("Print layout", "[orthogonal-planar]")
     std::vector<mockturtle::aig_network::node> nodes_rank0{7, 6, 9, 11};
     std::vector<mockturtle::aig_network::node> nodes_rank1{8, 10, 12};
 
-    aig_r.modify_rank(1, nodes_rank0);
-    aig_r.modify_rank(2, nodes_rank1);
+    aig_r.set_ranks(1, nodes_rank0);
+    aig_r.set_ranks(2, nodes_rank1);
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
@@ -277,8 +277,8 @@ TEST_CASE("Print layout two", "[orthogonal-planar]")
     std::vector<mockturtle::aig_network::node> nodes_rank0{7, 6, 9, 11};
     std::vector<mockturtle::aig_network::node> nodes_rank1{8, 10, 12};
 
-    aig_r.modify_rank(1, nodes_rank0);
-    aig_r.modify_rank(2, nodes_rank1);
+    aig_r.set_ranks(1, nodes_rank0);
+    aig_r.set_ranks(2, nodes_rank1);
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
