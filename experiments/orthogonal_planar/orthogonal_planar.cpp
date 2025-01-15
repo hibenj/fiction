@@ -33,35 +33,35 @@
 #include <sstream>
 #include <string>
 
-template<typename Ntk1, typename Ntk2>
-inline bool abc_cec_two_ntk( Ntk1 const& ntk1, Ntk2 const& ntk2 )
+template <typename Ntk1, typename Ntk2>
+inline bool abc_cec_two_ntk(Ntk1 const& ntk1, Ntk2 const& ntk2)
 {
-    mockturtle::write_bench( ntk1, "/tmp/test1.bench" );
-    mockturtle::write_bench( ntk2, "/tmp/test2.bench" );
-    std::string command = fmt::format( "abc -q \"cec -n /tmp/test1.bench /tmp/test2.bench\"" );
+    mockturtle::write_bench(ntk1, "/tmp/test1.bench");
+    mockturtle::write_bench(ntk2, "/tmp/test2.bench");
+    std::string command = fmt::format("abc -q \"cec -n /tmp/test1.bench /tmp/test2.bench\"");
 
     std::array<char, 128> buffer;
-    std::string result;
+    std::string           result;
 #if WIN32
-    std::unique_ptr<FILE, decltype( &_pclose )> pipe( _popen( command.c_str(), "r" ), _pclose );
+    std::unique_ptr<FILE, decltype(&_pclose)> pipe(_popen(command.c_str(), "r"), _pclose);
 #else
-    std::unique_ptr<FILE, decltype( &pclose )> pipe( popen( command.c_str(), "r" ), pclose );
+    std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(command.c_str(), "r"), pclose);
 #endif
-    if ( !pipe )
+    if (!pipe)
     {
-        throw std::runtime_error( "popen() failed" );
+        throw std::runtime_error("popen() failed");
     }
-    while ( fgets( buffer.data(), buffer.size(), pipe.get() ) != nullptr )
+    while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr)
     {
         result += buffer.data();
     }
 
     /* search for one line which says "Networks are equivalent" and ignore all other debug output from ABC */
-    std::stringstream ss( result );
-    std::string line;
-    while ( std::getline( ss, line, '\n' ) )
+    std::stringstream ss(result);
+    std::string       line;
+    while (std::getline(ss, line, '\n'))
     {
-        if ( line.size() >= 23u && line.substr( 0u, 23u ) == "Networks are equivalent" )
+        if (line.size() >= 23u && line.substr(0u, 23u) == "Networks are equivalent")
         {
             return true;
         }
@@ -69,7 +69,6 @@ inline bool abc_cec_two_ntk( Ntk1 const& ntk1, Ntk2 const& ntk2 )
 
     return false;
 }
-
 
 template <typename Ntk>
 Ntk read_ntk(const std::string& name)
@@ -275,7 +274,7 @@ int main()  // NOLINT
     }
 
     // For all fiction benchmarks
-    static constexpr const uint64_t bench_select = (fiction_experiments::t);
+    static constexpr const uint64_t bench_select = (fiction_experiments::trindade16 | fiction_experiments::fontes18);
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
@@ -327,7 +326,7 @@ int main()  // NOLINT
         const auto _b = fiction::network_balancing<fiction::technology_network>(
             fiction::fanout_substitution<fiction::technology_network>(benchmark_network), b_ps);
 
-        fiction::debug::write_dot_network(_b, "balanced_ntk");
+        // fiction::debug::write_dot_network(_b, "balanced_ntk");
 
         if (_b.size() > 10000)
         {
@@ -336,23 +335,17 @@ int main()  // NOLINT
 
         auto planarized_b = fiction::node_duplication_planarization<fiction::technology_network>(_b);
 
-        fiction::debug::write_dot_network(planarized_b, "planarized_ntk");
+        // fiction::debug::write_dot_network(planarized_b, "planarized_ntk");
 
         if (planarized_b.size() > 100000)
         {
             continue;
         }
 
-        auto substituted_b = inverter_substitution(planarized_b);
+        fiction::detail::operation_mode mode          = fiction::detail::operation_mode::AND_OR_ONLY;
+        auto                            substituted_b = inverter_substitution(planarized_b, mode);
 
         fiction::debug::write_dot_network(substituted_b, "substituted_ntk");
-
-        auto del_0 = delete_virtual_pis(planarized_b);
-        del_0.update_ranks();
-        fiction::debug::write_dot_network(del_0, "del");
-        auto del = delete_virtual_pis(substituted_b);
-        del.update_ranks();
-        fiction::debug::write_dot_network(del, "substituted del");
 
         // chek equivalence after planarization
         mockturtle::equivalence_checking_stats eq_st;
@@ -360,7 +353,7 @@ int main()  // NOLINT
             *fiction::virtual_miter<fiction::technology_network>(benchmark_network, substituted_b), {}, &eq_st);
         assert(cec_m.has_value());
 
-        const auto gate_level_layout = fiction::orthogonal_planar<gate_lyt>(planarized_b, {}, &orthogonal_planar_stats);
+        const auto gate_level_layout = fiction::orthogonal_planar<gate_lyt>(substituted_b, {}, &orthogonal_planar_stats);
 
         bool planar_layout = false;
         if (gate_level_layout.num_crossings() == 0)
@@ -373,7 +366,7 @@ int main()  // NOLINT
 
         fiction::gate_level_drvs(gate_level_layout, ps_p, &st_p);
 
-        // fiction::debug::write_dot_layout(gate_level_layout);
+        fiction::debug::write_dot_layout(gate_level_layout);
 
         // check equivalence for the planar layout
         const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);

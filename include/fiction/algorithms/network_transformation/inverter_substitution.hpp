@@ -461,7 +461,7 @@ class inverter_substitution_impl
             }
         }
         // store affected nodes and/or
-        if (fo_ntk.is_inv(n) && (mode == operation_mode::AND_OR_ONLY || mode == operation_mode::ALL_NODES))
+        if (fo_ntk.is_inv(n) && !fo_ntk.is_po(n) && (mode == operation_mode::AND_OR_ONLY || mode == operation_mode::ALL_NODES))
         {
             const auto inv_fanout = fanouts(fo_ntk, n);
             assert(inv_fanout.size() == 1);
