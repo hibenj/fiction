@@ -4429,6 +4429,23 @@ Parameter ``to_delete``:
 Returns:
     A 2D vector representing the calculated offset matrix.)doc";
 
+static const char *__doc_fiction_detail_calculate_pairs =
+R"doc(Calculates pairs of nodes from a given vector of nodes.
+
+This function takes a vector of nodes and returns a vector of node
+pairs. Each node pair consists of two nodes from the input vector and
+an optional vector of middle nodes. The delay of each node pair is
+initialized to infinity.
+
+Template parameter ``Ntk``:
+    The network type.
+
+Parameter ``nodes``:
+    The vector of nodes.
+
+Returns:
+    The vector of node pairs.)doc";
+
 static const char *__doc_fiction_detail_color_routing_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_color_routing_impl_color_routing_impl = R"doc()doc";
@@ -4581,6 +4598,37 @@ static const char *__doc_fiction_detail_count_gate_types_impl_run = R"doc()doc";
 static const char *__doc_fiction_detail_create_array =
 R"doc(From https://stackoverflow.com/questions/57756557/initializing-a-
 stdarray-with-a-constant-value)doc";
+
+static const char *__doc_fiction_detail_create_virtual_pi_ntk_from_duplicated_nodes =
+R"doc(Constructs a planar `virtual_pi_network` based on the `ntk_lvls`
+array, which holds the ranks of the duplicated nodes for each level in
+the new network. This function creates new nodes for the duplicated
+ones and restores their fanin relations using the
+`gather_fanin_signals` function.
+
+For duplicated PIs (Primary Inputs), virtual PIs are created, and the
+original PI is stored in a map.
+
+The auxiliary function `gather_fanin_signals` collects fanin data for
+a node and matches it in the `virtual_pi_network`.
+
+Example: For a level (2, 3, 2, 4, 2), new nodes are created for
+duplications (e.g., 2) and stored in the `old2new_v` node_map. This
+map is used by `gather_fanin_signals` to establish the correct fanin
+relations.
+
+Template parameter ``Ntk``:
+    Network type.
+
+Parameter ``ntk``:
+    Source network to be utilized for the creation of the
+    virtual_pi_network.
+
+Parameter ``ntk_lvls``:
+    Levels of nodes in the source network.
+
+Parameter ``ntk_lvls_new``:
+    Levels of newly created nodes in the virtual_pi_network.)doc";
 
 static const char *__doc_fiction_detail_create_wiring_reduction_layout =
 R"doc(Create a wiring_reduction_layout suitable for finding excess wiring
@@ -6873,26 +6921,6 @@ Parameter ``place_info``:
 Parameter ``ssg``:
     The search space graph.)doc";
 
-static const char *__doc_fiction_detail_inverter_substitution_impl = R"doc()doc";
-
-static const char *__doc_fiction_detail_inverter_substitution_impl_connect_children_to_gates_affected = R"doc()doc";
-
-static const char *__doc_fiction_detail_inverter_substitution_impl_fo_ntk = R"doc(This is a fan-out view of the network 'ntk'.)doc";
-
-static const char *__doc_fiction_detail_inverter_substitution_impl_gather_fanin_signals = R"doc()doc";
-
-static const char *__doc_fiction_detail_inverter_substitution_impl_inverter_substitution_impl = R"doc()doc";
-
-static const char *__doc_fiction_detail_inverter_substitution_impl_is_rerun = R"doc()doc";
-
-static const char *__doc_fiction_detail_inverter_substitution_impl_mode = R"doc(The operation mode of inverter substitution.)doc";
-
-static const char *__doc_fiction_detail_inverter_substitution_impl_ntk = R"doc(A topologically ordered input logic network.)doc";
-
-static const char *__doc_fiction_detail_inverter_substitution_impl_rerun = R"doc(An indicator to check if optimizations can be applied or not.)doc";
-
-static const char *__doc_fiction_detail_inverter_substitution_impl_run = R"doc()doc";
-
 static const char *__doc_fiction_detail_is_balanced_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_is_balanced_impl_balanced = R"doc()doc";
@@ -7376,6 +7404,64 @@ static const char *__doc_fiction_detail_new_gate_location_NONE = R"doc(Do not ch
 
 static const char *__doc_fiction_detail_new_gate_location_SRC = R"doc(Check if the source tile is empty.)doc";
 
+static const char *__doc_fiction_detail_node_duplication_planarization_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_impl_compute_slice_delays =
+R"doc(The H-graph represents all possible orderings of node pairs within a
+single network level. A "slice" is created by adding all possible
+combinations of a `node_pair` to the H-graph of the level. These
+combinations are formed by selecting pairs of nodes from the fan-ins
+of the input node: - If the input node has only one fan-in, it is
+treated as a single combination. - If the input node has two fan-ins,
+there are two possible combinations.
+
+Each `node_pair` consists of a first and second element. The objective
+is to find an ordering of node pairs that maximizes the instances
+where the first element of a node_pair matches the second element of
+the preceding node_pair. This ordering is given as a linked list.
+
+This function computes the optimal ordering by calculating delays as
+follows: - All combinations of node pairs are iteratively added to a
+linked list. - For each combination, the first element of the current
+node_pair is compared with the last element of the preceding
+node_pairs. - If a connection exists between two node_pairs, the delay
+increases by 1; otherwise, it increases by 2. The default delay for
+the first node is 1. - If a node_pair lacks a connection, and its
+updated delay (increased by 2) is less than the existing delay, the
+node_pair's delay is updated accordingly.
+
+Processed node_pairs are stored in the `lvl_pairs` member for
+subsequent delay calculations.
+
+Parameter ``nd``:
+    Node in the H-graph.
+
+Parameter ``border_pis``:
+    A boolean indicating whether the input PIs (Primary Inputs) should
+    be propagated to the next)doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_impl_insert_if_not_first =
+R"doc(Inserts a node into a vector if it is unique.
+
+`This function inserts a node into a vector only if the vector is
+empty or the node is not equal to the first element of the vector. If
+the vector is not empty and the node is equal to the first element, it
+does nothing. An exception occurs if the node was skipped on the
+previous insertion attempt due to `vec.front() == node`; in that case,
+the node will be inserted this time.
+
+Parameter ``node``:
+    The node to be inserted.
+
+Parameter ``vec``:
+    The vector to insert the node into.)doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_impl_lvl_pairs = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_impl_node_duplication_planarization_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_impl_ps = R"doc()doc";
+
 static const char *__doc_fiction_detail_node_pair =
 R"doc(A structure representing a pair of nodes in an H-graph.
 
@@ -7406,7 +7492,7 @@ Parameter ``node1``:
 Parameter ``node2``:
     The second node of the fanin-edged node.
 
-Parameter ``delayValue``:
+Parameter ``delay_value``:
     The delay value for the node.)doc";
 
 static const char *__doc_fiction_detail_non_operationality_reason = R"doc(Reason why a layout is non-operational.)doc";
@@ -8633,6 +8719,26 @@ R"doc(Enum indicating if primary inputs (PIs) can be placed at the top or
 left.)doc";
 
 static const char *__doc_fiction_detail_search_space_graph_planar = R"doc(Create planar layouts.)doc";
+
+static const char *__doc_fiction_detail_set_level_and_rank =
+R"doc(Set the level and rank of a node by calling its correxponding `on_add`
+function.
+
+Template parameter ``Ntk``:
+    Type of the input logic network.
+
+Template parameter ``NtkDest``:
+    Type of the returned logic network.
+
+Parameter ``ntk_dest``:
+    Output network.
+
+Parameter ``old2new``:
+    `node_map` to assign the nodes of the old network to the new
+    network.
+
+Parameter ``g``:
+    Currently viewed gate.`)doc";
 
 static const char *__doc_fiction_detail_start_orientation = R"doc()doc";
 
@@ -14490,10 +14596,6 @@ between two levels within the graph and computes the shortest x-y
 paths on the H-graph, traversing from the POs towards the Primary
 Inputs (PIs).
 
-Returns:
-    A view of the planarized virtual_pi_network created in the format
-    of extended_rank_view.
-
 Template parameter ``NtkDest``:
     Destination network type.
 
@@ -14504,7 +14606,11 @@ Parameter ``ntk_src``:
     Source network to be utilized for the planarization.
 
 Parameter ``ps``:
-    Node duplication parameters used in the computation.)doc";
+    Node duplication parameters used in the computation.
+
+Returns:
+    A view of the planarized virtual_pi_network created in the format
+    of extended_rank_view.)doc";
 
 static const char *__doc_fiction_node_duplication_planarization_params = R"doc(Parameters for the node duplication algorithm.)doc";
 
