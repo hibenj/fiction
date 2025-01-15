@@ -118,7 +118,7 @@ struct node_pair
  */
 template <typename Ntk>
 std::pair<virtual_pi_network<Ntk>, mockturtle::node_map<std::vector<mockturtle::signal<virtual_pi_network<Ntk>>>, Ntk>>
-initialize_copy_network_virtual(Ntk const& src)
+initialize_copy_network_duplicates(Ntk const& src)
 {
     static_assert(mockturtle::is_network_type_v<virtual_pi_network<Ntk>>, "Ntk is not a network type");
     static_assert(mockturtle::is_network_type_v<Ntk>, "Ntk is not a network type");
@@ -249,7 +249,7 @@ create_virtual_pi_ntk_from_duplicated_nodes(Ntk& ntk, std::vector<std::vector<mo
     std::unordered_map<mockturtle::node<Ntk>, bool> node_status;
     ntk_lvls_new.resize(ntk_lvls.size());
 
-    auto  init_v     = initialize_copy_network_virtual(ntk);
+    auto  init_v     = initialize_copy_network_duplicates(ntk);
     auto& ntk_dest_v = init_v.first;
     auto& old2new_v  = init_v.second;
 

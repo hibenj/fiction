@@ -4,6 +4,7 @@
 
 #include "fiction/algorithms/physical_design/orthogonal_planar.hpp"
 
+#include "fiction/algorithms/network_transformation/inverter_substitution.hpp"
 #include "fiction/algorithms/network_transformation/network_balancing.hpp"
 #include "fiction/algorithms/network_transformation/node_duplication_planarization.hpp"
 #include "fiction/algorithms/physical_design/apply_gate_library.hpp"
@@ -31,6 +32,44 @@
 #include <ostream>
 #include <sstream>
 #include <string>
+
+template<typename Ntk1, typename Ntk2>
+inline bool abc_cec_two_ntk( Ntk1 const& ntk1, Ntk2 const& ntk2 )
+{
+    mockturtle::write_bench( ntk1, "/tmp/test1.bench" );
+    mockturtle::write_bench( ntk2, "/tmp/test2.bench" );
+    std::string command = fmt::format( "abc -q \"cec -n /tmp/test1.bench /tmp/test2.bench\"" );
+
+    std::array<char, 128> buffer;
+    std::string result;
+#if WIN32
+    std::unique_ptr<FILE, decltype( &_pclose )> pipe( _popen( command.c_str(), "r" ), _pclose );
+#else
+    std::unique_ptr<FILE, decltype( &pclose )> pipe( popen( command.c_str(), "r" ), pclose );
+#endif
+    if ( !pipe )
+    {
+        throw std::runtime_error( "popen() failed" );
+    }
+    while ( fgets( buffer.data(), buffer.size(), pipe.get() ) != nullptr )
+    {
+        result += buffer.data();
+    }
+
+    /* search for one line which says "Networks are equivalent" and ignore all other debug output from ABC */
+    std::stringstream ss( result );
+    std::string line;
+    while ( std::getline( ss, line, '\n' ) )
+    {
+        if ( line.size() >= 23u && line.substr( 0u, 23u ) == "Networks are equivalent" )
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 
 template <typename Ntk>
 Ntk read_ntk(const std::string& name)
@@ -79,7 +118,7 @@ int main()  // NOLINT
     fiction::post_layout_optimization_stats   post_layout_optimization_stats{};
     fiction::post_layout_optimization_params  params{};
     params.max_gate_relocations = 0;
-    params.timeout = 100000;
+    params.timeout              = 100000;
 
     // For IWLS benchmarks
     int x = 0;
@@ -89,19 +128,19 @@ int main()  // NOLINT
         continue;
         fmt::print("[i] processing {}\n", entry.path().filename().string());
 
-        if ( "C432.v" == entry.path().filename().string())
+        if ("C432.v" == entry.path().filename().string())
         {
             continue;
         }
-        if ( "ex4p.v" == entry.path().filename().string())
+        if ("ex4p.v" == entry.path().filename().string())
         {
             continue;
         }
-        if ( "apex1.v" == entry.path().filename().string())
+        if ("apex1.v" == entry.path().filename().string())
         {
             continue;
         }
-        if ( "term1.v" == entry.path().filename().string())
+        if ("term1.v" == entry.path().filename().string())
         {
             continue;
         }
@@ -155,7 +194,7 @@ int main()  // NOLINT
         const auto gate_level_layout = fiction::orthogonal_planar<gate_lyt>(planarized_b, {}, &orthogonal_planar_stats);
 
         bool planar_layout = false;
-        if(gate_level_layout.num_crossings() == 0)
+        if (gate_level_layout.num_crossings() == 0)
         {
             planar_layout = true;
         }
@@ -198,7 +237,6 @@ int main()  // NOLINT
 
         fiction::post_layout_optimization(gate_level_layout, params, &post_layout_optimization_stats);
 
-
         /*auto ortho_cell_layout_post =
             fiction::apply_gate_library<qca_cell_level_layout, fiction::qca_one_library>(gate_level_layout);
         fiction::write_qca_layout_svg(ortho_cell_layout_post, "optimized_cell_lyt");*/
@@ -214,19 +252,21 @@ int main()  // NOLINT
 
         // check equivalence
         const auto miter_post = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
-        bool eq_post;
+        bool       eq_post;
         if (miter_post)
         {
             mockturtle::equivalence_checking_stats st_post;
 
             const auto ce = mockturtle::equivalence_checking(*miter_post, {}, &st_post);
-            eq_post = ce.value();
+            eq_post       = ce.value();
         }
 
-        orthogonal_planar_exp(
-            entry.path().filename().string(), planarized_b.num_pis(), planarized_b.num_pos(), planarized_b.num_gates(), width,
-            height,  width_after_optimization, height_after_optimization, area, area_after_optimization, mockturtle::to_seconds(orthogonal_planar_stats.time_total),
-            mockturtle::to_seconds(post_layout_optimization_stats.time_total), improv, planar_layout, cec_m.value(), eq, eq_post);
+        orthogonal_planar_exp(entry.path().filename().string(), planarized_b.num_pis(), planarized_b.num_pos(),
+                              planarized_b.num_gates(), width, height, width_after_optimization,
+                              height_after_optimization, area, area_after_optimization,
+                              mockturtle::to_seconds(orthogonal_planar_stats.time_total),
+                              mockturtle::to_seconds(post_layout_optimization_stats.time_total), improv, planar_layout,
+                              cec_m.value(), eq, eq_post);
 
         orthogonal_planar_exp.save();
         orthogonal_planar_exp.table();
@@ -235,12 +275,12 @@ int main()  // NOLINT
     }
 
     // For all fiction benchmarks
-    static constexpr const uint64_t bench_select = (fiction_experiments::trindade16 | fiction_experiments::fontes18 );
+    static constexpr const uint64_t bench_select = (fiction_experiments::t);
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
         // continue;
-        auto                              benchmark_network = read_ntk<fiction::tec_nt>(benchmark);
+        auto benchmark_network = read_ntk<fiction::tec_nt>(benchmark);
 
         /*fiction::technology_network benchmark_network;
         const auto pi0 = benchmark_network.create_pi();
@@ -287,7 +327,7 @@ int main()  // NOLINT
         const auto _b = fiction::network_balancing<fiction::technology_network>(
             fiction::fanout_substitution<fiction::technology_network>(benchmark_network), b_ps);
 
-        // fiction::debug::write_dot_network(_b, "balanced_ntk");
+        fiction::debug::write_dot_network(_b, "balanced_ntk");
 
         if (_b.size() > 10000)
         {
@@ -296,23 +336,34 @@ int main()  // NOLINT
 
         auto planarized_b = fiction::node_duplication_planarization<fiction::technology_network>(_b);
 
-        // fiction::debug::write_dot_network(planarized_b, "planarized_ntk");
+        fiction::debug::write_dot_network(planarized_b, "planarized_ntk");
 
         if (planarized_b.size() > 100000)
         {
             continue;
         }
 
+        auto substituted_b = inverter_substitution(planarized_b);
+
+        fiction::debug::write_dot_network(substituted_b, "substituted_ntk");
+
+        auto del_0 = delete_virtual_pis(planarized_b);
+        del_0.update_ranks();
+        fiction::debug::write_dot_network(del_0, "del");
+        auto del = delete_virtual_pis(substituted_b);
+        del.update_ranks();
+        fiction::debug::write_dot_network(del, "substituted del");
+
         // chek equivalence after planarization
         mockturtle::equivalence_checking_stats eq_st;
         const auto                             cec_m = mockturtle::equivalence_checking(
-            *fiction::virtual_miter<fiction::technology_network>(benchmark_network, planarized_b), {}, &eq_st);
+            *fiction::virtual_miter<fiction::technology_network>(benchmark_network, substituted_b), {}, &eq_st);
         assert(cec_m.has_value());
 
         const auto gate_level_layout = fiction::orthogonal_planar<gate_lyt>(planarized_b, {}, &orthogonal_planar_stats);
 
         bool planar_layout = false;
-        if(gate_level_layout.num_crossings() == 0)
+        if (gate_level_layout.num_crossings() == 0)
         {
             planar_layout = true;
         }
@@ -326,7 +377,7 @@ int main()  // NOLINT
 
         // check equivalence for the planar layout
         const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
-        bool       eq = false;
+        bool       eq    = false;
         if (miter)
         {
             mockturtle::equivalence_checking_stats st;
@@ -381,26 +432,27 @@ int main()  // NOLINT
 
         // check equivalence
         const auto miter_post = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
-        bool eq_post;
+        bool       eq_post;
         if (miter_post)
         {
             mockturtle::equivalence_checking_stats st_post;
 
             const auto ce = mockturtle::equivalence_checking(*miter_post, {}, &st_post);
-            eq_post = ce.value();
+            eq_post       = ce.value();
         }
 
         // log results
         orthogonal_planar_exp(benchmark, planarized_b.num_pis(), planarized_b.num_pos(), planarized_b.num_gates(),
-           width, height, width_after_optimization, height_after_optimization, area, area_after_optimization,
-                              mockturtle::to_seconds(orthogonal_planar_stats.time_total),
+                              width, height, width_after_optimization, height_after_optimization, area,
+                              area_after_optimization, mockturtle::to_seconds(orthogonal_planar_stats.time_total),
                               mockturtle::to_seconds(post_layout_optimization_stats.time_total), improv, planar_layout,
                               cec_m.value(), eq, eq_post);
 
-       /* orthogonal_planar_exp(
-            benchmark, planarized_b.num_pis(), planarized_b.num_pos(), planarized_b.num_gates(), gate_level_layout.x(),
-            gate_level_layout.y(), 0, 0, 0, 0, mockturtle::to_seconds(orthogonal_planar_stats.time_total),
-            mockturtle::to_seconds(post_layout_optimization_stats.time_total), 0, planar_layout, cec_m.value(), eq, 0);*/
+        /* orthogonal_planar_exp(
+             benchmark, planarized_b.num_pis(), planarized_b.num_pos(), planarized_b.num_gates(), gate_level_layout.x(),
+             gate_level_layout.y(), 0, 0, 0, 0, mockturtle::to_seconds(orthogonal_planar_stats.time_total),
+             mockturtle::to_seconds(post_layout_optimization_stats.time_total), 0, planar_layout, cec_m.value(), eq,
+           0);*/
 
         orthogonal_planar_exp.save();
         orthogonal_planar_exp.table();

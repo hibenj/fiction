@@ -12,6 +12,7 @@
 #include "utils/blueprints/network_blueprints.hpp"
 #include "utils/equivalence_checking_utils.hpp"
 
+#include <fiction/algorithms/network_transformation/inverter_substitution.hpp>
 #include <fiction/algorithms/physical_design/apply_gate_library.hpp>
 #include <fiction/algorithms/physical_design/orthogonal_planar.hpp>
 #include <fiction/layouts/cartesian_layout.hpp>
@@ -85,8 +86,8 @@ TEST_CASE("Case buf", "[orthogonal-planar]")
     const std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
     const std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
 
-    /*aig_r.modify_rank(0, nodes_rank0);
-    aig_r.modify_rank(0, nodes_rank0);*/
+    /*aig_r.set_ranks(0, nodes_rank0);
+    aig_r.set_ranks(0, nodes_rank0);*/
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
@@ -127,9 +128,9 @@ TEST_CASE("Edge case", "[orthogonal-planar]")
     const std::vector<mockturtle::aig_network::node> nodes_rank2{8, 9, 11, 14};
     const std::vector<mockturtle::aig_network::node> nodes_rank3{15, 12, 16};
 
-    aig_r.modify_rank(1, nodes_rank1);
-    aig_r.modify_rank(2, nodes_rank2);
-    aig_r.modify_rank(3, nodes_rank3);
+    aig_r.set_ranks(1, nodes_rank1);
+    aig_r.set_ranks(2, nodes_rank2);
+    aig_r.set_ranks(3, nodes_rank3);
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
@@ -185,8 +186,8 @@ TEST_CASE("And gaps", "[orthogonal-planar]")
     const std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
     const std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
 
-    /*aig_r.modify_rank(0, nodes_rank0);
-    aig_r.modify_rank(0, nodes_rank0);*/
+    /*aig_r.set_ranks(0, nodes_rank0);
+    aig_r.set_ranks(0, nodes_rank0);*/
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
@@ -236,8 +237,8 @@ TEST_CASE("Fo to And gaps", "[orthogonal-planar]")
     const std::vector<mockturtle::aig_network::node> nodes_rank0{1, 2, 3};
     const std::vector<mockturtle::aig_network::node> nodes_rank1{4, 5};
 
-    /*aig_r.modify_rank(0, nodes_rank0);
-    aig_r.modify_rank(0, nodes_rank0);*/
+    /*aig_r.set_ranks(0, nodes_rank0);
+    aig_r.set_ranks(0, nodes_rank0);*/
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
@@ -296,8 +297,8 @@ TEST_CASE("Print layout", "[orthogonal-planar]")
     std::vector<mockturtle::aig_network::node> nodes_rank0{7, 6, 9, 11};
     std::vector<mockturtle::aig_network::node> nodes_rank1{8, 10, 12};
 
-    aig_r.modify_rank(1, nodes_rank0);
-    aig_r.modify_rank(2, nodes_rank1);
+    aig_r.set_ranks(1, nodes_rank0);
+    aig_r.set_ranks(2, nodes_rank1);
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
@@ -334,11 +335,57 @@ TEST_CASE("Print layout two", "[orthogonal-planar]")
     std::vector<mockturtle::aig_network::node> nodes_rank0{7, 6, 9, 11};
     std::vector<mockturtle::aig_network::node> nodes_rank1{8, 10, 12};
 
-    aig_r.modify_rank(1, nodes_rank0);
-    aig_r.modify_rank(2, nodes_rank1);
+    aig_r.set_ranks(1, nodes_rank0);
+    aig_r.set_ranks(2, nodes_rank1);
 
     const auto layout = orthogonal_planar<gate_layout>(aig_r);
 
     debug::write_dot_layout(layout);
     debug::write_dot_network(fo_ntk);
+}
+
+TEST_CASE("Backward Propagation", "[orthogonal-planar]")
+{
+    using gate_layout = gate_level_layout<clocked_layout<tile_based_layout<cartesian_layout<offset::ucoord_t>>>>;
+
+    fiction::technology_network ntk;
+
+    const auto pi0 = ntk.create_pi();
+    const auto pi1 = ntk.create_pi();
+    const auto pi2 = ntk.create_pi();
+    const auto pi3 = ntk.create_pi();
+    const auto pi4 = ntk.create_pi();
+    const auto pi5 = ntk.create_pi();
+
+    const auto n2 = ntk.create_not(pi2);
+    const auto n3 = ntk.create_not(pi3);
+    const auto a0 = ntk.create_and(pi0, pi1);
+    const auto a1 = ntk.create_and(pi4, pi5);
+    const auto a2 = ntk.create_and(a0, pi2);
+    const auto a3 = ntk.create_and(n2, n3);
+    const auto a4 = ntk.create_and(a1, pi3);
+    const auto o0 = ntk.create_or(pi4, pi5);
+
+    ntk.create_po(a2);
+    ntk.create_po(a3);
+    ntk.create_po(a4);
+    ntk.create_po(o0);
+
+    network_balancing_params ps;
+    ps.unify_outputs = true;
+
+    const auto fo_ntk = network_balancing<technology_network>(fanout_substitution<technology_network>(ntk), ps);
+
+    const detail::operation_mode mode = detail::operation_mode::AND_OR_ONLY;
+
+    auto planarized_ntk = node_duplication_planarization<technology_network>(fo_ntk);
+
+    // auto fo_ntk_substituted = inverter_substitution(planarized_ntk, mode);
+
+    // planarized_ntk.update_ranks();
+
+    const auto layout = orthogonal_planar<gate_layout>(planarized_ntk);
+
+    debug::write_dot_layout(layout);
+    debug::write_dot_network(planarized_ntk);
 }

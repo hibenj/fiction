@@ -19,6 +19,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <utility>
 #include <vector>
 
 #if (PROGRESS_BARS)
@@ -30,6 +31,25 @@ namespace fiction
 
 namespace detail
 {
+
+/**
+ * Set the level and rank of a node by calling its correxponding `on_add` function.
+ *
+ * @tparam Ntk Type of the input logic network.
+ * @tparam NtkDest Type of the returned logic network.
+ * @param ntk_dest Output network.
+ * @param old2new `node_map` to assign the nodes of the old network to the new network.
+ * @param g Currently viewed gate.`
+ * */
+template <typename Ntk, typename NtkDest>
+void set_level_and_rank(NtkDest& ntk_dest, mockturtle::node_map<mockturtle::signal<Ntk>, Ntk>& old2new,
+                        const mockturtle::node<Ntk>& g)
+{
+    if constexpr (mockturtle::has_depth_v<NtkDest> || mockturtle::has_rank_position_v<NtkDest>)
+    {
+        ntk_dest.on_add(old2new[g]);
+    }
+}
 
 /**
  * This function connects gates that aren't affected by the inverter substitution. It means that all the gates without
@@ -56,6 +76,7 @@ bool connect_children_to_gates_unaffected(const Ntk& ntk, NtkDest& ntk_dest,
         if (ntk.is_and(g))
         {
             old2new[g] = ntk_dest.create_and(children[0], children[1]);
+            set_level_and_rank(ntk_dest, old2new, g);
             return true;  // keep looping
         }
     }
@@ -64,6 +85,7 @@ bool connect_children_to_gates_unaffected(const Ntk& ntk, NtkDest& ntk_dest,
         if (ntk.is_or(g))
         {
             old2new[g] = ntk_dest.create_or(children[0], children[1]);
+            set_level_and_rank(ntk_dest, old2new, g);
             return true;  // keep looping
         }
     }
@@ -72,6 +94,7 @@ bool connect_children_to_gates_unaffected(const Ntk& ntk, NtkDest& ntk_dest,
         if (ntk.is_xor(g))
         {
             old2new[g] = ntk_dest.create_xor(children[0], children[1]);
+            set_level_and_rank(ntk_dest, old2new, g);
             return true;  // keep looping
         }
     }
@@ -80,6 +103,7 @@ bool connect_children_to_gates_unaffected(const Ntk& ntk, NtkDest& ntk_dest,
         if (ntk.is_maj(g))
         {
             old2new[g] = ntk_dest.create_maj(children[0], children[1], children[2]);
+            set_level_and_rank(ntk_dest, old2new, g);
             return true;  // keep looping
         }
     }
@@ -88,6 +112,7 @@ bool connect_children_to_gates_unaffected(const Ntk& ntk, NtkDest& ntk_dest,
         if (ntk.is_nary_and(g))
         {
             old2new[g] = ntk_dest.create_nary_and(children);
+            set_level_and_rank(ntk_dest, old2new, g);
             return true;  // keep looping
         }
     }
@@ -96,6 +121,7 @@ bool connect_children_to_gates_unaffected(const Ntk& ntk, NtkDest& ntk_dest,
         if (ntk.is_nary_or(g))
         {
             old2new[g] = ntk_dest.create_nary_or(children);
+            set_level_and_rank(ntk_dest, old2new, g);
             return true;  // keep looping
         }
     }
@@ -104,6 +130,7 @@ bool connect_children_to_gates_unaffected(const Ntk& ntk, NtkDest& ntk_dest,
         if (ntk.is_nary_xor(g))
         {
             old2new[g] = ntk_dest.create_nary_xor(children);
+            set_level_and_rank(ntk_dest, old2new, g);
             return true;  // keep looping
         }
     }
@@ -112,6 +139,7 @@ bool connect_children_to_gates_unaffected(const Ntk& ntk, NtkDest& ntk_dest,
         if (ntk.is_not(g))
         {
             old2new[g] = ntk_dest.create_not(children[0]);
+            set_level_and_rank(ntk_dest, old2new, g);
             return true;
         }
     }
@@ -120,12 +148,14 @@ bool connect_children_to_gates_unaffected(const Ntk& ntk, NtkDest& ntk_dest,
         if (ntk.is_buf(g))
         {
             old2new[g] = ntk_dest.create_buf(children[0]);
+            set_level_and_rank(ntk_dest, old2new, g);
             return true;
         }
     }
     if constexpr (mockturtle::has_node_function_v<Ntk> && mockturtle::has_create_node_v<NtkDest>)
     {
         old2new[g] = ntk_dest.create_node(children, ntk.node_function(g));
+        set_level_and_rank(ntk_dest, old2new, g);
         return true;  // keep looping
     }
     return false;  // gate type not supported
@@ -137,6 +167,87 @@ enum class operation_mode : std::uint8_t
     AND_OR_ONLY,
     ALL_NODES
 };
+
+/**
+ * Initialize a network with virtual primary inputs by copying the given network.
+ *
+ * This function takes a network `src` and returns a new network `dest` without virtual primary inputs.
+ * It creates a map `old2new` to associate the signals from the old network to the corresponding signals in the new
+ * network.
+ *
+ * @tparam NtkSrc The type of the source network.
+ * @tparam NtkDest The type of the destination network.
+ * @param src The source network.
+ * @return A pair containing the new network without virtual primary inputs and the signal mapping from old to new
+ * network.
+ */
+template <class NtkDest, class NtkSrc>
+std::pair<NtkDest, mockturtle::node_map<mockturtle::signal<NtkDest>, NtkSrc>>
+initialize_copy_network_virtual(NtkSrc const& src)
+{
+    static_assert(mockturtle::is_network_type_v<NtkDest>, "NtkDest is not a network type");
+    static_assert(mockturtle::is_network_type_v<NtkSrc>, "NtkSrc is not a network type");
+
+    static_assert(mockturtle::has_get_constant_v<NtkDest>, "NtkDest does not implement the get_constant method");
+    static_assert(mockturtle::has_create_pi_v<NtkDest>, "NtkDest does not implement the create_pi method");
+    static_assert(mockturtle::has_get_constant_v<NtkSrc>, "NtkSrc does not implement the get_constant method");
+    static_assert(mockturtle::has_get_node_v<NtkSrc>, "NtkSrc does not implement the get_node method");
+    static_assert(mockturtle::has_foreach_pi_v<NtkSrc>, "NtkSrc does not implement the foreach_pi method");
+
+    mockturtle::node_map<mockturtle::signal<NtkDest>, NtkSrc> old2new(src);
+    NtkDest                                                   dest;
+    old2new[src.get_constant(false)] = dest.get_constant(false);
+    if (src.get_node(src.get_constant(true)) != src.get_node(src.get_constant(false)))
+    {
+        old2new[src.get_constant(true)] = dest.get_constant(true);
+    }
+
+    if constexpr (has_is_virtual_pi_v<NtkSrc> && has_is_virtual_pi_v<NtkDest>)
+    {
+        if constexpr (mockturtle::has_rank_position_v<NtkSrc>)
+        {
+            src.foreach_pi_unranked(
+                [&](auto const& n)
+                {
+                    if (src.is_real_pi(n))
+                    {
+                        old2new[n] = dest.create_pi();
+                    }
+                    else
+                    {
+                        old2new[n] = dest.create_virtual_pi(old2new[src.get_real_pi(n)]);
+                    }
+                });
+        }
+        else
+        {
+            src.foreach_pi(
+                [&](auto const& n)
+                {
+                    if (src.is_real_pi(n))
+                    {
+                        old2new[n] = dest.create_pi();
+                    }
+                    else
+                    {
+                        old2new[n] = dest.create_virtual_pi(old2new[src.get_real_pi(n)]);
+                    }
+                });
+        }
+    }
+    else
+    {
+        if constexpr (mockturtle::has_rank_position_v<NtkSrc>)
+        {
+            src.foreach_pi_unranked([&](auto const& n) { old2new[n] = dest.create_pi(); });
+        }
+        else
+        {
+            src.foreach_pi([&](auto const& n) { old2new[n] = dest.create_pi(); });
+        }
+    }
+    return {dest, old2new};
+}
 
 template <typename Ntk>
 class inverter_substitution_impl
@@ -185,7 +296,7 @@ class inverter_substitution_impl
 
     Ntk run()
     {
-        auto  init     = mockturtle::initialize_copy_network<Ntk>(ntk);
+        auto  init     = initialize_copy_network_virtual<Ntk>(ntk);
         auto& ntk_dest = init.first;
         auto& old2new  = init.second;
 
@@ -194,14 +305,21 @@ class inverter_substitution_impl
         mockturtle::progress_bar bar{static_cast<uint32_t>(ntk.num_gates()), "[i] inverter substitution: |{0}|"};
 #endif
 
+        // Restore the rank order of the PIs
+        if constexpr (mockturtle::has_rank_position_v<Ntk>)
+        {
+            ntk.foreach_pi([&ntk_dest](const auto& pi) { ntk_dest.on_add(pi); });
+        }
         ntk.foreach_gate(
             [&, this](const auto& g, [[maybe_unused]] auto i)
             {
                 const auto children = gather_fanin_signals<TopoNtkSrc>(g, old2new);
 
-                for (const auto& pair : delayed_nodes) {
+                for (const auto& pair : unplaced_nodes)
+                {
                     const auto& arr = pair.second;
-                    if (std::find(arr.begin(), arr.end(), g) != arr.end()) {
+                    if (std::find(arr.begin(), arr.end(), g) != arr.end())
+                    {
                         return true;
                     }
                 }
@@ -211,15 +329,14 @@ class inverter_substitution_impl
                 bar(i);
 #endif
 
-                connect_children_to_gates_affected<TopoNtkSrc>(ntk_dest, old2new, g, children);
-                if (delayed_nodes.find(g) != delayed_nodes.end())
+                connect_children_to_gates<TopoNtkSrc>(ntk_dest, old2new, g, children);
+                if (unplaced_nodes.find(g) != unplaced_nodes.end())
                 {
-                    const auto children0 = gather_fanin_signals<TopoNtkSrc>(delayed_nodes[g][0], old2new);
-                    connect_children_to_gates_affected<TopoNtkSrc>(ntk_dest, old2new, delayed_nodes[g][0], children0);
-                    const auto children1 = gather_fanin_signals<TopoNtkSrc>(delayed_nodes[g][1], old2new);
-                    connect_children_to_gates_affected<TopoNtkSrc>(ntk_dest, old2new, delayed_nodes[g][1], children1);
-                    const auto children2 = gather_fanin_signals<TopoNtkSrc>(delayed_nodes[g][2], old2new);
-                    connect_children_to_gates_affected<TopoNtkSrc>(ntk_dest, old2new, delayed_nodes[g][2], children2);
+                    for (int j = 0; j < 3; ++j)
+                    {
+                        const auto child = gather_fanin_signals<TopoNtkSrc>(unplaced_nodes[g][j], old2new);
+                        connect_children_to_gates<TopoNtkSrc>(ntk_dest, old2new, unplaced_nodes[g][j], child);
+                    }
                 }
 
                 return true;  // keep looping
@@ -309,7 +426,7 @@ class inverter_substitution_impl
     /**
      * Collection of nodes where the children have not been placed yet.
      */
-    std::unordered_map<mockturtle::node<Ntk>, std::array<mockturtle::node<Ntk>, 3>> delayed_nodes{};
+    std::unordered_map<mockturtle::node<Ntk>, std::array<mockturtle::node<Ntk>, 3>> unplaced_nodes{};
     /**
      * Collection of nodes where primary outputs need to be preserved.
      */
@@ -381,7 +498,7 @@ class inverter_substitution_impl
                 {
                     const auto and_node = and_or_nodes[i];
                     ntk.foreach_fanin(and_node,
-                                      [this, &and_node, &old2new, &fn, &children](const auto& f)
+                                      [this, &old2new, &fn, &children](const auto& f)
                                       {
                                           const auto fis = fanins(fo_ntk, f);
                                           assert(fis.fanin_nodes.size() == 1);
@@ -392,7 +509,7 @@ class inverter_substitution_impl
                                           {
                                               std::array<mockturtle::node<Ntk>, 3> nodes = {
                                                   m_inv_ao.back(), and_or_nodes.back(), x_inv_ao.back()};
-                                              delayed_nodes[fn] = nodes;
+                                              unplaced_nodes[fn] = nodes;
                                           }
                                           else
                                           {
@@ -417,7 +534,7 @@ class inverter_substitution_impl
 
         // compute children of affected nodes
         ntk.foreach_fanin(n,
-                          [this, &old2new, &children, &n](const auto& f)
+                          [this, &old2new, &children](const auto& f)
                           {
                               auto fn = ntk.get_node(f);
 
@@ -442,10 +559,8 @@ class inverter_substitution_impl
     }
 
     template <typename NtkSrc>
-    void connect_children_to_gates_affected(Ntk&                                                   ntk_dest,
-                                            mockturtle::node_map<mockturtle::signal<Ntk>, NtkSrc>& old2new,
-                                            const mockturtle::node<Ntk>&                           g,
-                                            const std::vector<typename Ntk::signal>&               children)
+    void connect_children_to_gates(Ntk& ntk_dest, mockturtle::node_map<mockturtle::signal<Ntk>, NtkSrc>& old2new,
+                                   const mockturtle::node<Ntk>& g, const std::vector<typename Ntk::signal>& children)
     {
         // map all affected nodes for fo
         if constexpr (fiction::has_is_inv_v<TopoNtkSrc> && mockturtle::has_create_buf_v<Ntk>)
@@ -453,6 +568,7 @@ class inverter_substitution_impl
             if (ntk.is_inv(g) && std::find(m_inv_fo.cbegin(), m_inv_fo.cend(), g) != m_inv_fo.cend())
             {
                 old2new[g] = ntk_dest.create_buf(children[0]);
+                set_level_and_rank(ntk_dest, old2new, g);
                 return;  // keep looping
             }
             if (const auto po_it = std::find(x_inv_fo.cbegin(), x_inv_fo.cend(), g);
@@ -472,9 +588,11 @@ class inverter_substitution_impl
             if (ntk.is_buf(g) && std::find(fo_nodes.cbegin(), fo_nodes.cend(), g) != fo_nodes.cend())
             {
                 old2new[g] = ntk_dest.create_not(children[0]);
+                set_level_and_rank(ntk_dest, old2new, g);
                 return;  // keep looping
             }
         }
+
         // map all affected nodes for and/or
         if constexpr (fiction::has_is_inv_v<TopoNtkSrc> && mockturtle::has_is_and_v<TopoNtkSrc> &&
                       mockturtle::has_is_or_v<TopoNtkSrc> && mockturtle::has_create_and_v<Ntk> &&
@@ -488,10 +606,12 @@ class inverter_substitution_impl
                 if (ntk.is_and(and_or_nodes[static_cast<std::vector<uint64_t>::size_type>(index)]))
                 {
                     old2new[g] = ntk_dest.create_or(children[0], children[1]);
+                    set_level_and_rank(ntk_dest, old2new, g);
                 }
                 else if (ntk.is_or(and_or_nodes[static_cast<std::vector<uint64_t>::size_type>(index)]))
                 {
                     old2new[g] = ntk_dest.create_and(children[0], children[1]);
+                    set_level_and_rank(ntk_dest, old2new, g);
                 }
                 return;  // keep looping
             }
@@ -508,9 +628,11 @@ class inverter_substitution_impl
                 std::find(and_or_nodes.cbegin(), and_or_nodes.cend(), g) != and_or_nodes.cend())
             {
                 old2new[g] = ntk_dest.create_not(children[0]);
+                set_level_and_rank(ntk_dest, old2new, g);
                 return;  // keep looping
             }
         }
+
         // map all unaffected nodes
         if (connect_children_to_gates_unaffected(ntk, ntk_dest, old2new, g, children))
         {
