@@ -4724,6 +4724,8 @@ Parameter ``b``:
 Returns:
     `true` iff `a < b` based on the aforementioned rule.)doc";
 
+static const char *__doc_fiction_detail_compute_pr_variables = R"doc()doc";
+
 static const char *__doc_fiction_detail_connect_and_place = R"doc()doc";
 
 static const char *__doc_fiction_detail_connect_and_place_2 = R"doc()doc";
@@ -8332,27 +8334,27 @@ static const char *__doc_fiction_detail_orthogonal_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_planar_impl = R"doc()doc";
 
-static const char *__doc_fiction_detail_orthogonal_planar_impl_2 = R"doc()doc";
-
 static const char *__doc_fiction_detail_orthogonal_planar_impl_orthogonal_planar_impl = R"doc()doc";
-
-static const char *__doc_fiction_detail_orthogonal_planar_impl_orthogonal_planar_impl_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_planar_impl_po_counter = R"doc()doc";
 
-static const char *__doc_fiction_detail_orthogonal_planar_impl_po_counter_2 = R"doc()doc";
-
 static const char *__doc_fiction_detail_orthogonal_planar_impl_ps = R"doc()doc";
-
-static const char *__doc_fiction_detail_orthogonal_planar_impl_ps_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_planar_impl_pst = R"doc()doc";
 
-static const char *__doc_fiction_detail_orthogonal_planar_impl_pst_2 = R"doc()doc";
-
 static const char *__doc_fiction_detail_orthogonal_planar_impl_run = R"doc()doc";
 
-static const char *__doc_fiction_detail_orthogonal_planar_impl_run_2 = R"doc()doc";
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl_orthogonal_planar_v2_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl_po_counter = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl_ps = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl_pst = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_physical_population_stability_impl =
 R"doc(This class implements the simulation of the population stability for a
@@ -9271,11 +9273,6 @@ Parameter ``g``:
     Currently viewed gate.`)doc";
 
 static const char *__doc_fiction_detail_start_orientation = R"doc()doc";
-
-static const char *__doc_fiction_detail_start_orientation_2 =
-R"doc(Determines the orientation of the first non-buffer node in a level.
-This orientation is used to define the orientation of all buffers
-placed before this node within the same level.)doc";
 
 static const char *__doc_fiction_detail_sweep_parameter_to_string =
 R"doc(Converts a sweep parameter to a string representation. This is used to
@@ -16142,7 +16139,7 @@ static const char *__doc_fiction_orthogonal_physical_design_stats_y_size = R"doc
 
 static const char *__doc_fiction_orthogonal_planar = R"doc(Description)doc";
 
-static const char *__doc_fiction_orthogonal_planar_2 = R"doc(Description)doc";
+static const char *__doc_fiction_orthogonal_planar_v2 = R"doc(Description)doc";
 
 static const char *__doc_fiction_out_of_cell_names_exception = R"doc()doc";
 
