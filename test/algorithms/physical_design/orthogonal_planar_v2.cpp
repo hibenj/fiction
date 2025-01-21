@@ -1,5 +1,5 @@
 //
-// Created by benjamin on 7/29/24.
+// Created by benjamin on 21.01.25.
 //
 #include <catch2/catch_test_macros.hpp>
 
@@ -14,7 +14,7 @@
 
 #include <fiction/algorithms/network_transformation/inverter_substitution.hpp>
 #include <fiction/algorithms/physical_design/apply_gate_library.hpp>
-#include <fiction/algorithms/physical_design/orthogonal_planar.hpp>
+#include <fiction/algorithms/physical_design/orthogonal_planar_v2.hpp>
 #include <fiction/layouts/cartesian_layout.hpp>
 #include <fiction/layouts/cell_level_layout.hpp>
 #include <fiction/layouts/clocked_layout.hpp>

@@ -20,7 +20,7 @@
 #include "fiction/layouts/clocked_layout.hpp"
 #include "fiction/layouts/gate_level_layout.hpp"
 #include "fiction/networks/technology_network.hpp"
-#include "fiction/networks/views/extended_rank_view.hpp"
+#include "fiction/networks/views/mutable_rank_view.hpp"
 #include "fiction/utils/debug/network_writer.hpp"
 #include "fiction_experiments.hpp"
 
@@ -274,7 +274,7 @@ int main()  // NOLINT
     }
 
     // For all fiction benchmarks
-    static constexpr const uint64_t bench_select = (fiction_experiments::trindade16 | fiction_experiments::fontes18);
+    static constexpr const uint64_t bench_select = (fiction_experiments::xor5_r1);
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
