@@ -1139,6 +1139,56 @@ static const char *__doc_fiction_bounding_box_2d_x_size = R"doc(The horizontal s
 
 static const char *__doc_fiction_bounding_box_2d_y_size = R"doc(The vertical size of the bounding box in layout coordinates.)doc";
 
+static const char *__doc_fiction_branching_signal_container =
+R"doc(A container class to help identify layout locations of branching nodes
+like fanouts. When a node from a network is to placed in a layout,
+fetching the node's fanins and looking for their locations in the
+layout does not work properly when branching nodes like fanouts are
+involved that got extended by wire nodes. This container solves that
+issue.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Template parameter ``fanout_size``:
+    Maximum fanout size possible in the layout and/or the network.)doc";
+
+static const char *__doc_fiction_branching_signal_container_branches = R"doc(Storage for all branches.)doc";
+
+static const char *__doc_fiction_branching_signal_container_branching_signal = R"doc(Branch type.)doc";
+
+static const char *__doc_fiction_branching_signal_container_branching_signal_branching_signal = R"doc()doc";
+
+static const char *__doc_fiction_branching_signal_container_branching_signal_lyt_signal = R"doc()doc";
+
+static const char *__doc_fiction_branching_signal_container_branching_signal_ntk_node = R"doc()doc";
+
+static const char *__doc_fiction_branching_signal_container_operator_array =
+R"doc(Accesses the branching container to find the location of a given node
+`n`. Returns the signal to that location if it was already stored or
+the default signal, otherwise.
+
+Parameter ``n``:
+    Node whose branching position is desired.
+
+Returns:
+    Signal to `n`'s layout location or the default signal if it wasn't
+    found.)doc";
+
+static const char *__doc_fiction_branching_signal_container_update_branch =
+R"doc(Updates the given node's branch by another layout signal, thereby,
+creating a new branch or updating the position of an existing one,
+e.g., if further wire segments were moving the head of the branch.
+
+Parameter ``ntk_node``:
+    Node whose branch is to be updated.
+
+Parameter ``lyt_signal``:
+    New signal pointing to the end of the branch.)doc";
+
 static const char *__doc_fiction_calculate_defect_clearance =
 R"doc(Computes the defect clearance for a given SiDB layout based on a
 defect influence domain. The defect clearance is the maximum distance
@@ -2390,54 +2440,6 @@ Template parameter ``Dist``:
     Integral distance type.)doc";
 
 static const char *__doc_fiction_chebyshev_distance_functor_chebyshev_distance_functor = R"doc()doc";
-
-static const char *__doc_fiction_check_planarity =
-R"doc(Checks if a logic network is planar for a network that is path
-balanced and has ranks assigned.
-
-If the network is not balanced, an exception is thrown. To balance the
-network, insert buffers to divide multi-level edges.
-
-It checks if the network represented by the variable `ntk` is planar.
-The network is planar if, for any edge with starting point :math:`m`
-and endpoint :math:`n` (represented by the node ranks), there is never
-another edge with starting point :math:`m' > m` and endpoint :math:`n'
-< n`, or vice versa. When iterating through the ranks of one level,
-the endpoints are always increasing. Therefore, only the starting
-points need to be checked. Thus, the highest connected starting point
-in the fan-in gives a border :math:`m_{\text{max}}` for every
-subsequent edge.
-
-Template parameter ``Ntk``:
-    Logic network type.
-
-Parameter ``ntk``:
-    The logic network to check for planarity.
-
-Returns:
-    `true` if the network is planar, `false` otherwise.)doc";
-
-static const char *__doc_fiction_check_planarity_impl = R"doc()doc";
-
-static const char *__doc_fiction_check_planarity_impl_check_planarity_impl = R"doc()doc";
-
-static const char *__doc_fiction_check_planarity_impl_ntk = R"doc()doc";
-
-static const char *__doc_fiction_check_planarity_impl_run =
-R"doc(Checks if a given network is planar.
-
-This function checks if the network represented by the variable `ntk`
-is planar. The network is planar if, for any edge with starting point
-:math:`m` and endpoint :math:`n` (represented by the node ranks),
-there is never another edge with starting point :math:`m' > m` and
-endpoint :math:`n' < n`, or vice versa. When iterating through the
-ranks of one level, the endpoints are always increasing. Therefore,
-only the starting points need to be checked. Thus, the highest
-connected starting point in the fan-in gives a border
-:math:`m_{\text{max}}` for every subsequent edge.
-
-Returns:
-    `true` if the network is planar, `false` otherwise.)doc";
 
 static const char *__doc_fiction_check_simulation_results_for_equivalence =
 R"doc(This function compares two SiDB simulation results for equivalence.
@@ -4098,10 +4100,12 @@ at this location, meaning there is no change in the operational status
 or the ground state.)doc";
 
 static const char *__doc_fiction_delete_virtual_pis =
-R"doc(Deletes virtual primary inputs from a network and maps all signals
-connected to virtual PIs back to the corresponding real PI. The main
-use is equivalence checking. If the network does not have any virtual
-PIs stored, the network is returned.
+R"doc(Deletes virtual primary inputs (PIs) from a network and remaps all
+signals connected to the virtual PIs back to their corresponding real
+PIs. This ensures compatibility for equivalence checking between
+networks with and without virtual inputs, as the miter requires
+networks to have an identical number of primary inputs. If the network
+does not contain any virtual PIs, it is returned unchanged.
 
 Template parameter ``Ntk``:
     The type of network.
@@ -4121,34 +4125,6 @@ local electrostatic potential at its position.)doc";
 static const char *__doc_fiction_dependent_cell_mode_VARIABLE =
 R"doc(The charge state of the dependent cell is changed based on the local
 electrostatic potential at its position.)doc";
-
-static const char *__doc_fiction_depth_view =
-R"doc(A specialization of `depth_view` for networks where
-`has_depth_interface` is `true`. When this condition is met,
-constructing a new depth view is unnecessary.
-
-Template parameter ``Ntk``:
-    The type of the network.
-
-Template parameter ``NodeCostFn``:
-    A function to compute the costs associated with nodes.)doc";
-
-static const char *__doc_fiction_depth_view_2 =
-R"doc(Deduction guide for `fiction::depth_view'.
-
-Template parameter ``T``:
-    Network type deduced from the construction context of
-    `fiction::depth_view`.)doc";
-
-static const char *__doc_fiction_depth_view_3 =
-R"doc(Deduction guide for `fiction::depth_view` with two constructor
-arguments
-
-Template parameter ``T``:
-    Network type deduced from the construction context of
-    `fiction::depth_view`.)doc";
-
-static const char *__doc_fiction_depth_view_depth_view = R"doc()doc";
 
 static const char *__doc_fiction_depth_view_params = R"doc(Parameters for depth view.)doc";
 
@@ -4604,23 +4580,6 @@ Parameter ``to_delete``:
 Returns:
     A 2D vector representing the calculated offset matrix.)doc";
 
-static const char *__doc_fiction_detail_calculate_pairs =
-R"doc(Calculates pairs of nodes from a given vector of nodes.
-
-This function takes a vector of nodes and returns a vector of node
-pairs. Each node pair consists of two nodes from the input vector and
-an optional vector of middle nodes. The delay of each node pair is
-initialized to infinity.
-
-Template parameter ``Ntk``:
-    The network type.
-
-Parameter ``nodes``:
-    The vector of nodes.
-
-Returns:
-    The vector of node pairs.)doc";
-
 static const char *__doc_fiction_detail_color_routing_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_color_routing_impl_color_routing_impl = R"doc()doc";
@@ -4692,37 +4651,6 @@ static const char *__doc_fiction_detail_connect_and_place = R"doc()doc";
 
 static const char *__doc_fiction_detail_connect_and_place_2 = R"doc()doc";
 
-static const char *__doc_fiction_detail_connect_children_to_gates_unaffected =
-R"doc(This function connects gates that aren't affected by the inverter
-substitution. It means that all the gates without any fan-ins or fan-
-outs impacted by the inverter substitution retain their functionality
-and are subsequently connected to their children.
-
-Template parameter ``Ntk``:
-    Type of the input logic network.
-
-Template parameter ``NtkDest``:
-    Type of the returned logic network.
-
-Parameter ``ntk``:
-    Input network.
-
-Parameter ``ntk_dest``:
-    Output network.
-
-Parameter ``old2new``:
-    `node_map` to assign the nodes of the old network to the new
-    network.
-
-Parameter ``children``:
-    Children of the current gate.
-
-Parameter ``g``:
-    Currently viewed gate.
-
-Returns:
-    'true' iff the assignment was successful.)doc";
-
 static const char *__doc_fiction_detail_contains_key = R"doc(Forward-declaration for `operational_domain`.)doc";
 
 static const char *__doc_fiction_detail_contains_key_2 =
@@ -4773,37 +4701,6 @@ static const char *__doc_fiction_detail_count_gate_types_impl_run = R"doc()doc";
 static const char *__doc_fiction_detail_create_array =
 R"doc(From https://stackoverflow.com/questions/57756557/initializing-a-
 stdarray-with-a-constant-value)doc";
-
-static const char *__doc_fiction_detail_create_virtual_pi_ntk_from_duplicated_nodes =
-R"doc(Constructs a planar `virtual_pi_network` based on the `ntk_lvls`
-array, which holds the ranks of the duplicated nodes for each level in
-the new network. This function creates new nodes for the duplicated
-ones and restores their fanin relations using the
-`gather_fanin_signals` function.
-
-For duplicated PIs (Primary Inputs), virtual PIs are created, and the
-original PI is stored in a map.
-
-The auxiliary function `gather_fanin_signals` collects fanin data for
-a node and matches it in the `virtual_pi_network`.
-
-Example: For a level (2, 3, 2, 4, 2), new nodes are created for
-duplications (e.g., 2) and stored in the `old2new_v` node_map. This
-map is used by `gather_fanin_signals` to establish the correct fanin
-relations.
-
-Template parameter ``Ntk``:
-    Network type.
-
-Parameter ``ntk``:
-    Source network to be utilized for the creation of the
-    virtual_pi_network.
-
-Parameter ``ntk_lvls``:
-    Levels of nodes in the source network.
-
-Parameter ``ntk_lvls_new``:
-    Levels of newly created nodes in the virtual_pi_network.)doc";
 
 static const char *__doc_fiction_detail_create_wiring_reduction_layout =
 R"doc(Create a wiring_reduction_layout suitable for finding excess wiring
@@ -6402,10 +6299,6 @@ static const char *__doc_fiction_detail_fanout_substitution_impl_ps = R"doc()doc
 
 static const char *__doc_fiction_detail_fanout_substitution_impl_run = R"doc()doc";
 
-static const char *__doc_fiction_detail_fill_gap_array_zeros = R"doc()doc";
-
-static const char *__doc_fiction_detail_fill_gap_array_zeros_2 = R"doc()doc";
-
 static const char *__doc_fiction_detail_find_key_with_tolerance =
 R"doc(This function searches for a floating-point value specified by the
 `key` in the provided map `map`, applying a tolerance specified by
@@ -7134,6 +7027,20 @@ Parameter ``place_info``:
 Parameter ``ssg``:
     The search space graph.)doc";
 
+static const char *__doc_fiction_detail_handle_virtual_pis =
+R"doc(Removes virtual primary inputs from a network if supported. Otherwise
+the input network is returned unmodified.
+
+Template parameter ``Ntk``:
+    The network type.
+
+Parameter ``network``:
+    The input network to process.
+
+Returns:
+    The network with virtual primary inputs removed, or the original
+    network if unsupported.)doc";
+
 static const char *__doc_fiction_detail_is_balanced_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_is_balanced_impl_balanced = R"doc()doc";
@@ -7718,97 +7625,6 @@ static const char *__doc_fiction_detail_new_gate_location_NONE = R"doc(Do not ch
 
 static const char *__doc_fiction_detail_new_gate_location_SRC = R"doc(Check if the source tile is empty.)doc";
 
-static const char *__doc_fiction_detail_node_duplication_planarization_impl = R"doc()doc";
-
-static const char *__doc_fiction_detail_node_duplication_planarization_impl_compute_slice_delays =
-R"doc(The H-graph represents all possible orderings of node pairs within a
-single network level. A "slice" is created by adding all possible
-combinations of a `node_pair` to the H-graph of the level. These
-combinations are formed by selecting pairs of nodes from the fan-ins
-of the input node: - If the input node has only one fan-in, it is
-treated as a single combination. - If the input node has two fan-ins,
-there are two possible combinations.
-
-Each `node_pair` consists of a first and second element. The objective
-is to find an ordering of node pairs that maximizes the instances
-where the first element of a node_pair matches the second element of
-the preceding node_pair. This ordering is given as a linked list.
-
-This function computes the optimal ordering by calculating delays as
-follows: - All combinations of node pairs are iteratively added to a
-linked list. - For each combination, the first element of the current
-node_pair is compared with the last element of the preceding
-node_pairs. - If a connection exists between two node_pairs, the delay
-increases by 1; otherwise, it increases by 2. The default delay for
-the first node is 1. - If a node_pair lacks a connection, and its
-updated delay (increased by 2) is less than the existing delay, the
-node_pair's delay is updated accordingly.
-
-Processed node_pairs are stored in the `lvl_pairs` member for
-subsequent delay calculations.
-
-Parameter ``nd``:
-    Node in the H-graph.
-
-Parameter ``border_pis``:
-    A boolean indicating whether the input PIs (Primary Inputs) should
-    be propagated to the next)doc";
-
-static const char *__doc_fiction_detail_node_duplication_planarization_impl_insert_if_not_first =
-R"doc(Inserts a node into a vector if it is unique.
-
-`This function inserts a node into a vector only if the vector is
-empty or the node is not equal to the first element of the vector. If
-the vector is not empty and the node is equal to the first element, it
-does nothing. An exception occurs if the node was skipped on the
-previous insertion attempt due to `vec.front() == node`; in that case,
-the node will be inserted this time.
-
-Parameter ``node``:
-    The node to be inserted.
-
-Parameter ``vec``:
-    The vector to insert the node into.)doc";
-
-static const char *__doc_fiction_detail_node_duplication_planarization_impl_lvl_pairs = R"doc()doc";
-
-static const char *__doc_fiction_detail_node_duplication_planarization_impl_node_duplication_planarization_impl = R"doc()doc";
-
-static const char *__doc_fiction_detail_node_duplication_planarization_impl_ps = R"doc()doc";
-
-static const char *__doc_fiction_detail_node_pair =
-R"doc(A structure representing a pair of nodes in an H-graph.
-
-The nodes stored in this struct describe the fanin-edges of a node in
-an H-graph. A node pair object holds two nodes, which are saved in the
-member 'pair'. These two outer nodes are connected through zero or
-more 'middle_nodes'. The fanin order starts with the first node in
-'pair', then proceeds through the 'middle_nodes', and ends with the
-second node in 'pair'. The order of 'middle_nodes' is arbitrary as
-they cannot be further connected to any other nodes. For the
-planarization, only the nodes inside the 'pair' are relevant.
-
-Template parameter ``Ntk``:
-    Network type for the nodes in the pair.)doc";
-
-static const char *__doc_fiction_detail_node_pair_delay = R"doc(Specifies the delay value for the node.)doc";
-
-static const char *__doc_fiction_detail_node_pair_fanin_pair =
-R"doc(Shared pointer to another instance of node_pair detailing fanin-edge
-alignment.)doc";
-
-static const char *__doc_fiction_detail_node_pair_node_pair =
-R"doc(Standard constructor.
-
-Parameter ``node1``:
-    The first node of the fanin-edged node.
-
-Parameter ``node2``:
-    The second node of the fanin-edged node.
-
-Parameter ``delay_value``:
-    The delay value for the node.)doc";
-
 static const char *__doc_fiction_detail_non_operationality_reason = R"doc(Reason why a layout is non-operational.)doc";
 
 static const char *__doc_fiction_detail_non_operationality_reason_KINKS = R"doc(Kinks induced the layout to become non-operational.)doc";
@@ -7830,14 +7646,6 @@ static const char *__doc_fiction_detail_on_the_fly_circuit_design_impl_on_the_fl
 static const char *__doc_fiction_detail_on_the_fly_circuit_design_impl_params = R"doc(Parameters for the on-the-fly circuit design.)doc";
 
 static const char *__doc_fiction_detail_on_the_fly_circuit_design_impl_stats = R"doc(Statistics for the on-the-fly circuit design.)doc";
-
-static const char *__doc_fiction_detail_operation_mode = R"doc()doc";
-
-static const char *__doc_fiction_detail_operation_mode_ALL_NODES = R"doc()doc";
-
-static const char *__doc_fiction_detail_operation_mode_AND_OR_ONLY = R"doc()doc";
-
-static const char *__doc_fiction_detail_operation_mode_FO_ONLY = R"doc()doc";
 
 static const char *__doc_fiction_detail_operational_domain_impl = R"doc()doc";
 
@@ -8260,18 +8068,6 @@ static const char *__doc_fiction_detail_orthogonal_impl_pst = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_impl_run = R"doc()doc";
 
-static const char *__doc_fiction_detail_orthogonal_planar_impl = R"doc()doc";
-
-static const char *__doc_fiction_detail_orthogonal_planar_impl_orthogonal_planar_impl = R"doc()doc";
-
-static const char *__doc_fiction_detail_orthogonal_planar_impl_po_counter = R"doc()doc";
-
-static const char *__doc_fiction_detail_orthogonal_planar_impl_ps = R"doc()doc";
-
-static const char *__doc_fiction_detail_orthogonal_planar_impl_pst = R"doc()doc";
-
-static const char *__doc_fiction_detail_orthogonal_planar_impl_run = R"doc()doc";
-
 static const char *__doc_fiction_detail_physical_population_stability_impl =
 R"doc(This class implements the simulation of the population stability for a
 given SiDB layout. It determines the minimum electrostatic potential
@@ -8684,10 +8480,6 @@ Parameter ``item``:
 
 Parameter ``priority``:
     The priority of the element.)doc";
-
-static const char *__doc_fiction_detail_propagate_backward = R"doc()doc";
-
-static const char *__doc_fiction_detail_propagate_forward = R"doc()doc";
 
 static const char *__doc_fiction_detail_qca_energy_dissipation_impl = R"doc()doc";
 
@@ -9157,28 +8949,6 @@ R"doc(Enum indicating if primary inputs (PIs) can be placed at the top or
 left.)doc";
 
 static const char *__doc_fiction_detail_search_space_graph_planar = R"doc(Create planar layouts.)doc";
-
-static const char *__doc_fiction_detail_set_level_and_rank =
-R"doc(Set the level and rank of a node by calling its correxponding `on_add`
-function.
-
-Template parameter ``Ntk``:
-    Type of the input logic network.
-
-Template parameter ``NtkDest``:
-    Type of the returned logic network.
-
-Parameter ``ntk_dest``:
-    Output network.
-
-Parameter ``old2new``:
-    `node_map` to assign the nodes of the old network to the new
-    network.
-
-Parameter ``g``:
-    Currently viewed gate.`)doc";
-
-static const char *__doc_fiction_detail_start_orientation = R"doc()doc";
 
 static const char *__doc_fiction_detail_sweep_parameter_to_string =
 R"doc(Converts a sweep parameter to a string representation. This is used to
@@ -10856,32 +10626,6 @@ Parameter ``ps``:
 Returns:
     sidb_simulation_result is returned with all results.)doc";
 
-static const char *__doc_fiction_extended_rank_view =
-R"doc(@class extended_rank_view<Ntk, true>
-
-If already a rank_interface exists only the depth_view constructor
-gets called.
-
-Template parameter ``Ntk``:
-    The network type.)doc";
-
-static const char *__doc_fiction_extended_rank_view_2 =
-R"doc(Deduction guide for `extended_rank_view'.
-
-Template parameter ``T``:
-    Network type deduced from the construction context of
-    `extended_rank_view`.)doc";
-
-static const char *__doc_fiction_extended_rank_view_3 =
-R"doc(Deduction guide for `extended_rank_view` with two constructor
-arguments.
-
-Template parameter ``T``:
-    Network type deduced from the construction context of
-    `extended_rank_view`.)doc";
-
-static const char *__doc_fiction_extended_rank_view_extended_rank_view = R"doc()doc";
-
 static const char *__doc_fiction_extract_routing_objectives =
 R"doc(Extracts all routing objectives from the given layout. To this end,
 all routing paths in the layout are traversed, starting at each PI.
@@ -10905,6 +10649,20 @@ Parameter ``lyt``:
 
 Returns:
     List of all routing objectives in the given layout.)doc";
+
+static const char *__doc_fiction_fanin_container =
+R"doc(Container that stores fanins of a node in a network, including whether
+one of them is a constant.
+
+Note that this container assumes that each node has a maximum of one
+constant fanin.
+
+Template parameter ``Ntk``:
+    `mockturtle` network type.)doc";
+
+static const char *__doc_fiction_fanin_container_constant_fanin =
+R"doc(Has a value if a fanin node is constant. In that case, it represents
+the constant value.)doc";
 
 static const char *__doc_fiction_fanin_edge_container =
 R"doc(Container that stores fanin edges of a node in a network, including
@@ -13145,20 +12903,6 @@ Parameter ``simulation_results``:
 Returns:
     A vector of charge distributions with the minimal energy.)doc";
 
-static const char *__doc_fiction_handle_virtual_pis =
-R"doc(Removes virtual primary inputs from a network if supported. Otherwise
-the input network is returned unmodified.
-
-Template parameter ``Ntk``:
-    The network type.
-
-Parameter ``network``:
-    The input network to process.
-
-Returns:
-    The network with virtual primary inputs removed, or the original
-    network if unsupported.)doc";
-
 static const char *__doc_fiction_has_above = R"doc()doc";
 
 static const char *__doc_fiction_has_assign_charge_state = R"doc()doc";
@@ -14339,22 +14083,6 @@ Returns:
     `ntk.node_to_index(n)` is the position where `n`'s inverse level
     is stored.)doc";
 
-static const char *__doc_fiction_inverter_substitution =
-R"doc(A network optimization algorithm that substitutes inverters at the
-outputs of all fan-out nodes with one single inverter at their inputs.
-Thereby, the total number of inverters is reduced. This is part of the
-Signal Distribution Networks I: Input Ordering.
-
-Template parameter ``Ntk``:
-    Logic network type.
-
-Parameter ``ntk``:
-    The input logic network whose inverter count is to be optimized.
-
-Returns:
-    A network that is logically equivalent to `ntk`, but with an
-    optimized inverter count.)doc";
-
 static const char *__doc_fiction_is_balanced =
 R"doc(Checks if a logic network is properly path-balanced with regard to the
 provided parameters.
@@ -15028,6 +14756,32 @@ static const char *__doc_fiction_missing_sidb_position_exception_missing_sidb_po
 
 static const char *__doc_fiction_missing_sidb_position_exception_where = R"doc()doc";
 
+static const char *__doc_fiction_mutable_rank_view =
+R"doc(@class mutable_rank_view<Ntk, true>
+
+If already a rank_interface exists only the static_depth_view
+constructor gets called.
+
+Template parameter ``Ntk``:
+    The network type.)doc";
+
+static const char *__doc_fiction_mutable_rank_view_2 =
+R"doc(Deduction guide for `mutable_rank_view'.
+
+Template parameter ``T``:
+    Network type deduced from the construction context of
+    `mutable_rank_view`.)doc";
+
+static const char *__doc_fiction_mutable_rank_view_3 =
+R"doc(Deduction guide for `mutable_rank_view` with two constructor
+arguments.
+
+Template parameter ``T``:
+    Network type deduced from the construction context of
+    `mutable_rank_view`.)doc";
+
+static const char *__doc_fiction_mutable_rank_view_mutable_rank_view = R"doc()doc";
+
 static const char *__doc_fiction_network_balancing =
 R"doc(Balances a logic network with buffer nodes that compute the identity
 function. For this purpose, `create_buf` is utilized. Therefore,
@@ -15111,52 +14865,6 @@ Parameter ``file``:
 
 Parameter ``rfun``:
     The actual parsing function.)doc";
-
-static const char *__doc_fiction_node_duplication_planarization =
-R"doc(Implements a planarization mechanism for networks using a H-Graph
-strategy for node duplication.
-
-The planarization achieved by this function solves the Node
-Duplication Crossing Minimization (NDCE) problem by finding the
-shortest x-y path in the H-graph for every level in the network. An
-H-graph describes edge relations between two levels in a network, with
-one level assumed as fixed, starting at the Primary Outputs (POs). By
-finding the shortest path from the source (x) to the sink (y) in this
-H-graph, an optimal solution for the NDCE problem for each level is
-found. The function constructs an H-graph that captures edge relations
-between two levels within the graph and computes the shortest x-y
-paths on the H-graph, traversing from the POs towards the Primary
-Inputs (PIs).
-
-Template parameter ``NtkDest``:
-    Destination network type.
-
-Template parameter ``NtkSrc``:
-    Source network type.
-
-Parameter ``ntk_src``:
-    Source network to be utilized for the planarization.
-
-Parameter ``ps``:
-    Node duplication parameters used in the computation.
-
-Returns:
-    A view of the planarized virtual_pi_network created in the format
-    of extended_rank_view.)doc";
-
-static const char *__doc_fiction_node_duplication_planarization_params = R"doc(Parameters for the node duplication algorithm.)doc";
-
-static const char *__doc_fiction_node_duplication_planarization_params_output_order =
-R"doc(The output order determines the starting layer for this algorithm. If
-this option is turned off, the output order remains the same as in the
-provided network. If it is turned on, the outputs are ordered
-randomly.)doc";
-
-static const char *__doc_fiction_node_duplication_planarization_params_output_order_KEEP_PO_ORDER = R"doc(Keep the PO order from the input network.)doc";
-
-static const char *__doc_fiction_node_duplication_planarization_params_output_order_RANDOM_PO_ORDER = R"doc(Randomize the PO order.)doc";
-
-static const char *__doc_fiction_node_duplication_planarization_params_po_order = R"doc()doc";
 
 static const char *__doc_fiction_normalize_layout_coordinates =
 R"doc(A new layout is constructed and returned that is equivalent to the
@@ -16043,8 +15751,6 @@ static const char *__doc_fiction_orthogonal_physical_design_stats_x_size = R"doc
 
 static const char *__doc_fiction_orthogonal_physical_design_stats_y_size = R"doc()doc";
 
-static const char *__doc_fiction_orthogonal_planar = R"doc(Description)doc";
-
 static const char *__doc_fiction_out_of_cell_names_exception = R"doc()doc";
 
 static const char *__doc_fiction_out_of_cell_names_exception_out_of_cell_names_exception = R"doc()doc";
@@ -16257,6 +15963,158 @@ Returns:
     point.)doc";
 
 static const char *__doc_fiction_place =
+R"doc(Place 0-input gates.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``lyt``:
+    Gate-level layout in which to place a 0-input gate.
+
+Parameter ``t``:
+    Tile in `lyt` to place the gate onto.
+
+Parameter ``ntk``:
+    Network whose node is to be placed.
+
+Parameter ``n``:
+    Node in `ntk` to place onto `t` in `lyt`.
+
+Returns:
+    Signal pointing to the placed gate in `lyt`.)doc";
+
+static const char *__doc_fiction_place_2 =
+R"doc(Place 1-input gates.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``lyt``:
+    Gate-level layout in which to place a 1-input gate.
+
+Parameter ``t``:
+    Tile in `lyt` to place the gate onto.
+
+Parameter ``ntk``:
+    Network whose node is to be placed.
+
+Parameter ``n``:
+    Node in `ntk` to place onto `t` in `lyt`.
+
+Parameter ``a``:
+    Incoming signal to the newly placed gate in `lyt`.
+
+Returns:
+    Signal pointing to the placed gate in `lyt`.)doc";
+
+static const char *__doc_fiction_place_3 =
+R"doc(Place 2-input gates.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``lyt``:
+    Gate-level layout in which to place a 2-input gate.
+
+Parameter ``t``:
+    Tile in `lyt` to place the gate onto.
+
+Parameter ``ntk``:
+    Network whose node is to be placed.
+
+Parameter ``n``:
+    Node in `ntk` to place onto `t` in `lyt`.
+
+Parameter ``a``:
+    First incoming signal to the newly placed gate in `lyt`.
+
+Parameter ``b``:
+    Second incoming signal to the newly placed gate in `lyt`.
+
+Parameter ``c``:
+    Third optional incoming constant value signal to the newly placed
+    gate in `lyt`. Might change the gate function when set, e.g., from
+    a MAJ to an AND if `c == false`.
+
+Returns:
+    Signal pointing to the placed gate in `lyt`.)doc";
+
+static const char *__doc_fiction_place_4 =
+R"doc(Place 3-input gates.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``lyt``:
+    Gate-level layout in which to place a 3-input gate.
+
+Parameter ``t``:
+    Tile in `lyt` to place the gate onto.
+
+Parameter ``ntk``:
+    Network whose node is to be placed.
+
+Parameter ``n``:
+    Node in `ntk` to place onto `t` in `lyt`.
+
+Parameter ``a``:
+    First incoming signal to the newly placed gate in `lyt`.
+
+Parameter ``b``:
+    Second incoming signal to the newly placed gate in `lyt`.
+
+Parameter ``c``:
+    Third incoming signal to the newly placed gate in `lyt`.
+
+Returns:
+    Signal pointing to the placed gate in `lyt`.)doc";
+
+static const char *__doc_fiction_place_5 =
+R"doc(Place any gate from a network. This function automatically identifies
+the arity of the passed node and fetches its incoming signals from the
+given network and a provided `mockturtle::node_map`. This function
+does not update the `mockturtle::node_map`.
+
+Template parameter ``Lyt``:
+    Gate-level layout type.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``lyt``:
+    Gate-level layout in which to place any gate.
+
+Parameter ``t``:
+    Tile in `lyt` to place the gate onto.
+
+Parameter ``ntk``:
+    Network whose node is to be placed.
+
+Parameter ``n``:
+    Node in `ntk` to place onto `t` in `lyt`.
+
+Parameter ``node2pos``:
+    Mapping from network nodes to layout signals, i.e., a pointer to
+    their position in the layout. The map is used to fetch location of
+    the fanins. The `mockturtle::node_map` is not updated by this
+    function.
+
+Returns:
+    Signal to the newly placed gate in `lyt`.)doc";
+
+static const char *__doc_fiction_place_6 =
 R"doc(Place any gate from a network. This function automatically identifies
 the arity of the passed node and fetches its incoming signals from the
 given network and a provided branching_signal_container
@@ -18621,6 +18479,34 @@ Template parameter ``Dist``:
 
 static const char *__doc_fiction_squared_euclidean_distance_functor_squared_euclidean_distance_functor = R"doc()doc";
 
+static const char *__doc_fiction_static_depth_view =
+R"doc(A specialization of `static_depth_view` for networks where
+`has_depth_interface` is `true`. When this condition is met,
+constructing a new depth view is unnecessary.
+
+Template parameter ``Ntk``:
+    The type of the network.
+
+Template parameter ``NodeCostFn``:
+    A function to compute the costs associated with nodes.)doc";
+
+static const char *__doc_fiction_static_depth_view_2 =
+R"doc(Deduction guide for `fiction::static_depth_view'.
+
+Template parameter ``T``:
+    Network type deduced from the construction context of
+    `fiction::static_depth_view`.)doc";
+
+static const char *__doc_fiction_static_depth_view_3 =
+R"doc(Deduction guide for `fiction::static_depth_view` with two constructor
+arguments
+
+Template parameter ``T``:
+    Network type deduced from the construction context of
+    `fiction::static_depth_view`.)doc";
+
+static const char *__doc_fiction_static_depth_view_static_depth_view = R"doc()doc";
+
 static const char *__doc_fiction_sweep_parameter = R"doc(Possible sweep parameters for the operational domain computation.)doc";
 
 static const char *__doc_fiction_sweep_parameter_EPSILON_R = R"doc(The relative permittivity of the dielectric material.)doc";
@@ -19583,7 +19469,7 @@ two networks differ.
 
 The input networks may have different types. If the two input networks
 have mismatched numbers of primary inputs or outputs, the method
-returns `nullopt`.
+returns `std::nullopt`.
 
 Template parameter ``NtkDest``:
     The type of the resulting network.
@@ -19602,7 +19488,7 @@ Parameter ``ntk2_in``:
 
 Returns:
     An `optional` containing the virtual miter network if successful,
-    or `nullopt` if the networks are incompatible.)doc";
+    or `std::nullopt` if the networks are incompatible.)doc";
 
 static const char *__doc_fiction_virtual_pi_network = R"doc()doc";
 
@@ -19732,7 +19618,7 @@ Returns:
     The number of virtual PIs as a `uint32_t`.)doc";
 
 static const char *__doc_fiction_virtual_pi_network_real_size =
-R"doc(Calculate the real size of the virtual_pi_network`.
+R"doc(Calculate the real size of the `virtual_pi_network`.
 
 The real size of the network is considered the size without virtual
 PIs.
@@ -20526,6 +20412,12 @@ static const char *__doc_fmt_formatter_format_2 = R"doc()doc";
 static const char *__doc_fmt_formatter_parse = R"doc()doc";
 
 static const char *__doc_fmt_formatter_parse_2 = R"doc()doc";
+
+static const char *__doc_fmt_unnamed_struct_at_home_runner_work_fiction_fiction_include_fiction_layouts_coordinates_hpp_1090_8 = R"doc()doc";
+
+static const char *__doc_fmt_unnamed_struct_at_home_runner_work_fiction_fiction_include_fiction_layouts_coordinates_hpp_1106_8 = R"doc()doc";
+
+static const char *__doc_fmt_unnamed_struct_at_home_runner_work_fiction_fiction_include_fiction_technology_cell_ports_hpp_291_8 = R"doc()doc";
 
 static const char *__doc_mockturtle_detail_foreach_element_if_transform = R"doc()doc";
 
