@@ -6,7 +6,7 @@
 #define FICTION_NODE_DUPLICATION_PLANARIZATION_HPP
 
 #include "fiction/algorithms/properties/check_planarity.hpp"
-#include "fiction/networks/views/extended_rank_view.hpp"
+#include "fiction/networks/views/mutable_rank_view.hpp"
 #include "fiction/networks/virtual_pi_network.hpp"
 
 #include <mockturtle/traits.hpp>
@@ -600,7 +600,7 @@ class node_duplication_planarization_impl
         return true;
     }
 
-    [[nodiscard]] extended_rank_view<virtual_pi_network<Ntk>>
+    [[nodiscard]] mutable_rank_view<virtual_pi_network<Ntk>>
     run(std::vector<std::vector<mockturtle::node<Ntk>>>& ntk_lvls_new)
     {
         // Initialize the POs
@@ -680,7 +680,7 @@ class node_duplication_planarization_impl
         std::reverse(ntk_lvls_new.begin(), ntk_lvls_new.end());
 
         // assign the ranks in the virtual network based on ntk_lvls_new
-        return extended_rank_view(virtual_ntk, ntk_lvls_new);
+        return mutable_rank_view(virtual_ntk, ntk_lvls_new);
     }
 
   private:
@@ -723,10 +723,10 @@ class node_duplication_planarization_impl
  * @param ntk_src Source network to be utilized for the planarization.
  * @param ps Node duplication parameters used in the computation.
  *
- * @return A view of the planarized virtual_pi_network created in the format of extended_rank_view.
+ * @return A view of the planarized virtual_pi_network created in the format of mutable_rank_view.
  */
 template <typename NtkSrc>
-[[nodiscard]] extended_rank_view<virtual_pi_network<NtkSrc>>
+[[nodiscard]] mutable_rank_view<virtual_pi_network<NtkSrc>>
 node_duplication_planarization(const NtkSrc& ntk_src, const node_duplication_planarization_params& ps = {})
 {
     static_assert(mockturtle::is_network_type_v<NtkSrc>, "NtkSrc is not a network type");
