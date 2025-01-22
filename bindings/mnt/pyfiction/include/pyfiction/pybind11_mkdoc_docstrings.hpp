@@ -4724,8 +4724,6 @@ Parameter ``b``:
 Returns:
     `true` iff `a < b` based on the aforementioned rule.)doc";
 
-static const char *__doc_fiction_detail_compute_pr_variables = R"doc()doc";
-
 static const char *__doc_fiction_detail_connect_and_place = R"doc()doc";
 
 static const char *__doc_fiction_detail_connect_and_place_2 = R"doc()doc";
