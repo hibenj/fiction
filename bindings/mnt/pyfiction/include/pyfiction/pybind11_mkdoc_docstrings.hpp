@@ -4614,6 +4614,8 @@ met.
 Returns:
     A `CellLyt` object representing the generated cell layout.)doc";
 
+static const char *__doc_fiction_detail_calculate_gap = R"doc()doc";
+
 static const char *__doc_fiction_detail_calculate_offset_matrix =
 R"doc(Calculate an offset matrix based on a to-delete list in a
 `wiring_reduction_layout`.
