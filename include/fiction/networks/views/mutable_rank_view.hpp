@@ -265,6 +265,7 @@ class mutable_rank_view<Ntk, false> : public fiction::static_depth_view<Ntk>
     [[nodiscard]] std::vector<node> get_ranks(const uint32_t level) const noexcept
     {
         assert(level < ranks.size() && "level must be less than the number of ranks");
+
         return ranks[level];
     }
 
