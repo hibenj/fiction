@@ -19,6 +19,7 @@
 #include <mockturtle/views/fanout_view.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cassert>
 #include <cstdint>
 #include <numeric>
@@ -36,9 +37,131 @@ namespace fiction
 namespace detail
 {
 
+// Define a 3D array using std::array and encapsulate it in a function
+std::array<std::array<std::array<int, 4>, 2>, 3>& getArray()
+{
+    static std::array<std::array<std::array<int, 4>, 2>, 3> array = {{{{{1, 2, 2, 2},  // Third layer (F1+2)
+                                                                        {0, 1, 1, 1}}},
+                                                                      {{{0, 3, 3, 3},  // First layer (F1) {0, 1, 1}
+                                                                        {0, 0, 0, 0}}},
+                                                                      {{{1, 1, 2, 1},  // Second layer (F2)
+                                                                        {0, 0, 1, 0}}}}};
+    return array;
+}
+
+template<typename  Ntk>
+uint64_t calculate_fanout_connection_type(const Ntk& ntk, mockturtle::node<Ntk> n)
+{
+    // order the POs
+    auto fo = ntk.fanout(n);
+    assert(fo.size() == 2);
+    std::sort(fo.begin(), fo.end(), [&ntk](int a, int b)
+              { return ntk.rank_position(a) < ntk.rank_position(b); });
+    if (ntk.fanin_size(fo[0]) == 1 && ntk.fanin_size(fo[1]) == 1)
+    {
+        return 0;
+    }
+    if (ntk.fanin_size(fo[0]) == 1)
+    {
+        return 1;
+    }
+    if (ntk.fanin_size(fo[1]) == 1)
+    {
+        return 2;
+    }
+    // both fan-puts are connected with a neighbour
+    return 3;
+}
+
+template <typename Ntk, typename Lyt>
+uint64_t calculate_predecessor_gap(const Ntk& ntk, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk>& node2pos,
+                                   uint64_t lvl, mockturtle::node<Ntk> n)
+{
+    // return if in the PI level
+    if (lvl == 0)
+    {
+        return 0;
+    }
+
+    // calculate the rank of the predecessor node
+    auto fc = fanins(ntk, n);
+
+    mockturtle::node<Ntk> nd = n;
+    if (fc.fanin_nodes.size() == 2)
+    {
+        std::sort(fc.fanin_nodes.begin(), fc.fanin_nodes.end(),
+                  [&ntk](int a, int b) { return ntk.rank_position(a) < ntk.rank_position(b); });
+    }
+    auto       pre = fc.fanin_nodes[0];
+    const auto r   = ntk.rank_position(pre);
+
+    // return if no neighbour
+    if (r == 0)
+    {
+        return 0;
+    }
+
+    // calculate the level of the predecessor node
+    const auto l = lvl - 1;
+
+    // get the neighbour with lower rank of the predecessor
+    const auto pre_neighbour = ntk.at_rank_position(l, r - 1);
+
+    // calculate the gap size
+    auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre]);
+    auto pre2_t = static_cast<tile<Lyt>>(node2pos[pre_neighbour]);
+
+    assert(pre1_t.y > pre2_t.y);
+    return pre1_t.y - pre2_t.y - 1;
+}
+
+template <typename Ntk>
+uint64_t calculate_connection(const Ntk& ntk, mockturtle::node<Ntk> n)
+{
+    if (ntk.is_po(n))
+    {
+        return false;
+    }
+    auto fo = ntk.fanout(n);
+    assert(fo.size() == 1);
+    if (ntk.fanin_size(fo[0]) == 2)
+    {
+        auto fc  = fanins(ntk, fo[0]);
+        auto pre = fc.fanin_nodes;
+        assert(pre.size() == 2);
+        std::sort(pre.begin(), pre.end(), [&ntk](int a, int b) { return ntk.rank_position(a) < ntk.rank_position(b); });
+        if (pre[1] == n)
+        {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+template <typename Ntk>
+uint64_t calculate_allowed_orientation(const Ntk& ntk, mockturtle::node<Ntk> n)
+{
+    auto fc = fanins(ntk, n);
+    assert(fc.fanin_nodes.size() == 1);
+    auto pre = fc.fanin_nodes[0];
+    if (ntk.is_fanout(pre))
+    {
+        auto fo = ntk.fanout(pre);
+        assert(fo.size() == 2);
+        std::sort(fo.begin(), fo.end(), [&ntk](int a, int b) { return ntk.rank_position(a) < ntk.rank_position(b); });
+        if (n == fo[0])  // east
+        {
+            return 0;
+        }
+        assert(n == fo[1]);
+        return 1;
+    }
+    return 2;
+}
+
 template <typename Ntk, typename Lyt>
 uint64_t calculate_gap(const Ntk& ntk, std::vector<uint64_t>& gap,
-                       mockturtle::node_map<mockturtle::signal<Lyt>, Ntk> node2pos, uint32_t lvl)
+                       mockturtle::node_map<mockturtle::signal<Lyt>, Ntk>& node2pos, uint32_t lvl)
 {
     uint64_t max_nl = 0;
     ntk.foreach_node_in_rank(lvl,
@@ -67,98 +190,57 @@ uint64_t calculate_gap(const Ntk& ntk, std::vector<uint64_t>& gap,
 }
 
 template <typename Ntk, typename Lyt>
-std::tuple<std::vector<uint8_t>, std::vector<uint64_t>, uint64_t>
+std::tuple<std::vector<uint64_t>, std::vector<uint64_t>, uint64_t>
 compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk> node2pos,
                      uint32_t lvl)
 {
-    std::vector<uint8_t>  orientation(ntk.rank_width(lvl));
+    std::vector<uint64_t> orientation(ntk.rank_width(lvl));
     std::vector<uint64_t> new_lines(ntk.rank_width(lvl));
-    // calculate the start gaps
+    // calculate the start gaps which are due to two input nodes
+    auto&                 array = getArray();
     std::vector<uint64_t> gap(ntk.rank_width(lvl));
-    uint64_t              max_new_lines = calculate_gap<Ntk, Lyt>(ntk, gap, node2pos, lvl);
 
     ntk.foreach_node_in_rank(lvl,
-                             [&ntk, &node2pos, &orientation, &gap, &new_lines](const auto& n, const auto& i)
+                             [&ntk, &node2pos, &lvl, &orientation, &new_lines, &array](const auto& n, const auto& i)
                              {
-                                 // when there is a node with two fan-ins, we need to add empty diagonals for each empty
-                                 // tile between the fan-in nodes (max_gap)
-                                 if (ntk.fanin_size(n) == 2)
+                                 // calculate the gap between the predecessors
+                                 uint64_t gap = 0; //calculate_predecessor_gap<Ntk, Lyt>(ntk, node2pos, lvl, n);
+
+                                 // needs gap and orientation as input
+                                 if (ntk.fanin_size(n) == 2)  // complete
                                  {
                                      if (i != 0)
                                      {
-                                         if (orientation[i - 1] == 1 && gap[i - 1] == 0)
+                                         if (orientation[i - 1] == 2 && gap == 0)
                                          {
                                              orientation[i] = 1;
                                          }
                                      }
-                                     std::cout << "And\n";
                                  }
                                  else if (ntk.fanin_size(n) == 1)
                                  {
+                                     // allowed orientation Flag e = 0, s = 1, free = 2
+                                     uint64_t allowed_orientation = calculate_allowed_orientation(ntk, n);
+
+                                     // needs the type of connection (F1+2, F1, F2), allowed_orientation, gap,
+                                     // orientation, new_line as input
                                      if (ntk.is_fanout(n))
                                      {
-                                         // order the POs
-                                         auto fo = ntk.fanout(n);
-                                         assert(fo.size() == 2);
-                                         std::sort(fo.begin(), fo.end(), [&ntk](int a, int b)
-                                                   { return ntk.rank_position(a) < ntk.rank_position(b); });
-
-                                         // if this condition is met, the fan-out does not connect to another node in
-                                         // the next level
-                                         if (ntk.fanin_size(fo[0]) == 1)
-                                         {
-                                             if (i != 0)
-                                             {
-                                                 if (orientation[i - 1] == 0 && gap[i] == 0)
-                                                 {
-                                                     orientation[i] = 1;
-                                                 }
-                                                 if (orientation[i - 1] == 1)
-                                                 {
-                                                     // in all cases there has to be a gap to allow routing
-                                                     gap[i - 1] = 1;
-
-                                                     if (gap[i] == 0)
-                                                     {
-                                                         // add a new line to compensate the gap
-                                                         new_lines[i] += 1;
-                                                     }
-                                                     if (gap[i] < 2)
-                                                     {
-                                                         // orientation is still 1
-                                                         orientation[i] = 1;
-                                                     }
-                                                     if (gap[i] > 0)
-                                                     {
-                                                         // use available gap to route the fan-out
-                                                         gap[i] -= 1;
-                                                     }
-                                                 }
-                                             }
-                                             std::cout << "Non connecting fanout\n";
-                                         }
-                                         if (ntk.fanin_size(fo[1]) == 1)
-                                         {
-                                             if (gap[i] == 0)
-                                             {
-                                                 orientation[i] = 1;
-                                             }
-                                             std::cout << "Non connecting fanout\n";
-                                         }
+                                         // calculate the type of connection F1+2 = 0, F1 = 1, F2 = 2;
+                                         uint64_t fanout_connection_type = calculate_fanout_connection_type(ntk, n);
+                                         int z = 0;
                                      }
+                                     // needs the type of connection (connected, unconnected), allowed_orientation, gap,
+                                     // orientation, new_line as input
                                      else
                                      {
-                                         std::cout << "Buffer\n";
-                                         if (i != 0)
-                                         {
-                                             orientation[i] = orientation[i - 1];
-                                         }
+                                         // Connected Flag
+                                         uint64_t connected = calculate_connection(ntk, n);
                                      }
                                  }
                              });
 
-    max_new_lines  = std::max(max_new_lines, static_cast<uint64_t>(std::accumulate(gap.cbegin(), gap.cend(), 0)));
-    const auto ret = std::make_tuple(orientation, gap, max_new_lines);
+    const auto ret = std::make_tuple(orientation, gap, 0);
     return ret;
 }
 
@@ -213,6 +295,7 @@ class orthogonal_planar_v2_impl
                 [this, &layout, &pi2node, &node2pos, &orientation, &gap, &max_gap, &first_pos, &prec_pos](const auto& n,
                                                                                                           const auto& i)
                 {
+                    std::cout << "Node: " << n << " , Orientation: " << orientation[i] << std::endl;
                     if (!ntk.is_constant(n))
                     {
                         // if node is a PI, move it to its correct position
@@ -250,7 +333,7 @@ class orthogonal_planar_v2_impl
                         // if n has only one fanin
                         else if (const auto fc = fanins(ntk, n); fc.fanin_nodes.size() == 1)
                         {
-                            const auto& pre   = fc.fanin_nodes[0];
+                            /*const auto& pre   = fc.fanin_nodes[0];
                             auto        pre_t = static_cast<tile<Lyt>>(node2pos[pre]);
                             // horizontal (corresponding to colored east)
 
@@ -264,61 +347,62 @@ class orthogonal_planar_v2_impl
                             else
                             {
                                 // compare them with the node placed with rank(n) - 1
-                               /* const auto& pre_check = ntk.at_rank_position(ntk.rank_position(n) - 1);
-                                auto        pre_check_t = static_cast<tile<Lyt>>(node2pos[pre_check]);
+                               *//* const auto& pre_check = ntk.at_rank_position(ntk.rank_position(n) - 1);
+                           auto        pre_check_t = static_cast<tile<Lyt>>(node2pos[pre_check]);
 
-                                prec_pos;*/
+                           prec_pos;*//*
 
-                                prec_pos.x -= gap[i-1];
-                                prec_pos.y += gap[i-1];
+                 prec_pos.x -= gap[i-1];
+                 prec_pos.y += gap[i-1];
 
-                                tile<Lyt> t = pre_t;
-                                t.x += 1;
+                 tile<Lyt> t = pre_t;
+                 t.x += 1;
 
-                                // if it can be wired east, wire east
-                                if (prec_pos != t)
-                                {
-                                    node2pos[n] = connect_and_place(layout, t, ntk, n, pre_t);
-                                }
-                                // if it can not be wired east then it has to be wired south
-                                else
-                                {
-                                    t = pre_t;
-                                    t.y += 1;
-                                    node2pos[n] = connect_and_place(layout, t, ntk, n, pre_t);
-                                }
-                                prec_pos = t;
-                            }
+                 // if it can be wired east, wire east
+                 if (prec_pos != t)
+                 {
+                     node2pos[n] = connect_and_place(layout, t, ntk, n, pre_t);
+                 }
+                 // if it can not be wired east then it has to be wired south
+                 else
+                 {
+                     t = pre_t;
+                     t.y += 1;
+                     node2pos[n] = connect_and_place(layout, t, ntk, n, pre_t);
+                 }
+                 prec_pos = t;
+             }*/
                         }
                         else  // if node has two fanins (or three fanins with one of them being constant)
                         {
-                            const auto &pre1 = fc.fanin_nodes[0], pre2 = fc.fanin_nodes[1];
+                            /* const auto &pre1 = fc.fanin_nodes[0], pre2 = fc.fanin_nodes[1];
 
-                            auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre1]),
-                                 pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
+                             auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre1]),
+                                  pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
 
-                            // pre1_t is the northwards/eastern tile.
-                            if (pre2_t.y < pre1_t.y)
-                            {
-                                std::swap(pre1_t, pre2_t);
-                            }
+                             // pre1_t is the northwards/eastern tile.
+                             if (pre2_t.y < pre1_t.y)
+                             {
+                                 std::swap(pre1_t, pre2_t);
+                             }
 
-                            prec_pos = {pre1_t.x, pre2_t.y};
+                             prec_pos = {pre1_t.x, pre2_t.y};
 
-                            node2pos[n] =
-                                connect_and_place(layout, prec_pos, ntk, n, pre1_t, pre2_t, fc.constant_fanin);
+                             node2pos[n] =
+                                 connect_and_place(layout, prec_pos, ntk, n, pre1_t, pre2_t, fc.constant_fanin);
 
-                            // handle buffering for extra diagonals
+                             // handle buffering for extra diagonals
+                             */
                             /*if ((max_gap + 1) > (pre1_t.x - pre2_t.x))
-                            {
-                                prec_pos.x += (max_gap + 1 - (pre1_t.x - pre2_t.x));
-                                node2pos[n] = wire_east(layout, prec_pos, {prec_pos.x + 1, prec_pos.y});
-                            }*/
+                      {
+                          prec_pos.x += (max_gap + 1 - (pre1_t.x - pre2_t.x));
+                          node2pos[n] = wire_east(layout, prec_pos, {prec_pos.x + 1, prec_pos.y});
+                      }*/ /*
 
-                            if (ntk.rank_position(n) == 0)
-                            {
-                                first_pos = prec_pos;
-                            }
+                        if (ntk.rank_position(n) == 0)
+                        {
+                            first_pos = prec_pos;
+                        }*/
                         }
                     }
                 });
