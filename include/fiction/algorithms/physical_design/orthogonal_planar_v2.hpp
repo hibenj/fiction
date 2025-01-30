@@ -22,9 +22,9 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
-#include <numeric>
 #include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #if (PROGRESS_BARS)
@@ -38,25 +38,160 @@ namespace detail
 {
 
 // Define a 3D array using std::array and encapsulate it in a function
-std::array<std::array<std::array<int, 4>, 2>, 3>& getArray()
+std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2>, 3>, 2>& get_buffer_lookup()
 {
-    static std::array<std::array<std::array<int, 4>, 2>, 3> array = {{{{{1, 2, 2, 2},  // Third layer (F1+2)
-                                                                        {0, 1, 1, 1}}},
-                                                                      {{{0, 3, 3, 3},  // First layer (F1) {0, 1, 1}
-                                                                        {0, 0, 0, 0}}},
-                                                                      {{{1, 1, 2, 1},  // Second layer (F2)
-                                                                        {0, 0, 1, 0}}}}};
+    static std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2>, 3>, 2> array =
+    {{ // Array
+        {{ // Unconnected
+            {{ // East
+                {{
+                        {0, 0}, {1, 0}, {1, 1}, {0, 1} // gap 0
+                }},
+                {{
+                        {0, 0}, {0, 0}, {1, 0}, {0, 0} // gap 1
+                }}
+            }},
+            {{ // South
+                {{
+                        {3, 0}, {2, 0}, {0, 0}, {0, 0} // only first two entries used
+                }},
+                {{
+                        {0, 0}, {0, 0}, {0, 0}, {0, 0} // unused
+                }}
+            }},
+            {{ // Free
+                {{
+                        {0, 0}, {1, 0}, {2, 0}, {3, 0} // gap 0
+                }},
+                {{
+                        {0, 0}, {0, 0}, {1, 0}, {0, 0} // gap 1
+                }}
+            }}
+        }},
+        {{ // Connected
+            {{ // East
+                {{
+                    {0, 0}, {0, 0}, {0, 1}, {0, 1} // gap 0
+                }},
+                {{
+                    {0, 0}, {0, 0}, {0, 0}, {0, 0} // gap 1
+                }}
+            }},
+            {{ // South
+                {{
+                    {3, 0}, {3, 0}, {0, 0}, {0, 0} // only first two entries used
+                }},
+                {{
+                    {0, 0}, {0, 0}, {0, 0}, {0, 0} // unused
+                }}
+            }},
+            {{ // Free
+                {{
+                    {0, 0}, {0, 0}, {3, 0}, {3, 0} // gap 0
+                }},
+                {{
+                      {0, 0}, {0, 0}, {0, 0}, {0, 0} // gap 1
+                }}
+            }}
+        }}
+    }};
     return array;
 }
 
-template<typename  Ntk>
+// Define a 3D array using std::array and encapsulate it in a function
+std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2>, 3>, 3>& get_fanout_lookup()
+{
+    static std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2>, 3>, 3> array =
+        {{ // Array
+            {{ // Type Fo 1+2
+                {{ // East
+                  {{
+                      {1, 0}, {1, 1}, {1, 2}, {1, 1} // gap 0
+                  }},
+                  {{
+                      {1, 0}, {1, 0}, {1, 1}, {1, 0} // gap 1
+                  }}
+                }},
+                {{ // South
+                  {{
+                      {2, 0}, {2, 1}, {0, 0}, {0, 0} // only first two entries used
+                  }},
+                  {{
+                      {0, 0}, {0, 0}, {0, 0}, {0, 0} // unused
+                  }}
+                }},
+                {{ // Free
+                  {{
+                      {1, 0}, {2, 0}, {2, 1}, {2, 0} // gap 0
+                  }},
+                  {{
+                      {1, 0}, {1, 0}, {2, 0}, {1, 0} // gap 1
+                  }}
+                }}
+            }},
+            {{ // Type F1
+                {{ // East
+                  {{
+                      {0, 0}, {0, 1}, {0, 2}, {0, 1} // gap 0
+                  }},
+                  {{
+                      {0, 0}, {0, 0}, {0, 1}, {0, 0} // gap 1
+                  }}
+                }},
+                {{ // South
+                  {{
+                      {3, 0}, {3, 1}, {0, 0}, {0, 0} // only first two entries used
+                  }},
+                  {{
+                      {0, 0}, {0, 0}, {0, 0}, {0, 0} // unused
+                  }}
+                }},
+                {{ // Free
+                  {{
+                      {0, 0}, {3, 0}, {3, 1}, {3, 0} // gap 0
+                  }},
+                  {{
+                      {0, 0}, {0, 0}, {3, 0}, {0, 0} // gap 1
+                  }}
+                }}
+            }},
+            {{ // Type F2
+                {{ // East
+                  {{
+                      {1, 0}, {1, 0}, {1, 1}, {1, 1} // gap 0
+                  }},
+                  {{
+                      {1, 0}, {1, 0}, {1, 0}, {1, 0} // gap 1
+                  }}
+                }},
+                {{ // South
+                  {{
+                      {2, 0}, {2, 0}, {0, 0}, {0, 0} // only first two entries used
+                  }},
+                  {{
+                      {0, 0}, {0, 0}, {0, 0}, {0, 0} // unused
+                  }}
+                }},
+                {{ // Free
+                  {{
+                      {1, 0}, {1, 0}, {2, 0}, {2, 0} // gap 0
+                  }},
+                  {{
+                  {1, 0}, {1, 0}, {1, 0}, {1, 0} // gap 1
+                  }}
+                }}
+            }}
+        }};
+    return array;
+}
+
+template <typename Ntk>
 uint64_t calculate_fanout_connection_type(const Ntk& ntk, mockturtle::node<Ntk> n)
 {
     // order the POs
     auto fo = ntk.fanout(n);
     assert(fo.size() == 2);
-    std::sort(fo.begin(), fo.end(), [&ntk](int a, int b)
-              { return ntk.rank_position(a) < ntk.rank_position(b); });
+    std::sort(fo.begin(), fo.end(), [&ntk](int a, int b) { return ntk.rank_position(a) < ntk.rank_position(b); });
     if (ntk.fanin_size(fo[0]) == 1 && ntk.fanin_size(fo[1]) == 1)
     {
         return 0;
@@ -160,12 +295,12 @@ uint64_t calculate_allowed_orientation(const Ntk& ntk, mockturtle::node<Ntk> n)
 }
 
 template <typename Ntk, typename Lyt>
-uint64_t calculate_gap(const Ntk& ntk, std::vector<uint64_t>& gap,
+uint64_t calculate_max_new_lines(const Ntk& ntk,
                        mockturtle::node_map<mockturtle::signal<Lyt>, Ntk>& node2pos, uint32_t lvl)
 {
     uint64_t max_nl = 0;
     ntk.foreach_node_in_rank(lvl,
-                             [&ntk, &gap, &node2pos, &max_nl](const auto& n, const auto& i)
+                             [&ntk, &node2pos, &max_nl](const auto& n, const auto& i)
                              {
                                  auto fc = fanins(ntk, n);
                                  // calculate gaps due to AND gates
@@ -180,67 +315,82 @@ uint64_t calculate_gap(const Ntk& ntk, std::vector<uint64_t>& gap,
                                           pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
 
                                      max_nl = std::max(max_nl, static_cast<uint64_t>(pre2_t.y - pre1_t.y));
-                                     if (i != 0)
-                                     {
-                                         gap[i - 1] += 1;
-                                     }
                                  }
                              });
     return max_nl;
 }
 
 template <typename Ntk, typename Lyt>
-std::tuple<std::vector<uint64_t>, std::vector<uint64_t>, uint64_t>
+std::tuple<std::vector<uint64_t>, std::vector<uint64_t>>
 compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk> node2pos,
                      uint32_t lvl)
 {
     std::vector<uint64_t> orientation(ntk.rank_width(lvl));
     std::vector<uint64_t> new_lines(ntk.rank_width(lvl));
-    // calculate the start gaps which are due to two input nodes
-    auto&                 array = getArray();
-    std::vector<uint64_t> gap(ntk.rank_width(lvl));
+    // get the lookup tables for the gate types
+    const auto& buffer_lu = get_buffer_lookup();
+    const auto& fanout_lu = get_fanout_lookup();
 
-    ntk.foreach_node_in_rank(lvl,
-                             [&ntk, &node2pos, &lvl, &orientation, &new_lines, &array](const auto& n, const auto& i)
-                             {
-                                 // calculate the gap between the predecessors
-                                 uint64_t gap = 0; //calculate_predecessor_gap<Ntk, Lyt>(ntk, node2pos, lvl, n);
+    ntk.foreach_node_in_rank(
+        lvl,
+        [&ntk, &node2pos, &lvl, &orientation, &new_lines, &buffer_lu, &fanout_lu](const auto& n, const auto& i)
+        {
+            // calculate the gap between the predecessors
+            uint64_t gap = 0;  // calculate_predecessor_gap<Ntk, Lyt>(ntk, node2pos, lvl, n);
+            if (n == 11)
+            {
+                gap = 1;
+            }
 
-                                 // needs gap and orientation as input
-                                 if (ntk.fanin_size(n) == 2)  // complete
-                                 {
-                                     if (i != 0)
-                                     {
-                                         if (orientation[i - 1] == 2 && gap == 0)
-                                         {
-                                             orientation[i] = 1;
-                                         }
-                                     }
-                                 }
-                                 else if (ntk.fanin_size(n) == 1)
-                                 {
-                                     // allowed orientation Flag e = 0, s = 1, free = 2
-                                     uint64_t allowed_orientation = calculate_allowed_orientation(ntk, n);
+            // needs gap and orientation as input
+            if (ntk.fanin_size(n) == 2)  // complete
+            {
+                if (i != 0)
+                {
+                    if (orientation[i - 1] == 2 && gap == 0)
+                    {
+                        orientation[i] = 1;
+                    }
+                }
+            }
+            else if (ntk.fanin_size(n) == 1)
+            {
+                // allowed orientation Flag e = 0, s = 1, free = 2
+                uint64_t allowed_orientation = calculate_allowed_orientation(ntk, n);
 
-                                     // needs the type of connection (F1+2, F1, F2), allowed_orientation, gap,
-                                     // orientation, new_line as input
-                                     if (ntk.is_fanout(n))
-                                     {
-                                         // calculate the type of connection F1+2 = 0, F1 = 1, F2 = 2;
-                                         uint64_t fanout_connection_type = calculate_fanout_connection_type(ntk, n);
-                                         int z = 0;
-                                     }
-                                     // needs the type of connection (connected, unconnected), allowed_orientation, gap,
-                                     // orientation, new_line as input
-                                     else
-                                     {
-                                         // Connected Flag
-                                         uint64_t connected = calculate_connection(ntk, n);
-                                     }
-                                 }
-                             });
+                // needs the type of connection (F1+2, F1, F2), allowed_orientation, gap,
+                // orientation, new_line as input
+                if (ntk.is_fanout(n))
+                {
+                    if (i != 0)
+                    {
+                        // calculate the type of connection F1+2 = 0, F1 = 1, F2 = 2;
+                        uint64_t fanout_connection_type = calculate_fanout_connection_type(ntk, n);
 
-    const auto ret = std::make_tuple(orientation, gap, 0);
+                        const std::pair<uint64_t, uint64_t> pair =
+                            fanout_lu[fanout_connection_type][allowed_orientation][gap][orientation[i - 1]];
+                        orientation[i] = pair.first;
+                        new_lines[i] = pair.second;
+                    }
+                }
+                // needs the type of connection (connected, unconnected), allowed_orientation, gap,
+                // orientation, new_line as input
+                else
+                {
+                    if (i != 0)
+                    {
+                        // Connected Flag
+                        uint64_t                            connected = calculate_connection(ntk, n);
+                        const std::pair<uint64_t, uint64_t> pair =
+                            buffer_lu[connected][allowed_orientation][gap][orientation[i - 1]];
+                        orientation[i] = pair.first;
+                        new_lines[i] = pair.second;
+                    }
+                }
+            }
+        });
+
+    const auto ret = std::make_tuple(orientation, new_lines);
     return ret;
 }
 
@@ -280,19 +430,18 @@ class orthogonal_planar_v2_impl
         mockturtle::progress_bar bar{ctn.color_ntk.size(), "[i] arranging layout: |{0}|"};
 #endif
 
-        tile<Lyt> prec_pos{0, 0};
+        tile<Lyt> place_t{0, 0};
         tile<Lyt> first_pos = {ntk.num_pis(), 0};
 
         for (uint32_t lvl = 0; lvl < ntk.depth() + 1; lvl++)
         {
             const auto variable_tuple = compute_pr_variables(ntk, layout, node2pos, lvl);
             const auto orientation    = std::get<0>(variable_tuple);
-            const auto gap            = std::get<1>(variable_tuple);
-            const auto max_gap        = std::get<2>(variable_tuple);
+            const auto new_lines      = std::get<1>(variable_tuple);
 
             ntk.foreach_node_in_rank(
                 lvl,
-                [this, &layout, &pi2node, &node2pos, &orientation, &gap, &max_gap, &first_pos, &prec_pos](const auto& n,
+                [this, &layout, &pi2node, &node2pos, &orientation, &first_pos, &place_t](const auto& n,
                                                                                                           const auto& i)
                 {
                     std::cout << "Node: " << n << " , Orientation: " << orientation[i] << std::endl;
@@ -304,105 +453,79 @@ class orthogonal_planar_v2_impl
                             if (ntk.rank_position(n) == 0)
                             {
                                 node2pos[n] = layout.move_node(pi2node[n], first_pos);
-                                prec_pos    = first_pos;
+                                place_t     = first_pos;
                             }
                             else
                             {
-                                prec_pos = {prec_pos.x - 1, prec_pos.y + 1};
+                                place_t = {place_t.x - 1, place_t.y + 1};
                                 // node2pos[n] = layout.move_node(pi2node[n], prec_pos);
-                                if (prec_pos.x == 0)
+                                if (place_t.x == 0)
                                 {
-                                    node2pos[n] = layout.move_node(pi2node[n], prec_pos);
+                                    node2pos[n] = layout.move_node(pi2node[n], place_t);
                                 }
-                                else if (prec_pos.x < (first_pos.x / 2))
+                                else if (place_t.x < (first_pos.x / 2))
                                 {
-                                    node2pos[n] = layout.move_node(pi2node[n], {0, prec_pos.y});
+                                    node2pos[n] = layout.move_node(pi2node[n], {0, place_t.y});
 
                                     node2pos[n] =
-                                        layout.create_buf(wire_east(layout, {0, prec_pos.y}, prec_pos), prec_pos);
+                                        layout.create_buf(wire_east(layout, {0, place_t.y}, place_t), place_t);
                                 }
                                 else
                                 {
-                                    node2pos[n] = layout.move_node(pi2node[n], {prec_pos.x, 0});
+                                    node2pos[n] = layout.move_node(pi2node[n], {place_t.x, 0});
 
                                     node2pos[n] =
-                                        layout.create_buf(wire_south(layout, {prec_pos.x, 0}, prec_pos), prec_pos);
+                                        layout.create_buf(wire_south(layout, {place_t.x, 0}, place_t), place_t);
                                 }
                             }
                         }
                         // if n has only one fanin
                         else if (const auto fc = fanins(ntk, n); fc.fanin_nodes.size() == 1)
                         {
-                            /*const auto& pre   = fc.fanin_nodes[0];
+                            const auto& pre   = fc.fanin_nodes[0];
                             auto        pre_t = static_cast<tile<Lyt>>(node2pos[pre]);
-                            // horizontal (corresponding to colored east)
 
-                            if (ntk.rank_position(n) == 0)
+                            // horizontal (corresponding to colored east)
+                            if (orientation[i] == 0 || orientation[i] == 1)
                             {
-                                prec_pos.y  = pre_t.y;
-                                prec_pos.x  = pre_t.x + 1;
-                                first_pos   = prec_pos;
-                                node2pos[n] = connect_and_place(layout, first_pos, ntk, n, pre_t);
+                                place_t.y  = pre_t.y;
+                                place_t.x  = pre_t.x + 1;
+                                node2pos[n] = connect_and_place(layout, place_t, ntk, n, pre_t);
                             }
                             else
                             {
-                                // compare them with the node placed with rank(n) - 1
-                               *//* const auto& pre_check = ntk.at_rank_position(ntk.rank_position(n) - 1);
-                           auto        pre_check_t = static_cast<tile<Lyt>>(node2pos[pre_check]);
+                                assert(orientation[i] == 2 || orientation[i] == 3);
+                                place_t.y  = pre_t.y + 1;
+                                place_t.x  = pre_t.x;
+                                node2pos[n] = connect_and_place(layout, place_t, ntk, n, pre_t);
+                            }
 
-                           prec_pos;*//*
-
-                 prec_pos.x -= gap[i-1];
-                 prec_pos.y += gap[i-1];
-
-                 tile<Lyt> t = pre_t;
-                 t.x += 1;
-
-                 // if it can be wired east, wire east
-                 if (prec_pos != t)
-                 {
-                     node2pos[n] = connect_and_place(layout, t, ntk, n, pre_t);
-                 }
-                 // if it can not be wired east then it has to be wired south
-                 else
-                 {
-                     t = pre_t;
-                     t.y += 1;
-                     node2pos[n] = connect_and_place(layout, t, ntk, n, pre_t);
-                 }
-                 prec_pos = t;
-             }*/
+                            if (ntk.rank_position(n) == 0)
+                            {
+                                first_pos   = place_t;
+                            }
                         }
                         else  // if node has two fanins (or three fanins with one of them being constant)
                         {
-                            /* const auto &pre1 = fc.fanin_nodes[0], pre2 = fc.fanin_nodes[1];
+                            const auto &pre1 = fc.fanin_nodes[0], pre2 = fc.fanin_nodes[1];
 
-                             auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre1]),
-                                  pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
+                            auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre1]),
+                                 pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
 
-                             // pre1_t is the northwards/eastern tile.
-                             if (pre2_t.y < pre1_t.y)
-                             {
-                                 std::swap(pre1_t, pre2_t);
-                             }
+                            // pre1_t is the northwards/eastern tile.
+                            if (pre2_t.y < pre1_t.y)
+                            {
+                                std::swap(pre1_t, pre2_t);
+                            }
 
-                             prec_pos = {pre1_t.x, pre2_t.y};
+                            place_t = {pre1_t.x, pre2_t.y};
 
-                             node2pos[n] =
-                                 connect_and_place(layout, prec_pos, ntk, n, pre1_t, pre2_t, fc.constant_fanin);
+                            node2pos[n] = connect_and_place(layout, place_t, ntk, n, pre1_t, pre2_t, fc.constant_fanin);
 
-                             // handle buffering for extra diagonals
-                             */
-                            /*if ((max_gap + 1) > (pre1_t.x - pre2_t.x))
-                      {
-                          prec_pos.x += (max_gap + 1 - (pre1_t.x - pre2_t.x));
-                          node2pos[n] = wire_east(layout, prec_pos, {prec_pos.x + 1, prec_pos.y});
-                      }*/ /*
-
-                        if (ntk.rank_position(n) == 0)
-                        {
-                            first_pos = prec_pos;
-                        }*/
+                            if (ntk.rank_position(n) == 0)
+                            {
+                                first_pos   = place_t;
+                            }
                         }
                     }
                 });
@@ -423,7 +546,7 @@ class orthogonal_planar_v2_impl
                         // Adjust the position based on whether it's the first or second occurrence
                         if (countMap[po] == 1)
                         {
-                            if (po_tile.y == prec_pos.y)
+                            if (po_tile.y == place_t.y)
                             {
                                 add_line = 1;
                             }
@@ -446,7 +569,7 @@ class orthogonal_planar_v2_impl
                 }
             });
 
-        layout.resize({first_pos.x + 1, prec_pos.y + add_line, 0});
+        layout.resize({first_pos.x + 1, place_t.y + add_line, 0});
 
         // layout.resize({10, 10, 0});
 
