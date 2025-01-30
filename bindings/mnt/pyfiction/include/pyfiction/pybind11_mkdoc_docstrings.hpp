@@ -4620,7 +4620,7 @@ static const char *__doc_fiction_detail_calculate_connection = R"doc()doc";
 
 static const char *__doc_fiction_detail_calculate_fanout_connection_type = R"doc()doc";
 
-static const char *__doc_fiction_detail_calculate_gap = R"doc()doc";
+static const char *__doc_fiction_detail_calculate_max_new_lines = R"doc()doc";
 
 static const char *__doc_fiction_detail_calculate_offset_matrix =
 R"doc(Calculate an offset matrix based on a to-delete list in a
@@ -6705,7 +6705,9 @@ static const char *__doc_fiction_detail_generate_edge_intersection_graph_impl_ps
 
 static const char *__doc_fiction_detail_generate_edge_intersection_graph_impl_run = R"doc()doc";
 
-static const char *__doc_fiction_detail_getArray = R"doc()doc";
+static const char *__doc_fiction_detail_get_buffer_lookup = R"doc()doc";
+
+static const char *__doc_fiction_detail_get_fanout_lookup = R"doc()doc";
 
 static const char *__doc_fiction_detail_get_offset =
 R"doc(Utility function to calculate the offset that has to be subtracted
