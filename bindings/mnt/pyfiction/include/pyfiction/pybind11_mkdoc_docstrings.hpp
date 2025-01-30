@@ -4614,6 +4614,12 @@ met.
 Returns:
     A `CellLyt` object representing the generated cell layout.)doc";
 
+static const char *__doc_fiction_detail_calculate_allowed_orientation = R"doc()doc";
+
+static const char *__doc_fiction_detail_calculate_connection = R"doc()doc";
+
+static const char *__doc_fiction_detail_calculate_fanout_connection_type = R"doc()doc";
+
 static const char *__doc_fiction_detail_calculate_gap = R"doc()doc";
 
 static const char *__doc_fiction_detail_calculate_offset_matrix =
@@ -4658,6 +4664,8 @@ Parameter ``nodes``:
 
 Returns:
     The vector of node pairs.)doc";
+
+static const char *__doc_fiction_detail_calculate_predecessor_gap = R"doc()doc";
 
 static const char *__doc_fiction_detail_color_routing_impl = R"doc()doc";
 
@@ -6696,6 +6704,8 @@ static const char *__doc_fiction_detail_generate_edge_intersection_graph_impl_ps
 static const char *__doc_fiction_detail_generate_edge_intersection_graph_impl_pst = R"doc(Statistics.)doc";
 
 static const char *__doc_fiction_detail_generate_edge_intersection_graph_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_getArray = R"doc()doc";
 
 static const char *__doc_fiction_detail_get_offset =
 R"doc(Utility function to calculate the offset that has to be subtracted
