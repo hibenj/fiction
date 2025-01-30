@@ -17,10 +17,12 @@
 #include <mockturtle/utils/node_map.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
 #include <mockturtle/views/fanout_view.hpp>
+#include <mockturtle/views/names_view.hpp>
 
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <tuple>
 #include <unordered_map>
@@ -394,6 +396,48 @@ compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mocktu
     return ret;
 }
 
+template<typename Ntk>
+std::vector<std::size_t> compute_two_input_indices(const Ntk& ntk, uint64_t lvl)
+{
+    std::vector<size_t> two_input_indices;
+    ntk.foreach_node_in_rank(lvl,
+                             [&ntk, &two_input_indices](const auto& n, const auto& i)
+                             {
+                                 if (ntk.fanin_size(n) == 2 && i != 0)
+                                 {
+                                     two_input_indices.emplace_back(i);
+                                 }
+                             });
+    return two_input_indices;
+}
+
+template<typename Ntk>
+std::pair<std::vector<uint64_t>, std::vector<uint64_t>> compute_wiring(const Ntk& ntk, const std::vector<uint64_t>& new_lines, uint64_t lvl) {
+    // Initialize 2-input indices
+    const auto two_input_indices = compute_two_input_indices(ntk, lvl);
+
+    // Initialize cluster indices
+    std::size_t cluster_index_start = 0;
+
+    // Initialize the x and y vectors
+    std::vector<uint64_t> x(ntk.rank_width(lvl));
+    std::vector<uint64_t> y(ntk.rank_width(lvl));
+
+    // Iterate over all cluster indices
+    for (unsigned long cluster_index_end : two_input_indices) {
+        // Compute x and y for the current cluster
+        for (std::size_t i = cluster_index_start; i < cluster_index_end; ++i) {
+            x[i] = std::accumulate(new_lines.begin() + i, new_lines.begin() + cluster_index_end, 0);
+            y[i] = (i == 0) ? new_lines[i] : y[i - 1] + new_lines[i];
+        }
+
+        // Move to the next cluster
+        cluster_index_start = cluster_index_end + 1;
+    }
+
+    return std::make_pair(x, y);
+}
+
 template <typename Lyt, typename Ntk>
 class orthogonal_planar_v2_impl
 {
@@ -438,6 +482,11 @@ class orthogonal_planar_v2_impl
             const auto variable_tuple = compute_pr_variables(ntk, layout, node2pos, lvl);
             const auto orientation    = std::get<0>(variable_tuple);
             const auto new_lines      = std::get<1>(variable_tuple);
+
+            // std::pair<std::vector<uint64_t>, std::vector<uint64_t>> compute_new_line_wiring();
+            // Input orientation and new_lines
+
+            const auto [x, y] = compute_wiring(ntk, new_lines, lvl);
 
             ntk.foreach_node_in_rank(
                 lvl,
