@@ -28,6 +28,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <numeric>
 
 #if (PROGRESS_BARS)
 #include <mockturtle/utils/progress_bar.hpp>
@@ -297,32 +298,6 @@ uint64_t calculate_allowed_orientation(const Ntk& ntk, mockturtle::node<Ntk> n)
 }
 
 template <typename Ntk, typename Lyt>
-uint64_t calculate_max_new_lines(const Ntk& ntk,
-                       mockturtle::node_map<mockturtle::signal<Lyt>, Ntk>& node2pos, uint32_t lvl)
-{
-    uint64_t max_nl = 0;
-    ntk.foreach_node_in_rank(lvl,
-                             [&ntk, &node2pos, &max_nl](const auto& n, const auto& i)
-                             {
-                                 auto fc = fanins(ntk, n);
-                                 // calculate gaps due to AND gates
-                                 if (fc.fanin_nodes.size() == 2)
-                                 {
-                                     std::sort(fc.fanin_nodes.begin(), fc.fanin_nodes.end(), [&ntk](int a, int b)
-                                               { return ntk.rank_position(a) < ntk.rank_position(b); });
-                                     // compute the max_gap for two fan-ins of  anode
-                                     const auto &pre1 = fc.fanin_nodes[0], &pre2 = fc.fanin_nodes[1];
-
-                                     auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre1]),
-                                          pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
-
-                                     max_nl = std::max(max_nl, static_cast<uint64_t>(pre2_t.y - pre1_t.y));
-                                 }
-                             });
-    return max_nl;
-}
-
-template <typename Ntk, typename Lyt>
 std::tuple<std::vector<uint64_t>, std::vector<uint64_t>>
 compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk> node2pos,
                      uint32_t lvl)
@@ -399,11 +374,11 @@ compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mocktu
 template<typename Ntk>
 std::vector<std::size_t> compute_two_input_indices(const Ntk& ntk, uint64_t lvl)
 {
-    std::vector<size_t> two_input_indices;
+    std::vector<std::size_t> two_input_indices;
     ntk.foreach_node_in_rank(lvl,
-                             [&ntk, &two_input_indices](const auto& n, const auto& i)
+                             [&ntk, &two_input_indices, &lvl](const auto& n, const auto& i)
                              {
-                                 if (ntk.fanin_size(n) == 2 && i != 0)
+                                 if (ntk.fanin_size(n) == 2 && i != 0 && i != ntk.rank_width(lvl) - 1)
                                  {
                                      two_input_indices.emplace_back(i);
                                  }
@@ -411,10 +386,38 @@ std::vector<std::size_t> compute_two_input_indices(const Ntk& ntk, uint64_t lvl)
     return two_input_indices;
 }
 
-template<typename Ntk>
-std::pair<std::vector<uint64_t>, std::vector<uint64_t>> compute_wiring(const Ntk& ntk, const std::vector<uint64_t>& new_lines, uint64_t lvl) {
-    // Initialize 2-input indices
+template <typename Ntk, typename Lyt>
+std::vector<uint64_t> calculate_two_input_new_lines(const Ntk& ntk,
+                                 mockturtle::node_map<mockturtle::signal<Lyt>, Ntk>& node2pos, uint32_t lvl)
+{
+    std::vector<uint64_t> cluster_new_lines;
+    ntk.foreach_node_in_rank(lvl,
+                             [&ntk, &node2pos, &cluster_new_lines](const auto& n)
+                             {
+                                 auto fc = fanins(ntk, n);
+                                 // calculate gaps due to AND gates
+                                 if (fc.fanin_nodes.size() == 2)
+                                 {
+                                     std::sort(fc.fanin_nodes.begin(), fc.fanin_nodes.end(), [&ntk](int a, int b)
+                                               { return ntk.rank_position(a) < ntk.rank_position(b); });
+                                     // compute the max_gap for two fan-ins of  anode
+                                     const auto &pre1 = fc.fanin_nodes[0], &pre2 = fc.fanin_nodes[1];
+
+                                     auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre1]),
+                                          pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
+
+                                     cluster_new_lines.emplace_back(static_cast<uint64_t>(pre2_t.y - pre1_t.y));
+                                 }
+                             });
+    return cluster_new_lines;
+}
+
+template<typename Ntk, typename Lyt>
+std::pair<std::vector<uint64_t>, std::vector<uint64_t>> compute_wiring(const Ntk& ntk, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk>& node2pos, const std::vector<uint64_t>& new_lines_c, uint64_t lvl) {
+    /*// Initialize 2-input indices
     const auto two_input_indices = compute_two_input_indices(ntk, lvl);
+    const auto two_input_new_lines = calculate_two_input_new_lines<Ntk, Lyt>(ntk, node2pos, lvl);
+    const auto max_new_lines_two_inputs = std::max_element(two_input_new_lines.cbegin(), two_input_new_lines.cend());
 
     // Initialize cluster indices
     std::size_t cluster_index_start = 0;
@@ -423,17 +426,119 @@ std::pair<std::vector<uint64_t>, std::vector<uint64_t>> compute_wiring(const Ntk
     std::vector<uint64_t> x(ntk.rank_width(lvl));
     std::vector<uint64_t> y(ntk.rank_width(lvl));
 
-    // Iterate over all cluster indices
-    for (unsigned long cluster_index_end : two_input_indices) {
-        // Compute x and y for the current cluster
-        for (std::size_t i = cluster_index_start; i < cluster_index_end; ++i) {
-            x[i] = std::accumulate(new_lines.begin() + i, new_lines.begin() + cluster_index_end, 0);
-            y[i] = (i == 0) ? new_lines[i] : y[i - 1] + new_lines[i];
+    // Initialize the x and y vectors
+    std::vector<uint64_t> cluster_new_lines(two_input_indices.size() + 1);*/
+
+    // Example
+    std::vector<uint64_t> two_input_indices = {3, 8, 15};
+    std::vector<uint64_t> two_input_new_lines = {0, 2, 5};
+    std::vector<uint64_t> x(19);
+    std::vector<uint64_t> y(19);
+    std::vector<uint64_t> cluster_new_lines(two_input_indices.size() + 1);
+    std::size_t cluster_index_start = 0;
+    std::vector<uint64_t> new_lines = {0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0};
+
+    // if there is no two input gate, then there is only one cluster
+    if(two_input_indices.empty())
+    {
+        for (std::size_t j = 0; j < ntk.rank_width(lvl); ++j) {
+            x[j] = std::accumulate(new_lines.begin() + static_cast<int>(j), new_lines.begin() + static_cast<int>(ntk.rank_width(lvl)), static_cast<uint64_t>(0));
+            y[j] = (j == 0) ? new_lines[j] : y[j - 1] + new_lines[j];
         }
+        return std::make_pair(x, y);
+    }
+
+    // Iterate over all cluster indices
+    uint64_t propagate_right = 0;
+    for (std::size_t i = 0; i < two_input_indices.size() + 1; ++i)
+    {
+        std::size_t cluster_index_end = 0;
+        if (i == two_input_indices.size())
+        {
+            cluster_index_end = new_lines.size();
+        }
+        else
+        {
+            cluster_index_end = two_input_indices[i];
+        }
+
+        // Compute x and y for the current cluster
+        for (std::size_t j = cluster_index_start; j < cluster_index_end; ++j) {
+
+            // adjust x values
+            x[j] = std::accumulate(new_lines.begin() + static_cast<int>(j) + 1, new_lines.begin() + static_cast<int>(cluster_index_end), static_cast<uint64_t>(0));
+
+            // adjust y values with propagation to the right (direction based on a 1D vector)
+            y[j] = (j == 0) ? new_lines[j] : y[j - 1] + new_lines[j];
+        }
+
+        for (std::size_t j = cluster_index_start; j < cluster_index_end; ++j) {
+
+            y[j] += propagate_right;
+        }
+
+        // Save the number of new lines in a cluster
+        cluster_new_lines[i] = x[cluster_index_start];
+
+        // Save the right propagated new_lines
+        propagate_right = (two_input_new_lines[i] > cluster_new_lines[i] + propagate_right) ? 0 : propagate_right + cluster_new_lines[i] - two_input_new_lines[i];
 
         // Move to the next cluster
         cluster_index_start = cluster_index_end + 1;
     }
+
+    uint64_t propagate_left = 0;
+    // propagate left (direction based on a 1D vector)
+    for (std::size_t i = two_input_indices.size(); i > 0; --i)
+    {
+        std::size_t cluster_index_end = 0;
+
+        cluster_index_end = two_input_indices[i - 1];
+
+        if (i == 1)
+        {
+            cluster_index_start = 0;
+        }
+        else
+        {
+            cluster_index_start = two_input_indices[i-2] + 1;
+        }
+
+        // Save the left propagated new_lines
+        propagate_left = (two_input_new_lines[i - 1] > cluster_new_lines[i] + propagate_left) ? 0 : propagate_left + cluster_new_lines[i] - two_input_new_lines[i - 1];
+
+        for (std::size_t j = cluster_index_start; j < cluster_index_end; ++j) {
+            // adjust x values
+            x[j] += propagate_left;
+        }
+    }
+
+    // calculate the final x and y values depending on the max_nl value
+    const auto            max_it = std::max_element(two_input_new_lines.cbegin(), two_input_new_lines.cend());
+    uint64_t max_new_lines_two_inputs = *max_it;
+    std::size_t max_new_lines_two_inputs_index = std::distance(two_input_new_lines.cbegin(), max_it);
+
+    // Find max element in x + y and its index
+    uint64_t max_new_lines = 0;
+    std::size_t mnl_iterator = 0;
+
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        uint64_t sum_xy = x[i] + y[i];
+        if (sum_xy > max_new_lines) {
+            max_new_lines = sum_xy;
+            mnl_iterator = i; // Store the index of the max element
+        }
+    }
+
+    // Determine the center index
+    uint64_t center = 0;
+    if (max_new_lines > max_new_lines_two_inputs) {
+        center = mnl_iterator; // The index at which max_new_lines occurs in x + y
+    } else {
+        center = two_input_indices[max_new_lines_two_inputs_index]; // The corresponding index from two_input_indices
+    }
+
+    // ToDo: Keep in mind to handle two input nodes in case they are at first or last position in a level
 
     return std::make_pair(x, y);
 }
@@ -486,7 +591,7 @@ class orthogonal_planar_v2_impl
             // std::pair<std::vector<uint64_t>, std::vector<uint64_t>> compute_new_line_wiring();
             // Input orientation and new_lines
 
-            const auto [x, y] = compute_wiring(ntk, new_lines, lvl);
+            const auto [x, y] = compute_wiring<decltype(ntk), Lyt>(ntk, node2pos, new_lines, lvl);
 
             ntk.foreach_node_in_rank(
                 lvl,
