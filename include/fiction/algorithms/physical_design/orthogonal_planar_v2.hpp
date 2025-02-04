@@ -443,7 +443,7 @@ std::vector<std::size_t> compute_two_input_indices(const Ntk& ntk, uint64_t lvl)
     ntk.foreach_node_in_rank(lvl,
                              [&ntk, &two_input_indices, &lvl](const auto& n, const auto& i)
                              {
-                                 if (ntk.fanin_size(n) == 2 && i != 0 && i != ntk.rank_width(lvl) - 1)
+                                 if (ntk.fanin_size(n) == 2)
                                  {
                                      two_input_indices.emplace_back(i);
                                  }
@@ -472,7 +472,7 @@ std::vector<uint64_t> calculate_two_input_new_lines(const Ntk&                  
                                      auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre1]),
                                           pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
 
-                                     cluster_new_lines.emplace_back(static_cast<uint64_t>(pre2_t.y - pre1_t.y));
+                                     cluster_new_lines.emplace_back(static_cast<uint64_t>(pre2_t.y - pre1_t.y - 1));
                                  }
                              });
     return cluster_new_lines;
@@ -526,11 +526,11 @@ void adjust_final_values(std::vector<uint64_t>& x, std::vector<uint64_t>& y,
 
             if (i < center)
             {
-                x[i] += diff;
+                y[i] += diff;
             }
             else if (i > center)
             {
-                y[i] += diff;
+                x[i] += diff;
             }
             else
             {
@@ -543,11 +543,11 @@ void adjust_final_values(std::vector<uint64_t>& x, std::vector<uint64_t>& y,
 
             if (i < center)
             {
-                x[i] += diff;
+                y[i] += diff;
             }
             else if (i > center)
             {
-                y[i] += diff;
+                x[i] += diff;
             }
             else
             {
