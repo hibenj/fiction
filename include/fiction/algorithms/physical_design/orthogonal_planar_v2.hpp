@@ -68,10 +68,10 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {0, 0}  // only first two entries used
              }},
              {{
+                 {3, 0},
+                 {2, 0},
                  {0, 0},
-                 {0, 0},
-                 {0, 0},
-                 {0, 0}  // unused
+                 {0, 0}  // only first two entries used
              }}}},
            {{// Free
              {{
@@ -108,10 +108,10 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {0, 0}  // only first two entries used
              }},
              {{
+                 {3, 0},
+                 {3, 0},
                  {0, 0},
-                 {0, 0},
-                 {0, 0},
-                 {0, 0}  // unused
+                 {0, 0}  // only first two entries used
              }}}},
            {{// Free
              {{
@@ -156,10 +156,10 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {0, 0}  // only first two entries used
              }},
              {{
+                 {2, 0},
+                 {2, 1},
                  {0, 0},
-                 {0, 0},
-                 {0, 0},
-                 {0, 0}  // unused
+                 {0, 0}  // only first two entries used
              }}}},
            {{// Free
              {{
@@ -196,10 +196,10 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {0, 0}  // only first two entries used
              }},
              {{
+                 {3, 0},
+                 {3, 1},
                  {0, 0},
-                 {0, 0},
-                 {0, 0},
-                 {0, 0}  // unused
+                 {0, 0}  // only first two entries used
              }}}},
            {{// Free
              {{
@@ -521,8 +521,8 @@ void adjust_final_values(std::vector<uint64_t>& x, std::vector<uint64_t>& y,
         auto it = two_input_map.find(i);
         if (it != two_input_map.end())  // Two fan-in node (found in two_input_indices)
         {
-            std::size_t idx  = it->second;  // Get the corresponding index
-            uint64_t    diff = max - x[i] - y[i] - two_input_new_lines[idx];
+            const std::size_t idx  = it->second;  // Get the corresponding index
+            const uint64_t    diff = max - x[i] - y[i] - two_input_new_lines[idx];
 
             if (i < center)
             {
@@ -539,7 +539,7 @@ void adjust_final_values(std::vector<uint64_t>& x, std::vector<uint64_t>& y,
         }
         else  // One fan-in node
         {
-            uint64_t diff = max - x[i] - y[i];
+            const uint64_t diff = max - x[i] - y[i];
 
             if (i < center)
             {
@@ -584,12 +584,6 @@ compute_wiring(const Ntk& ntk, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk
     std::vector<uint64_t> cluster_new_lines(two_input_indices.size() + 1);
     std::size_t cluster_index_start = 0;
     std::vector<uint64_t> new_lines = {0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0};*/
-
-    // Early termination condition
-    if (std::accumulate(new_lines.cbegin(), new_lines.cend(), 0UL) == 0u)
-    {
-        return std::make_pair(x, y);
-    }
 
     // if there is no two input gate, then there is only one cluster
     if (two_input_indices.empty())
@@ -736,16 +730,14 @@ class orthogonal_planar_v2_impl
             const auto orientation    = std::get<0>(variable_tuple);
             const auto new_lines      = std::get<1>(variable_tuple);
 
-            // std::pair<std::vector<uint64_t>, std::vector<uint64_t>> compute_new_line_wiring();
-            // Input orientation and new_lines
-
-            const auto& [x, y] = compute_wiring<decltype(ntk), Lyt>(ntk, node2pos, new_lines, lvl);
+            const auto wiring = compute_wiring<decltype(ntk), Lyt>(ntk, node2pos, new_lines, lvl);
+            const auto& x = wiring.first;
+            const auto& y = wiring.second;
 
             ntk.foreach_node_in_rank(
                 lvl,
-                [this, &layout, &pi2node, &node2pos, &orientation, &first_pos, &place_t](const auto& n, const auto& i)
+                [this, &layout, &pi2node, &node2pos, &orientation, &first_pos, &place_t, &x, &y](const auto& n, const auto& i)
                 {
-                    std::cout << "Node: " << n << " , Orientation: " << orientation[i] << std::endl;
                     if (!ntk.is_constant(n))
                     {
                         // if node is a PI, move it to its correct position
@@ -786,20 +778,49 @@ class orthogonal_planar_v2_impl
                             const auto& pre   = fc.fanin_nodes[0];
                             auto        pre_t = static_cast<tile<Lyt>>(node2pos[pre]);
 
+                            // Resolve new lines. Special case for the second fan-out of a fan-out node
+                            if (!(ntk.is_fanout(pre) && (orientation[i] == 2 || orientation[i] == 3)))
+                            {
+                                if (x[i] != 0)
+                                {
+                                    wire_east(layout, pre_t, {pre_t.x + x[i] + 1, pre_t.y});
+                                    pre_t.x += x[i];
+                                }
+                                if (y[i] != 0)
+                                {
+                                    wire_south(layout, pre_t, {pre_t.x, pre_t.y + y[i] + 1});
+                                    pre_t.y += y[i];
+                                }
+                            }
                             // horizontal (corresponding to colored east)
                             if (orientation[i] == 0 || orientation[i] == 1)
                             {
                                 place_t.y   = pre_t.y;
                                 place_t.x   = pre_t.x + 1;
-                                node2pos[n] = connect_and_place(layout, place_t, ntk, n, pre_t);
                             }
                             else
                             {
                                 assert(orientation[i] == 2 || orientation[i] == 3);
+
+                                // Resolve new lines. Special case for the second fan-out of a fan-out node
+                                if (ntk.is_fanout(pre) && (orientation[i] == 2 || orientation[i] == 3))
+                                {
+                                    // n the special case the
+                                    if (x[i] != 0)
+                                    {
+                                        pre_t.x += x[i];
+                                    }
+                                    if (y[i] != 0)
+                                    {
+                                        wire_south(layout, pre_t, {pre_t.x, pre_t.y + y[i] + 1});
+                                        pre_t.y += y[i];
+                                    }
+                                }
                                 place_t.y   = pre_t.y + 1;
                                 place_t.x   = pre_t.x;
-                                node2pos[n] = connect_and_place(layout, place_t, ntk, n, pre_t);
                             }
+
+                            node2pos[n] = connect_and_place(layout, place_t, ntk, n, pre_t);
 
                             if (ntk.rank_position(n) == 0)
                             {
@@ -822,6 +843,18 @@ class orthogonal_planar_v2_impl
                             place_t = {pre1_t.x, pre2_t.y};
 
                             node2pos[n] = connect_and_place(layout, place_t, ntk, n, pre1_t, pre2_t, fc.constant_fanin);
+
+                            // Resolve new lines
+                            if (x[i] != 0)
+                            {
+                                node2pos[n] = wire_east(layout, place_t, {place_t.x + x[i] + 1, place_t.y});
+                                place_t.x += x[i];
+                            }
+                            if (y[i] != 0)
+                            {
+                                node2pos[n] = wire_south(layout, place_t, {place_t.x, place_t.y + y[i] + 1});
+                                place_t.y += y[i];
+                            }
 
                             if (ntk.rank_position(n) == 0)
                             {
