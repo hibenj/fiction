@@ -4448,6 +4448,8 @@ Template parameter ``WiringReductionLyt``:
 Parameter ``lyt``:
     The wiring_reduction_layout to which obstructions will be added.)doc";
 
+static const char *__doc_fiction_detail_adjust_final_values = R"doc()doc";
+
 static const char *__doc_fiction_detail_adjust_tile =
 R"doc(This function adjusts the tile and gates in the layout after deleting
 wires. It shifts gates to fill the empty coordinates and adjusts the
