@@ -4620,8 +4620,6 @@ static const char *__doc_fiction_detail_calculate_connection = R"doc()doc";
 
 static const char *__doc_fiction_detail_calculate_fanout_connection_type = R"doc()doc";
 
-static const char *__doc_fiction_detail_calculate_max_new_lines = R"doc()doc";
-
 static const char *__doc_fiction_detail_calculate_offset_matrix =
 R"doc(Calculate an offset matrix based on a to-delete list in a
 `wiring_reduction_layout`.
@@ -4666,6 +4664,8 @@ Returns:
     The vector of node pairs.)doc";
 
 static const char *__doc_fiction_detail_calculate_predecessor_gap = R"doc()doc";
+
+static const char *__doc_fiction_detail_calculate_two_input_new_lines = R"doc()doc";
 
 static const char *__doc_fiction_detail_color_routing_impl = R"doc()doc";
 
