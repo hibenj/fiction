@@ -42,9 +42,9 @@ namespace detail
 {
 
 // Define a 3D array using std::array and encapsulate it in a function
-std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2>, 3>, 2>& get_buffer_lookup()
+std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 3>, 3>, 2>& get_buffer_lookup()
 {
-    static std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2>, 3>, 2> array = {
+    static std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 3>, 3>, 2> array = {
         {    // Array
          {{  // Unconnected
            {{// East
@@ -58,20 +58,34 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {0, 0},
                  {0, 0},
                  {1, 0},
-                 {0, 0}  // gap 1
+                 {0, 0},  // gap 1
+
+             }},
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},  // gap 2 and higher
+
              }}}},
            {{// South
              {{
                  {3, 0},
                  {2, 0},
                  {0, 0},
-                 {0, 0}  // only first two entries used
+                 {0, 0}  // gap 0; only first two entries used
              }},
              {{
                  {3, 0},
                  {2, 0},
                  {0, 0},
-                 {0, 0}  // only first two entries used
+                 {0, 0}  // gap 1
+             }},
+             {{
+                 {3, 0},
+                 {2, 0},
+                 {0, 0},
+                 {0, 0}  // gap 2
              }}}},
            {{// Free
              {{
@@ -85,6 +99,12 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {0, 0},
                  {1, 0},
                  {0, 0}  // gap 1
+             }},
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},
+                 {0, 0}  // gap 2 and higher
              }}}}}},
          {{  // Connected
            {{// East
@@ -99,19 +119,31 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {0, 0},
                  {0, 0},
                  {0, 0}  // gap 1
+             }},
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},
+                 {0, 0}  // gap 2 and higher
              }}}},
            {{// South
              {{
                  {3, 0},
                  {3, 0},
                  {0, 0},
-                 {0, 0}  // only first two entries used
+                 {0, 0}  // gap 0
              }},
              {{
                  {3, 0},
                  {3, 0},
                  {0, 0},
-                 {0, 0}  // only first two entries used
+                 {0, 0}  // gap 1
+             }},
+             {{
+                 {3, 0},
+                 {3, 0},
+                 {0, 0},
+                 {0, 0}  // gap 2 and higher
              }}}},
            {{// Free
              {{
@@ -125,14 +157,20 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {0, 0},
                  {0, 0},
                  {0, 0}  // gap 1
+             }},
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},
+                 {0, 0}  // gap 2
              }}}}}}}};
     return array;
 }
 
 // Define a 3D array using std::array and encapsulate it in a function
-std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2>, 3>, 3>& get_fanout_lookup()
+std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 3>, 3>, 4>& get_fanout_lookup()
 {
-    static std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2>, 3>, 3> array = {
+    static std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 3>, 3>, 4> array = {
         {    // Array
          {{  // Type Fo 1+2
            {{// East
@@ -147,19 +185,31 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {1, 0},
                  {1, 1},
                  {1, 0}  // gap 1
+             }},
+             {{
+                 {1, 0},
+                 {1, 0},
+                 {1, 0},
+                 {1, 0}  // gap 2
              }}}},
            {{// South
              {{
                  {2, 0},
                  {2, 1},
                  {0, 0},
-                 {0, 0}  // only first two entries used
+                 {0, 0}  // gap 0
              }},
              {{
                  {2, 0},
                  {2, 1},
                  {0, 0},
-                 {0, 0}  // only first two entries used
+                 {0, 0}  // gap 1
+             }},
+             {{
+                 {2, 0},
+                 {2, 1},
+                 {0, 0},
+                 {0, 0}  // gap 2
              }}}},
            {{// Free
              {{
@@ -173,6 +223,12 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {1, 0},
                  {2, 0},
                  {1, 0}  // gap 1
+             }},
+             {{
+                 {1, 0},
+                 {1, 0},
+                 {1, 0},
+                 {1, 0}  // gap 2
              }}}}}},
          {{  // Type F1
            {{// East
@@ -187,19 +243,31 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {0, 0},
                  {0, 1},
                  {0, 0}  // gap 1
+             }},
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},
+                 {0, 0}  // gap 2
              }}}},
            {{// South
              {{
                  {3, 0},
                  {3, 1},
                  {0, 0},
-                 {0, 0}  // only first two entries used
+                 {0, 0}  // gap 0
              }},
              {{
                  {3, 0},
                  {3, 1},
                  {0, 0},
-                 {0, 0}  // only first two entries used
+                 {0, 0}  // gap 1
+             }},
+             {{
+                 {3, 0},
+                 {3, 1},
+                 {0, 0},
+                 {0, 0}  // gap 2
              }}}},
            {{// Free
              {{
@@ -213,6 +281,12 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {0, 0},
                  {3, 0},
                  {0, 0}  // gap 1
+             }},
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},
+                 {0, 0}  // gap 2
              }}}}}},
          {{  // Type F2
            {{// East
@@ -227,19 +301,31 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {1, 0},
                  {1, 0},
                  {1, 0}  // gap 1
+             }},
+             {{
+                 {1, 0},
+                 {1, 0},
+                 {1, 0},
+                 {1, 0}  // gap 2
              }}}},
            {{// South
              {{
                  {2, 0},
                  {2, 0},
                  {0, 0},
-                 {0, 0}  // only first two entries used
+                 {0, 0}  // gap 0
              }},
              {{
+                 {2, 0},
+                 {2, 0},
                  {0, 0},
+                 {0, 0}  // gap 1
+             }},
+             {{
+                 {2, 0},
+                 {2, 0},
                  {0, 0},
-                 {0, 0},
-                 {0, 0}  // unused
+                 {0, 0}  // gap 2
              }}}},
            {{// Free
              {{
@@ -253,6 +339,70 @@ std::array<std::array<std::array<std::array<std::pair<uint64_t, uint64_t>, 4>, 2
                  {1, 0},
                  {1, 0},
                  {1, 0}  // gap 1
+             }},
+             {{
+                 {1, 0},
+                 {1, 0},
+                 {1, 0},
+                 {1, 0}  // gap 2
+             }}}}}},
+         {{  // Type F3
+           {{// East
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},
+                 {0, 0}  // gap 0
+             }},
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},
+                 {0, 0}  // gap 1
+             }},
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},
+                 {0, 0}  // gap 2
+             }}}},
+           {{// South
+             {{
+                 {3, 0},
+                 {3, 0},
+                 {0, 0},
+                 {0, 0}  // gap 0
+             }},
+             {{
+                 {3, 0},
+                 {3, 0},
+                 {0, 0},
+                 {0, 0}  // gap 1
+             }},
+             {{
+                 {3, 0},
+                 {3, 0},
+                 {0, 0},
+                 {0, 0}  /// gap 2
+             }}}},
+           {{// Free
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {3, 0},
+                 {3, 0}  // gap 0
+             }},
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},
+                 {0, 0}  // gap 1
+             }},
+             {{
+                 {0, 0},
+                 {0, 0},
+                 {0, 0},
+                 {0, 0}  // gap 2
              }}}}}}}};
     return array;
 }
@@ -261,6 +411,10 @@ template <typename Ntk>
 uint64_t calculate_fanout_connection_type(const Ntk& ntk, mockturtle::node<Ntk> n)
 {
     // order the POs
+    if (ntk.is_po(n))
+    {
+        return 0;
+    }
     auto fo = ntk.fanout(n);
     assert(fo.size() == 2);
     std::sort(fo.begin(), fo.end(), [&ntk](int a, int b) { return ntk.rank_position(a) < ntk.rank_position(b); });
@@ -319,7 +473,7 @@ uint64_t calculate_predecessor_gap(const Ntk& ntk, mockturtle::node_map<mockturt
     auto pre2_t = static_cast<tile<Lyt>>(node2pos[pre_neighbour]);
 
     assert(pre1_t.y > pre2_t.y);
-    return pre1_t.y - pre2_t.y - 1;
+    return std::min(pre1_t.y - pre2_t.y - 1, 2);
 }
 
 template <typename Ntk>
@@ -371,6 +525,7 @@ std::tuple<std::vector<uint64_t>, std::vector<uint64_t>>
 compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk> node2pos,
                      uint32_t lvl)
 {
+    // ToDo: compute the starting orientation
     std::vector<uint64_t> orientation(ntk.rank_width(lvl));
     std::vector<uint64_t> new_lines(ntk.rank_width(lvl));
     // get the lookup tables for the gate types
@@ -404,6 +559,8 @@ compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mocktu
                 // orientation, new_line as input
                 if (ntk.is_fanout(n))
                 {
+                    // calculate the type of connection F1+2 = 0, F1 = 1, F2 = 2;
+                    const uint64_t fanout_connection_type = calculate_fanout_connection_type(ntk, n);
                     if (i != 0)
                     {
                         // calculate the type of connection F1+2 = 0, F1 = 1, F2 = 2;
@@ -413,6 +570,10 @@ compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mocktu
                             fanout_lu[fanout_connection_type][allowed_orientation][gap][orientation[i - 1]];
                         orientation[i] = pair.first;
                         new_lines[i]   = pair.second;
+                    }
+                    else if (fanout_connection_type == 0 || fanout_connection_type == 2)
+                    {
+                        orientation[0] = 1;
                     }
                 }
                 // needs the type of connection (connected, unconnected), allowed_orientation, gap,
@@ -534,7 +695,7 @@ void adjust_final_values(std::vector<uint64_t>& x, std::vector<uint64_t>& y,
             }
             else
             {
-                assert(x[i] + y [i] + two_input_new_lines[idx] == max);
+                assert(x[i] + y[i] + two_input_new_lines[idx] == max);
             }
         }
         else  // One fan-in node
@@ -551,7 +712,7 @@ void adjust_final_values(std::vector<uint64_t>& x, std::vector<uint64_t>& y,
             }
             else
             {
-                assert(x[i] + y [i] == max);
+                assert(x[i] + y[i] == max);
             }
         }
     }
@@ -619,22 +780,20 @@ compute_wiring(const Ntk& ntk, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk
                                    new_lines.begin() + static_cast<int>(cluster_index_end), 0UL);
 
             // adjust y values with propagation to the right (direction based on a 1D vector)
-            y[j] = (j == 0) ? new_lines[j] : y[j - 1] + new_lines[j];
+            y[j] = (j == 0) ? new_lines[j] + propagate_right : y[j - 1] + new_lines[j];
         }
 
-        for (std::size_t j = cluster_index_start; j < cluster_index_end; ++j)
-        {
-            y[j] += propagate_right;
-        }
-
-        // ALso set the new lines for two input nodes
+        // Also set the new lines for two input nodes
         if (cluster_index_start != 0)
         {
             y[cluster_index_start - 1] += propagate_right;
         }
 
         // Save the number of new lines in a cluster
-        cluster_new_lines[i] = x[cluster_index_start];
+        if (cluster_index_start != cluster_index_end)
+        {
+            cluster_new_lines[i] = x[cluster_index_start];
+        }
 
         // Save the right propagated new_lines
         propagate_right = (two_input_new_lines[i] > cluster_new_lines[i] + propagate_right) ?
@@ -675,7 +834,6 @@ compute_wiring(const Ntk& ntk, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk
 
         for (std::size_t j = cluster_index_start; j < cluster_index_end; ++j)
         {
-            // adjust x values
             x[j] += propagate_left;
         }
     }
@@ -722,7 +880,7 @@ class orthogonal_planar_v2_impl
 #endif
 
         tile<Lyt> place_t{0, 0};
-        tile<Lyt> first_pos = {ntk.num_pis(), 0};
+        tile<Lyt> first_pos = {ntk.num_pis() - 1, 0};
 
         for (uint32_t lvl = 0; lvl < ntk.depth() + 1; lvl++)
         {
@@ -730,13 +888,14 @@ class orthogonal_planar_v2_impl
             const auto orientation    = std::get<0>(variable_tuple);
             const auto new_lines      = std::get<1>(variable_tuple);
 
-            const auto wiring = compute_wiring<decltype(ntk), Lyt>(ntk, node2pos, new_lines, lvl);
-            const auto& x = wiring.first;
-            const auto& y = wiring.second;
+            const auto  wiring = compute_wiring<decltype(ntk), Lyt>(ntk, node2pos, new_lines, lvl);
+            const auto& x      = wiring.first;
+            const auto& y      = wiring.second;
 
             ntk.foreach_node_in_rank(
                 lvl,
-                [this, &layout, &pi2node, &node2pos, &orientation, &first_pos, &place_t, &x, &y](const auto& n, const auto& i)
+                [this, &layout, &pi2node, &node2pos, &orientation, &first_pos, &place_t, &x, &y](const auto& n,
+                                                                                                 const auto& i)
                 {
                     if (!ntk.is_constant(n))
                     {
@@ -795,8 +954,8 @@ class orthogonal_planar_v2_impl
                             // horizontal (corresponding to colored east)
                             if (orientation[i] == 0 || orientation[i] == 1)
                             {
-                                place_t.y   = pre_t.y;
-                                place_t.x   = pre_t.x + 1;
+                                place_t.y = pre_t.y;
+                                place_t.x = pre_t.x + 1;
                             }
                             else
                             {
@@ -816,8 +975,8 @@ class orthogonal_planar_v2_impl
                                         pre_t.y += y[i];
                                     }
                                 }
-                                place_t.y   = pre_t.y + 1;
-                                place_t.x   = pre_t.x;
+                                place_t.y = pre_t.y + 1;
+                                place_t.x = pre_t.x;
                             }
 
                             node2pos[n] = connect_and_place(layout, place_t, ntk, n, pre_t);
@@ -864,6 +1023,9 @@ class orthogonal_planar_v2_impl
                     }
                 });
         }
+
+        /*layout.resize({first_pos.x + 1, place_t.y +3, 0});
+        debug::write_dot_layout(layout);*/
 
         std::unordered_map<int, int> countMap;
         int                          add_line = 0;
