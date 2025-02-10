@@ -520,6 +520,50 @@ uint64_t calculate_allowed_orientation(const Ntk& ntk, mockturtle::node<Ntk> n)
     return 2;
 }
 
+template <typename Ntk>
+int calculate_start_orientation(Ntk& ntk, uint32_t lvl)
+{
+    int orientation = 0;
+    if (lvl == 0)
+    {
+        return orientation;
+    }
+    ntk.foreach_node_in_rank(lvl,
+                             [&ntk, &orientation](const auto& n)
+                             {
+                                 if (orientation > 0)
+                                 {
+                                     return;
+                                 }
+                                 if (ntk.fanin_size(n) == 2)
+                                 {
+                                     // it is 3 but return makes -1
+                                     orientation = 4;
+                                     return;
+                                 }
+                                 if (const auto fc = fanins(ntk, n); fc.fanin_nodes.size() == 1)
+                                 {
+                                     const auto& pre = fc.fanin_nodes[0];
+                                     if (ntk.is_fanout(pre) && ntk.fanout_size(pre) == 2)
+                                     {
+                                         // it is 0 but return makes -1
+                                         orientation = 1;
+                                         return;
+                                     }
+                                 }
+                                 if(ntk.fanout_size(n) == 2)
+                                 {
+                                     // it is 0 but return makes -1
+                                     orientation = 1;
+                                     return;
+                                 }
+
+                             });
+    return (orientation == 0) ? 0 : (orientation - 1);
+    // instead of just returning 0, here the buffers could be wired in a way they are closer together and hence overhead
+    // produced by two input nodes is reduced
+}
+
 template <typename Ntk, typename Lyt>
 std::tuple<std::vector<uint64_t>, std::vector<uint64_t>>
 compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk> node2pos,
@@ -554,18 +598,17 @@ compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mocktu
             {
                 // allowed orientation Flag e = 0, s = 1, free = 2
                 const uint64_t allowed_orientation = calculate_allowed_orientation(ntk, n);
+                assert(allowed_orientation < 3);
 
                 // needs the type of connection (F1+2, F1, F2), allowed_orientation, gap,
                 // orientation, new_line as input
                 if (ntk.is_fanout(n))
                 {
-                    // calculate the type of connection F1+2 = 0, F1 = 1, F2 = 2;
+                    // calculate the type of connection F1+2 = 0, F1 = 1, F2 = 2, F0 = 3;
                     const uint64_t fanout_connection_type = calculate_fanout_connection_type(ntk, n);
+                    assert(fanout_connection_type < 4);
                     if (i != 0)
                     {
-                        // calculate the type of connection F1+2 = 0, F1 = 1, F2 = 2;
-                        const uint64_t fanout_connection_type = calculate_fanout_connection_type(ntk, n);
-
                         const std::pair<uint64_t, uint64_t> pair =
                             fanout_lu[fanout_connection_type][allowed_orientation][gap][orientation[i - 1]];
                         orientation[i] = pair.first;
@@ -573,7 +616,8 @@ compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mocktu
                     }
                     else if (fanout_connection_type == 0 || fanout_connection_type == 2)
                     {
-                        orientation[0] = 1;
+                        // i == 0
+                        orientation[i] = 1;
                     }
                 }
                 // needs the type of connection (connected, unconnected), allowed_orientation, gap,
@@ -588,6 +632,11 @@ compute_pr_variables(const Ntk& ntk, const Lyt& lyt, mockturtle::node_map<mocktu
                             buffer_lu[connected][allowed_orientation][gap][orientation[i - 1]];
                         orientation[i] = pair.first;
                         new_lines[i]   = pair.second;
+                    }
+                    else
+                    {
+                        // i == 0
+                        orientation[i] = calculate_start_orientation(ntk, lvl);
                     }
                 }
             }
@@ -738,7 +787,7 @@ compute_wiring(const Ntk& ntk, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk
     std::vector<uint64_t> cluster_new_lines(two_input_indices.size() + 1);
 
     // Example
-    /*std::vector<uint64_t> two_input_indices = {0, 4, 9, 16, 21};
+    /*std::vector<uint64_t> two_input_indices = {0, 4, 9, 16, 20};
     std::vector<uint64_t> two_input_new_lines = {0, 0, 2, 5, 0};
     std::vector<uint64_t> x(21);
     std::vector<uint64_t> y(21);
@@ -780,7 +829,8 @@ compute_wiring(const Ntk& ntk, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk
                                    new_lines.begin() + static_cast<int>(cluster_index_end), 0UL);
 
             // adjust y values with propagation to the right (direction based on a 1D vector)
-            y[j] = (j == 0) ? new_lines[j] + propagate_right : y[j - 1] + new_lines[j];
+            y[j] = (j == 0) ? new_lines[j] : y[j - 1] + new_lines[j];
+            y[j] += (j == cluster_index_start) ? propagate_right : 0;
         }
 
         // Also set the new lines for two input nodes
@@ -993,6 +1043,22 @@ class orthogonal_planar_v2_impl
                             auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre1]),
                                  pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
 
+                            // Resolve new lines
+                            if (x[i] != 0)
+                            {
+                                wire_east(layout, pre1_t, {pre1_t.x + x[i] + 1, pre1_t.y});
+                                wire_east(layout, pre2_t, {pre2_t.x + x[i] + 1, pre2_t.y});
+                                pre1_t.x += x[i];
+                                pre2_t.x += x[i];
+                            }
+                            if (y[i] != 0)
+                            {
+                                wire_south(layout, pre1_t, {pre1_t.x, pre1_t.y + y[i] + 1});
+                                wire_south(layout, pre2_t, {pre2_t.x, pre2_t.y + y[i] + 1});
+                                pre1_t.y += y[i];
+                                pre2_t.y += y[i];
+                            }
+
                             // pre1_t is the northwards/eastern tile.
                             if (pre2_t.y < pre1_t.y)
                             {
@@ -1003,18 +1069,6 @@ class orthogonal_planar_v2_impl
 
                             node2pos[n] = connect_and_place(layout, place_t, ntk, n, pre1_t, pre2_t, fc.constant_fanin);
 
-                            // Resolve new lines
-                            if (x[i] != 0)
-                            {
-                                node2pos[n] = wire_east(layout, place_t, {place_t.x + x[i] + 1, place_t.y});
-                                place_t.x += x[i];
-                            }
-                            if (y[i] != 0)
-                            {
-                                node2pos[n] = wire_south(layout, place_t, {place_t.x, place_t.y + y[i] + 1});
-                                place_t.y += y[i];
-                            }
-
                             if (ntk.rank_position(n) == 0)
                             {
                                 first_pos = place_t;
@@ -1024,8 +1078,8 @@ class orthogonal_planar_v2_impl
                 });
         }
 
-        /*layout.resize({first_pos.x + 1, place_t.y +3, 0});
-        debug::write_dot_layout(layout);*/
+        // layout.resize({first_pos.x + 1, place_t.y +3, 0});
+        // debug::write_dot_layout(layout);
 
         std::unordered_map<int, int> countMap;
         int                          add_line = 0;
@@ -1070,7 +1124,7 @@ class orthogonal_planar_v2_impl
         // layout.resize({10, 10, 0});
 
         // restore possibly set signal names
-        // restore_names(ntk, layout, node2pos);
+        restore_names(ntk, layout, node2pos);
 
         // statistical information
         pst.x_size    = layout.x() + 1;
