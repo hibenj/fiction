@@ -4667,6 +4667,8 @@ Returns:
 
 static const char *__doc_fiction_detail_calculate_predecessor_gap = R"doc()doc";
 
+static const char *__doc_fiction_detail_calculate_start_orientation = R"doc()doc";
+
 static const char *__doc_fiction_detail_calculate_two_input_new_lines = R"doc()doc";
 
 static const char *__doc_fiction_detail_color_routing_impl = R"doc()doc";
