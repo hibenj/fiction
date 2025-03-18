@@ -3,6 +3,7 @@
 //
 
 #include "fiction/algorithms/physical_design/orthogonal_planar.hpp"
+#include "fiction/algorithms/physical_design/orthogonal_planar_v2.hpp"
 
 #include "fiction/algorithms/network_transformation/inverter_substitution.hpp"
 #include "fiction/algorithms/network_transformation/network_balancing.hpp"
@@ -172,14 +173,16 @@ int main()  // NOLINT
         const auto _b = fiction::network_balancing<fiction::technology_network>(
             fiction::fanout_substitution<fiction::technology_network>(benchmark_network), b_ps);
 
-        if (_b.size() > 10000)
+        if (_b.size() > 1000)
         {
             continue;
         }
 
         auto planarized_b = fiction::node_duplication_planarization<fiction::technology_network>(_b);
 
-        if (planarized_b.num_gates() > 200000)
+        std::cout << "planarization finished\n";
+
+        if (planarized_b.num_gates() > 100000)
         {
             continue;
         }
@@ -191,6 +194,11 @@ int main()  // NOLINT
         assert(cec_m.has_value());
 
         const auto gate_level_layout = fiction::orthogonal_planar<gate_lyt>(planarized_b, {}, &orthogonal_planar_stats);
+
+        std::cout << "layout finished\n";
+
+        // fiction::debug::write_dot_network(planarized_b);
+        // fiction::debug::write_dot_layout(gate_level_layout);
 
         bool planar_layout = false;
         if (gate_level_layout.num_crossings() == 0)
@@ -207,7 +215,7 @@ int main()  // NOLINT
 
         // check equivalence for the planar layout
         const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
-        bool       eq;
+        bool       eq = false;
         if (miter)
         {
             mockturtle::equivalence_checking_stats st;
@@ -215,6 +223,8 @@ int main()  // NOLINT
             const auto ce = mockturtle::equivalence_checking(*miter, {}, &st);
             eq            = ce.value();
         }
+
+        std::cout << "equivalence finished\n";
 
         // Ortho part
         fiction::orthogonal_physical_design_stats stats{};
@@ -229,12 +239,12 @@ int main()  // NOLINT
         fiction::gate_level_drv_params ps_post{};
         fiction::gate_level_drv_stats  st_post{};
 
-        // fiction::gate_level_drvs(gate_level_layout, ps_post, &st_post);
+        fiction::gate_level_drvs(gate_level_layout, ps_post, &st_post);
         // fiction::print_gate_level_layout(std::cout, gate_level_layout);
 
         // const auto layout_copy = gate_level_layout.clone();
 
-        fiction::post_layout_optimization(gate_level_layout, params, &post_layout_optimization_stats);
+        // fiction::post_layout_optimization(gate_level_layout, params, &post_layout_optimization_stats);
 
         /*auto ortho_cell_layout_post =
             fiction::apply_gate_library<qca_cell_level_layout, fiction::qca_one_library>(gate_level_layout);
@@ -251,14 +261,14 @@ int main()  // NOLINT
 
         // check equivalence
         const auto miter_post = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
-        bool       eq_post;
-        if (miter_post)
+        bool       eq_post = false;
+        /*if (miter_post)
         {
             mockturtle::equivalence_checking_stats st_post;
 
             const auto ce = mockturtle::equivalence_checking(*miter_post, {}, &st_post);
             eq_post       = ce.value();
-        }
+        }*/
 
         orthogonal_planar_exp(entry.path().filename().string(), planarized_b.num_pis(), planarized_b.num_pos(),
                               planarized_b.num_gates(), width, height, width_after_optimization,
@@ -353,7 +363,7 @@ int main()  // NOLINT
             *fiction::virtual_miter<fiction::technology_network>(benchmark_network, substituted_b), {}, &eq_st);
         assert(cec_m.has_value());
 
-        const auto gate_level_layout = fiction::orthogonal_planar<gate_lyt>(substituted_b, {}, &orthogonal_planar_stats);
+        const auto gate_level_layout = fiction::orthogonal_planar_v2<gate_lyt>(substituted_b, {}, &orthogonal_planar_stats);
 
         bool planar_layout = false;
         if (gate_level_layout.num_crossings() == 0)
@@ -366,10 +376,10 @@ int main()  // NOLINT
 
         fiction::gate_level_drvs(gate_level_layout, ps_p, &st_p);
 
-        fiction::debug::write_dot_layout(gate_level_layout);
+        // fiction::debug::write_dot_layout(gate_level_layout);
 
         // check equivalence for the planar layout
-        const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout);
+        const auto miter = mockturtle::miter<mockturtle::klut_network>(substituted_b, gate_level_layout);
         bool       eq    = false;
         if (miter)
         {
@@ -408,7 +418,7 @@ int main()  // NOLINT
         // fiction::print_gate_level_layout(std::cout, gate_level_layout);
 
         // const auto layout_copy = gate_level_layout.clone();
-        fiction::post_layout_optimization(gate_level_layout, params, &post_layout_optimization_stats);
+        // fiction::post_layout_optimization(gate_level_layout, params, &post_layout_optimization_stats);
 
         /*auto ortho_cell_layout_post =
             fiction::apply_gate_library<qca_cell_level_layout, fiction::qca_one_library>(gate_level_layout);
