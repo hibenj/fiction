@@ -13,7 +13,6 @@
 
 #include <mockturtle/algorithms/equivalence_checking.hpp>
 #include <mockturtle/networks/aig.hpp>
-#include <mockturtle/views/rank_view.hpp>
 
 using namespace fiction;
 
@@ -39,9 +38,9 @@ TEST_CASE("Planarize technology ntk", "[node-duplication-planarization]")
     const auto tec_b = fiction::network_balancing<fiction::technology_network>(
         fiction::fanout_substitution<fiction::technology_network>(tec), ps);
 
-    const auto vpi_r = mockturtle::rank_view(tec_b);
+    const auto vpi_r = fiction::mutable_rank_view(tec_b);
 
-    auto planarized_maj = node_duplication_planarization<technology_network>(tec_b);
+    auto planarized_maj = node_duplication_planarization(vpi_r);
 
     mockturtle::equivalence_checking_stats st;
     const auto                             cec_m =
@@ -74,9 +73,9 @@ TEST_CASE("Planarize ntk with 3-ary node", "[node-duplication-planarization]")
     const auto tec_b = fiction::network_balancing<fiction::technology_network>(
         fiction::fanout_substitution<fiction::technology_network>(tec), ps);
 
-    const auto vpi_r = mockturtle::rank_view(tec_b);
+    const auto vpi_r = fiction::mutable_rank_view(tec_b);
 
-    auto planarized_maj = node_duplication_planarization<technology_network>(tec_b);
+    auto planarized_maj = node_duplication_planarization(vpi_r);
 
     mockturtle::equivalence_checking_stats st;
     const auto                             cec_m =
@@ -109,9 +108,9 @@ TEST_CASE("Buffer AIG and planarize technology_network", "[node-duplication-plan
     const auto aig_b = fiction::network_balancing<fiction::technology_network>(
         fiction::fanout_substitution<fiction::technology_network>(aig), ps);
 
-    const auto vpi_r = mockturtle::rank_view(aig_b);
+    const auto vpi_r = fiction::mutable_rank_view(aig_b);
 
-    auto planarized_maj = node_duplication_planarization<technology_network>(aig_b);
+    auto planarized_maj = node_duplication_planarization(vpi_r);
 
     mockturtle::equivalence_checking_stats st;
     const auto                             cec_m =
@@ -137,9 +136,9 @@ TEST_CASE("Buffer AIG and planarize technology_network 2", "[node-duplication-pl
     const auto aig_b = fiction::network_balancing<fiction::technology_network>(
         fiction::fanout_substitution<fiction::technology_network>(aig), ps);
 
-    const auto vpi_r = mockturtle::rank_view(aig_b);
+    const auto vpi_r = fiction::mutable_rank_view(aig_b);
 
-    auto planarized_maj = node_duplication_planarization<technology_network>(aig_b);
+    auto planarized_maj = node_duplication_planarization(vpi_r);
 
     mockturtle::equivalence_checking_stats st;
     const auto                             cec_m =
@@ -168,9 +167,9 @@ TEST_CASE("Planarize multi output network", "[node-duplication-planarization]")
     const auto aig_b = fiction::network_balancing<fiction::technology_network>(
         fiction::fanout_substitution<fiction::technology_network>(aig), ps);
 
-    const auto vpi_r = mockturtle::rank_view(aig_b);
+    const auto vpi_r = fiction::mutable_rank_view(aig_b);
 
-    auto planarized_maj = node_duplication_planarization<technology_network>(aig_b);
+    auto planarized_maj = node_duplication_planarization(vpi_r);
 
     mockturtle::equivalence_checking_stats st;
     const auto                             cec_m =

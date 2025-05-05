@@ -600,19 +600,22 @@ class node_duplication_planarization_impl
         return true;
     }
 
-    [[nodiscard]] mutable_rank_view<virtual_pi_network<Ntk>>
+    [[nodiscard]] virtual_pi_network<Ntk>
     run(std::vector<std::vector<mockturtle::node<Ntk>>>& ntk_lvls_new)
     {
         // Initialize the POs
         std::vector<mockturtle::node<Ntk>> pos{};
         pos.reserve(ntk.num_pos());
-        ntk.foreach_po(
+        ntk.foreach_node(
             [this, &pos](const auto n)
             {
-                const auto po = ntk.get_node(n);
-                if (std::find(pos.begin(), pos.end(), po) == pos.end())
+                if(ntk.is_po(n))
                 {
-                    pos.push_back(po);
+                    const auto po = ntk.get_node(n);
+                    if (std::find(pos.begin(), pos.end(), po) == pos.end())
+                    {
+                        pos.push_back(po);
+                    }
                 }
             });
 
@@ -674,13 +677,16 @@ class node_duplication_planarization_impl
         }
 
         // create virtual pi network
-        const auto virtual_ntk = create_virtual_pi_ntk_from_duplicated_nodes(ntk, ntk_lvls, ntk_lvls_new);
+        auto virtual_ntk = create_virtual_pi_ntk_from_duplicated_nodes(ntk, ntk_lvls, ntk_lvls_new);
 
         // the ntk_levels were created in reverse order
         std::reverse(ntk_lvls_new.begin(), ntk_lvls_new.end());
 
         // assign the ranks in the virtual network based on ntk_lvls_new
-        return mutable_rank_view(virtual_ntk, ntk_lvls_new);
+        virtual_ntk.update_ranks();
+        virtual_ntk.set_all_ranks(ntk_lvls_new);
+
+        return virtual_ntk;
     }
 
   private:
@@ -726,11 +732,12 @@ class node_duplication_planarization_impl
  * @return A view of the planarized virtual_pi_network created in the format of mutable_rank_view.
  */
 template <typename NtkSrc>
-[[nodiscard]] mutable_rank_view<virtual_pi_network<NtkSrc>>
+[[nodiscard]] virtual_pi_network<NtkSrc>
 node_duplication_planarization(const NtkSrc& ntk_src, const node_duplication_planarization_params& ps = {})
 {
     static_assert(mockturtle::is_network_type_v<NtkSrc>, "NtkSrc is not a network type");
     static_assert(mockturtle::has_create_node_v<NtkSrc>, "NtkSrc does not implement the create_node function");
+    static_assert(mockturtle::has_rank_position_v<NtkSrc>, "NtkSrc does not implement the rank_position function");
 
     assert(is_balanced(ntk_src) && "Networks have to be balanced for this duplication");
 

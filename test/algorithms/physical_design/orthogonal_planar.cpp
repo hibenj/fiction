@@ -259,7 +259,9 @@ TEST_CASE("Test blueprints", "[orthogonal-planar]")
 
     const auto maj_tec_b = network_balancing<technology_network>(fanout_substitution<technology_network>(maj_t), ps);
 
-    auto planarized_maj = fiction::node_duplication_planarization<technology_network>(maj_tec_b);
+    const auto maj_r = fiction::mutable_rank_view(maj_tec_b);
+
+    auto planarized_maj = fiction::node_duplication_planarization(maj_r);
 
     const auto layout = orthogonal_planar<gate_layout>(planarized_maj);
 
@@ -378,7 +380,9 @@ TEST_CASE("Backward Propagation", "[orthogonal-planar]")
 
     const detail::operation_mode mode = detail::operation_mode::AND_OR_ONLY;
 
-    auto planarized_ntk = node_duplication_planarization<technology_network>(fo_ntk);
+    const auto fo_ntk_r = fiction::mutable_rank_view(fo_ntk);
+
+    auto planarized_ntk = node_duplication_planarization(fo_ntk_r);
 
     // auto fo_ntk_substituted = inverter_substitution(planarized_ntk, mode);
 

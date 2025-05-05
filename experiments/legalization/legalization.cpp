@@ -3,6 +3,7 @@
 //
 
 #include "experiments.hpp"
+#include "fiction/algorithms/graph/mincross.hpp"
 #include "fiction/algorithms/network_transformation/fanout_substitution.hpp"
 #include "fiction/algorithms/properties/check_planarity.hpp"
 #include "fiction/utils/debug/network_writer.hpp"
@@ -58,29 +59,7 @@ int main()  // NOLINT
     for (const auto& entry :
          std::filesystem::directory_iterator("/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93"))
     {
-        continue;
         fmt::print("[i] processing {}\n", entry.path().filename().string());
-
-        /*if ( "sqrt8ml.v" != entry.path().filename().string())
-        {
-            continue;
-        }*/
-        /*if ( "C1355.v" != entry.path().filename().string())
-        {
-            continue;
-        }*/
-        if ("C432.v" == entry.path().filename().string())
-        {
-            continue;
-        }
-        if ("ex4p.v" == entry.path().filename().string())
-        {
-            continue;
-        }
-        if ("apex1.v" == entry.path().filename().string())
-        {
-            continue;
-        }
 
         std::ostringstream os{};
 
@@ -90,46 +69,11 @@ int main()  // NOLINT
 
         auto benchmark_network = *nets.front();
 
-        bool cont = false;
-        benchmark_network.foreach_pi(
-            [&benchmark_network, &cont](auto pi)
-            {
-                if (benchmark_network.is_po(pi))
-                {
-                    cont = true;
-                    // std::cout << "Pi is Po\n";
-                }
-            });
-        if (cont)
-        {
-            continue;
-        }
-
-        // fiction::debug::write_dot_network(benchmark_network);
-
-        // std::cout << benchmark_network.num_gates() << std::endl;
-
         fiction::network_balancing_params ps;
         ps.unify_outputs = true;
 
         const auto _b = fiction::network_balancing<fiction::technology_network>(
             fiction::fanout_substitution<fiction::technology_network>(benchmark_network), ps);
-
-        // happens with exp4.v
-        /*const auto fc = fanins(_b, 9213);
-
-        std::cout << "Node 9213: " << fc.fanin_nodes.size() << std::endl;
-        std::cout << "Node 9213: " << _b.is_buf(9213) << std::endl;*/
-
-        // happens with apex1.v
-        /*const auto fc = fanins(_b, 8771);
-
-        std::cout << "Node 9213: " << fc.fanin_nodes.size() << std::endl;
-        std::cout << "Node 9213: " << _b.is_buf(8771) << std::endl;*/
-
-        // std::cout << _b.num_gates() << std::endl;
-
-        // fiction::debug::write_dot_network(_b);
 
         if (_b.size() > 10000)
         {
@@ -142,7 +86,8 @@ int main()  // NOLINT
             continue;
         }
 
-        const auto planarized_b = fiction::node_duplication_planarization<fiction::technology_network>(_b);
+        const auto _r = fiction::mutable_rank_view(_b);
+        const auto planarized_b = fiction::node_duplication_planarization(_r);
         const auto is_planar    = fiction::check_planarity(planarized_b);
         if (planarized_b.size() > 20000)
         {
@@ -152,7 +97,6 @@ int main()  // NOLINT
         const auto                             cec_m = mockturtle::equivalence_checking(
             *fiction::virtual_miter<fiction::technology_network>(benchmark_network, planarized_b), {}, &st);
         assert(cec_m.has_value());
-        std::cout << cec_m.value() << std::endl;
 
         using gate_lyt = fiction::gate_level_layout<
             fiction::clocked_layout<fiction::tile_based_layout<fiction::cartesian_layout<>>>>;
@@ -223,7 +167,7 @@ int main()  // NOLINT
     fiction::debug::write_dot_network(_b, "t_b");
     fiction::debug::write_dot_network(planarized_b, "network_b");*/
 
-    static constexpr const uint64_t bench_select = (fiction_experiments::iscas85);  // fiction_experiments::iscas85 & ~
+    static constexpr const uint64_t bench_select = (fiction_experiments::trindade16 | fiction_experiments::fontes18 | fiction_experiments::epfl);  // fiction_experiments::iscas85 & ~
     // fiction_experiments::trindade16 | fiction_experiments::fontes18 | fiction_experiments::epfl |
     // fiction_experiments::iscas85 static constexpr const uint64_t bench_select =
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
@@ -233,7 +177,7 @@ int main()  // NOLINT
         fiction::network_balancing_params ps;
         ps.unify_outputs = true;
 
-        bool cont = false;
+        /*bool cont = false;
         benchmark_network.foreach_pi(
             [&benchmark_network, &cont](auto pi)
             {
@@ -246,12 +190,12 @@ int main()  // NOLINT
         if (cont)
         {
             continue;
-        }
+        }*/
 
         const auto _b = fiction::network_balancing<fiction::technology_network>(
             fiction::fanout_substitution<fiction::technology_network>(benchmark_network), ps);
 
-        if (_b.size() > 10000)
+        if (_b.size() > 20000)
         {
             /*wiring_reduction_exp(benchmark, benchmark_network.num_pis(), 0, benchmark_network.num_pos(),
                                  benchmark_network.num_gates(), _b.num_gates(), _b.num_gates(), 0, 0, "TEST");
@@ -260,11 +204,45 @@ int main()  // NOLINT
             continue;
         }
 
-        const auto planarized_b = fiction::node_duplication_planarization<fiction::technology_network>(_b);
+
+        auto _r = fiction::mutable_rank_view(_b);
+        fiction::mincross_params p_min{};
+        p_min.fixed_pis = true;
+        fiction::mincross_stats st_min{};
+        auto mincross_b = fiction::mincross(_r, p_min, &st_min, false);
+        std::cout << "Crossings before: " << st_min.num_crossings << std::endl;
+        mincross_b = fiction::mincross(_r, p_min, &st_min);
+        std::cout << "Crossings after: " << st_min.num_crossings << std::endl;
+        std::cout << st_min.num_crossings << std::endl;
+
+        std::cout << "Case Initial Ranking:\n";
+        _r.foreach_node([&](const auto n){
+                            if (_r.is_po(n))
+                            {
+                                std::cout<< "Node: " << n << " with position: " << _r.rank_position(n) << std::endl;
+                            }
+                        });
+
+        _r.foreach_po([&](const auto n){
+                          std::cout<< "PO: " << n << " with position: " << _r.rank_position(n) << std::endl;
+                      });
+
+        std::cout << "Case Mincross:\n";
+        mincross_b.foreach_node([&](const auto n){
+                                    if (mincross_b.is_po(n))
+                                    {
+                                        std::cout<< "Node: " << n << " with position: " << mincross_b.rank_position(n) << std::endl;
+                                    }
+                                });
+        mincross_b.foreach_po([&](const auto n){
+                          std::cout<< "PO: " << n << " with position: " << mincross_b.rank_position(n) << std::endl;
+                      });
+
+        const auto planarized_b = fiction::node_duplication_planarization(mincross_b);
 
         const auto is_planar = fiction::check_planarity(planarized_b);
 
-        if (planarized_b.size() > 20000)
+        /*if (planarized_b.size() > 20000)
         {
             wiring_reduction_exp(benchmark, benchmark_network.num_pis(), planarized_b.num_virtual_pis(),
                                  benchmark_network.num_pos(), benchmark_network.num_gates(), _b.num_gates(),
@@ -272,7 +250,7 @@ int main()  // NOLINT
             wiring_reduction_exp.save();
             wiring_reduction_exp.table();
             continue;
-        }
+        }*/
 
         // check equivalence
         mockturtle::equivalence_checking_stats st;
@@ -280,7 +258,7 @@ int main()  // NOLINT
             *fiction::virtual_miter<fiction::technology_network>(benchmark_network, planarized_b), {}, &st);
         assert(cec_m.has_value());
 
-        auto name = mockturtle::names_view(planarized_b);
+        /*auto name = mockturtle::names_view(planarized_b);
 
         fiction::restore_names(benchmark_network, name);
 
@@ -306,9 +284,9 @@ int main()  // NOLINT
         std::cout << "PO layout : " << layout.num_pos() << "\n";
 
         fiction::gate_level_drv_params ps_d{};
-        fiction::gate_level_drv_stats  st_d{};
+        fiction::gate_level_drv_stats  st_d{};*/
 
-        fiction::gate_level_drvs(layout, ps_d, &st_d);
+        // fiction::gate_level_drvs(layout, ps_d, &st_d);
 
         /*fiction::equivalence_checking_stats eq_s_ortho{};
         // check equivalence
@@ -319,7 +297,7 @@ int main()  // NOLINT
                                             eq_stats_ortho == fiction::eq_type::WEAK   ? "WEAK" :
                                                                                          "NO";*/
 
-        const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, layout);
+        /*const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, layout);
         bool       eq;
         if (miter)
         {
@@ -327,7 +305,7 @@ int main()  // NOLINT
 
             const auto ce = mockturtle::equivalence_checking(*miter, {}, &st);
             eq            = ce.value();
-        }
+        }*/
 
         // fiction::debug::write_dot_layout(layout);
         /*fiction::debug::write_dot_network(_b, "ntk_b");
@@ -336,7 +314,7 @@ int main()  // NOLINT
         // log results
         wiring_reduction_exp(benchmark, benchmark_network.num_pis(), planarized_b.num_virtual_pis(),
                              benchmark_network.num_pos(), benchmark_network.num_gates(), _b.num_gates(),
-                             planarized_b.num_gates(), is_planar, cec_m.value(), eq);
+                             planarized_b.num_gates(), is_planar, cec_m.value(), 0);
 
         wiring_reduction_exp.save();
         wiring_reduction_exp.table();
