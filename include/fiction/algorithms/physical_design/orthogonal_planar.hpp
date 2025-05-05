@@ -893,10 +893,10 @@ compute_wiring(const Ntk& ntk, mockturtle::node_map<mockturtle::signal<Lyt>, Ntk
 }
 
 template <typename Lyt, typename Ntk>
-class orthogonal_planar_v2_impl
+class orthogonal_planar_impl
 {
   public:
-    orthogonal_planar_v2_impl(const Ntk& src, const orthogonal_physical_design_params& p,
+    orthogonal_planar_impl(const Ntk& src, const orthogonal_physical_design_params& p,
                               orthogonal_physical_design_stats& st) :
             ntk{mockturtle::names_view(mockturtle::fanout_view(src))},
             ps{p},
@@ -1149,7 +1149,7 @@ class orthogonal_planar_v2_impl
  * Description
  */
 template <typename Lyt, typename Ntk>
-Lyt orthogonal_planar_v2(const Ntk& ntk, orthogonal_physical_design_params ps = {},
+Lyt orthogonal_planar(const Ntk& ntk, orthogonal_physical_design_params ps = {},
                          orthogonal_physical_design_stats* pst = nullptr)
 {
     static_assert(is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
@@ -1170,7 +1170,7 @@ Lyt orthogonal_planar_v2(const Ntk& ntk, orthogonal_physical_design_params ps = 
     }
 
     orthogonal_physical_design_stats            st{};
-    detail::orthogonal_planar_v2_impl<Lyt, Ntk> p{ntk, ps, st};
+    detail::orthogonal_planar_impl<Lyt, Ntk> p{ntk, ps, st};
 
     auto result = p.run();
 

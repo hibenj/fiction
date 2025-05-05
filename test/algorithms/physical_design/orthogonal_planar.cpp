@@ -12,7 +12,6 @@
 #include "utils/blueprints/network_blueprints.hpp"
 #include "utils/equivalence_checking_utils.hpp"
 
-#include <fiction/algorithms/network_transformation/inverter_substitution.hpp>
 #include <fiction/algorithms/physical_design/apply_gate_library.hpp>
 #include <fiction/algorithms/physical_design/orthogonal_planar.hpp>
 #include <fiction/layouts/cartesian_layout.hpp>
@@ -378,13 +377,9 @@ TEST_CASE("Backward Propagation", "[orthogonal-planar]")
 
     const auto fo_ntk = network_balancing<technology_network>(fanout_substitution<technology_network>(ntk), ps);
 
-    const detail::operation_mode mode = detail::operation_mode::AND_OR_ONLY;
-
     const auto fo_ntk_r = fiction::mutable_rank_view(fo_ntk);
 
     auto planarized_ntk = node_duplication_planarization(fo_ntk_r);
-
-    // auto fo_ntk_substituted = inverter_substitution(planarized_ntk, mode);
 
     // planarized_ntk.update_ranks();
 
