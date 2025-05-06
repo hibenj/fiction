@@ -224,6 +224,52 @@ int main()  // NOLINT
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
         // continue;
+        fiction::technology_network tec{};
+        const auto                  pi0 = tec.create_pi();  // Cin
+        const auto                  pi1 = tec.create_pi();  // A
+        const auto                  pi2 = tec.create_pi();  // B
+        // level 1
+        const auto s10 = tec.create_buf(pi0);
+        const auto s11 = tec.create_buf(pi1);
+        const auto s12 = tec.create_buf(pi2);
+        // level2
+        const auto s20 = tec.create_buf(s10);
+        const auto s21 = tec.create_xor(s11, s12);
+        const auto s22 = tec.create_buf(s12);
+        // level3
+        const auto s30 = tec.create_buf(s20);
+        const auto s31 = tec.create_buf(s21);
+        const auto s32 = tec.create_buf(s22);
+        // level4
+        const auto s40 = tec.create_xor(s30, s31);
+        const auto s41 = tec.create_buf(s31);
+        const auto s42 = tec.create_buf(s32);
+        // level4 out
+        const auto s4x  = tec.create_buf(s40);
+        const auto s40x = tec.create_buf(s41);
+        const auto s41x = tec.create_buf(s41);
+        const auto s42x = tec.create_buf(s42);
+        // level5
+        const auto s5  = tec.create_buf(s4x);
+        const auto s50 = tec.create_xor(s4x, s40x);
+        const auto s51 = tec.create_buf(s41x);
+        const auto s52 = tec.create_buf(s42x);
+        // level6
+        const auto s6  = tec.create_buf(s5);
+        const auto s60 = tec.create_and(s50, s51);
+        const auto s61 = tec.create_xor(s51, s52);
+        const auto s62 = tec.create_buf(s52);
+        // level7
+        const auto s7  = tec.create_buf(s6);
+        const auto s70 = tec.create_buf(s60);
+        const auto s71 = tec.create_and(s61, s62);
+        // level8
+        const auto s8  = tec.create_buf(s7);
+        const auto s80 = tec.create_or(s70, s71);
+
+        tec.create_po(s8);
+        tec.create_po(s80);
+
         auto net = read_ntk<fiction::tec_nt>(benchmark);
         fiction::network_balancing_params ps;
         ps.unify_outputs = true;
