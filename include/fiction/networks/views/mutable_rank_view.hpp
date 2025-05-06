@@ -142,6 +142,11 @@ class mutable_rank_view<Ntk, false> : public fiction::static_depth_view<Ntk>
         init_ranks(ranks);
     }
 
+    [[nodiscard]] mutable_rank_view clone() const
+    {
+        return mutable_rank_view{*this};
+    }
+
     /**
      * Copy constructor creates a new `mutable_rank_view` by copying the content of another `mutable_rank_view`.
      *

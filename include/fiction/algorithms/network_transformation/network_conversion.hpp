@@ -188,6 +188,52 @@ class convert_network_impl<NtkDest, NtkSrc, false>
   private:
     using TopoNtkSrc = mockturtle::topo_view<NtkSrc>;
     TopoNtkSrc ntk;
+
+    template <class NtkDestCpy, class NtkSrcCpy>
+    [[nodiscard]] std::pair<NtkDestCpy, mockturtle::node_map<mockturtle::signal<NtkDestCpy>, NtkSrcCpy>>
+    initialize_copy_network_r(const NtkSrcCpy& src)
+    {
+        static_assert(mockturtle::is_network_type_v<NtkDestCpy>, "NtkDestCpy is not a network type");
+        static_assert(mockturtle::is_network_type_v<NtkSrcCpy>, "NtkSrcCpy is not a network type");
+
+        static_assert(mockturtle::has_get_constant_v<NtkDestCpy>,
+                      "NtkDestCpy does not implement the get_constant method");
+        static_assert(mockturtle::has_create_pi_v<NtkDestCpy>, "NtkDestCpy does not implement the create_pi method");
+        static_assert(mockturtle::has_get_constant_v<NtkSrcCpy>,
+                      "NtkSrcCpy does not implement the get_constant method");
+        static_assert(mockturtle::has_get_node_v<NtkSrcCpy>, "NtkSrcCpy does not implement the get_node method");
+        static_assert(mockturtle::has_foreach_pi_v<NtkSrcCpy>, "NtkSrcCpy does not implement the foreach_pi method");
+
+        mockturtle::node_map<mockturtle::signal<NtkDestCpy>, NtkSrcCpy> old2new(src);
+        NtkDestCpy                                                      dest;
+
+        // Constants
+        old2new[src.get_constant(false)] = dest.get_constant(false);
+        if (src.get_node(src.get_constant(true)) != src.get_node(src.get_constant(false)))
+        {
+            old2new[src.get_constant(true)] = dest.get_constant(true);
+        }
+
+        // Handle primary inputs with rank environment
+        if constexpr (mockturtle::has_rank_position_v<NtkSrcCpy>)
+        {
+            src.foreach_pi_unranked(
+                [&](auto const& n)
+                {
+                    old2new[n] = dest.create_pi();
+                    if constexpr (mockturtle::has_rank_position_v<NtkDestCpy>)
+                    {
+                        dest.on_add(old2new[n]);
+                    }
+                });
+        }
+        else
+        {
+            src.foreach_pi([&](auto const& n) { old2new[n] = dest.create_pi(); });
+        }
+
+        return {dest, old2new};
+    }
 };
 }  // namespace detail
 
@@ -234,6 +280,11 @@ NtkDest convert_network(const NtkSrc& ntk)
     detail::convert_network_impl<NtkDest, NtkSrc> p{ntk};
 
     auto result = p.run();
+
+    if constexpr (mockturtle::has_rank_position_v<NtkDest>)
+    {
+        result.update_ranks();
+    }
 
     return result;
 }

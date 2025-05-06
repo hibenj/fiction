@@ -248,7 +248,12 @@ Ntk delete_virtual_pis(const Ntk& ntk) noexcept
 
     detail::delete_virtual_pis_impl<Ntk> p{ntk};
 
-    const auto result = p.run();
+    auto result = p.run();
+
+    if constexpr (mockturtle::has_rank_position_v<Ntk>)
+    {
+        result.update_ranks();
+    }
 
     return result;
 }
