@@ -15,7 +15,7 @@
 #include "fiction/io/network_reader.hpp"     // read networks from files
 #include "fiction/layouts/bounding_box.hpp"  // calculate area of generated layouts
 #include "fiction/networks/technology_network.hpp"
-#include "fiction/networks/views/extended_rank_view.hpp"
+#include "fiction/networks/views/mutable_rank_view.hpp"
 #include "fiction/networks/virtual_pi_network.hpp"
 #include "fiction/utils/debug/network_writer.hpp"
 #include "fiction_experiments.hpp"
@@ -75,7 +75,7 @@ int main()  // NOLINT
     graph_oriented_layout_design_params.timeout = 100000;
     graph_oriented_layout_design_params.planar = true;
 
-    static constexpr const uint64_t bench_select = (fiction_experiments::trindade16 | fiction_experiments::fontes18 );
+    static constexpr const uint64_t bench_select = (fiction_experiments::full_adder);
 
     for (const auto& entry :
          std::filesystem::directory_iterator("/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93"))
@@ -128,7 +128,8 @@ int main()  // NOLINT
             continue;
         }
 
-        auto network = fiction::node_duplication_planarization<fiction::technology_network>(tec_b);
+        const auto tec_r = fiction::mutable_rank_view(tec_b);
+        auto network = fiction::node_duplication_planarization(tec_r);
 
         /*if (network.num_gates() > 1000)
         {
@@ -226,13 +227,16 @@ int main()  // NOLINT
         auto net = read_ntk<fiction::tec_nt>(benchmark);
         fiction::network_balancing_params ps;
         ps.unify_outputs = true;
+        fiction::debug::write_dot_network(net);
 
         const auto tec_b = fiction::network_balancing<fiction::technology_network>(fiction::fanout_substitution<fiction::technology_network>(net), ps);
 
-        auto ntk = fiction::node_duplication_planarization<fiction::technology_network>(tec_b);
+        const auto tec_r = fiction::mutable_rank_view(tec_b);
+        auto ntk = fiction::node_duplication_planarization(tec_r);
 
         const auto planar = ntk.clone();
         const auto network = fiction::remove_buffer(planar);
+        fiction::debug::write_dot_network(network, "planar");
 
         auto gate_level_layout = fiction::graph_oriented_layout_design<gate_lyt, decltype(network)>(
             network, graph_oriented_layout_design_params, &graph_oriented_layout_design_stats);
@@ -270,6 +274,7 @@ int main()  // NOLINT
 
             const auto layout_copy       = gate_level_layout->clone();
             fiction::post_layout_optimization(*gate_level_layout, params, &post_layout_optimization_stats);
+            fiction::debug::write_dot_layout(*gate_level_layout);
 
             // calculate bounding box
             const auto bounding_box_after_optimization = fiction::bounding_box_2d(*gate_level_layout);

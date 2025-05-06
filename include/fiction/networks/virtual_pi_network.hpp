@@ -95,14 +95,15 @@ class virtual_pi_network : public Ntk
     /**
      * Clones the `virtual_pi_network` object.
      */
-    [[nodiscard]] virtual_pi_network clone() const
+     // ToDo: Check how clone should work
+    /*[[nodiscard]] virtual_pi_network clone() const
     {
         return virtual_pi_network(
             // Clone the parent network
             Ntk::clone(),
             // Create a new shared pointer to `virtual_storage` using a copy of the current `v_storage`
             std::make_shared<virtual_storage>(*v_storage));
-    }
+    }*/
 
     /**
      * Calculate the real size of the `virtual_pi_network`.
