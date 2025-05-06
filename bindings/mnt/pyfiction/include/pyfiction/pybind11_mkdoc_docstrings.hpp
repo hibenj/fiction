@@ -22933,8 +22933,6 @@ Returns:
 
 static const char *__doc_fiction_virtual_pi_network = R"doc()doc";
 
-static const char *__doc_fiction_virtual_pi_network_clone = R"doc(Clones the `virtual_pi_network` object.)doc";
-
 static const char *__doc_fiction_virtual_pi_network_create_virtual_pi =
 R"doc(Create a virtual PI, which is a mapping to a real PI.
 
