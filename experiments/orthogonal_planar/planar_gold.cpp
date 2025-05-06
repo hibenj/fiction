@@ -2,6 +2,7 @@
 // Created by benjamin on 20.08.24.
 //
 
+#include "fiction/algorithms/graph/mincross.hpp"
 #include "fiction/algorithms/network_transformation/buffer_removal.hpp"
 #include "fiction/algorithms/network_transformation/network_balancing.hpp"
 #include "fiction/algorithms/network_transformation/node_duplication_planarization.hpp"
@@ -45,8 +46,8 @@ int main()  // NOLINT
     using gate_lyt =
         fiction::gate_level_layout<fiction::clocked_layout<fiction::tile_based_layout<fiction::cartesian_layout<>>>>;
 
-    experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
-                            double, double, float, std::string, std::string>
+    experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
+                            uint64_t, double, double, float, std::string, std::string>
         graph_oriented_layout_design_exp{"graph_oriented_layout_design_exp",
                                          "benchmark",
                                          "inputs",
@@ -64,16 +65,16 @@ int main()  // NOLINT
                                          "eq (gold)",
                                          "eq (plo)"};
 
-    fiction::graph_oriented_layout_design_stats  graph_oriented_layout_design_stats{};
-    fiction::post_layout_optimization_stats   post_layout_optimization_stats{};
-    fiction::post_layout_optimization_params params{};
+    fiction::graph_oriented_layout_design_stats graph_oriented_layout_design_stats{};
+    fiction::post_layout_optimization_stats     post_layout_optimization_stats{};
+    fiction::post_layout_optimization_params    params{};
     params.planar_optimization = true;
     fiction::graph_oriented_layout_design_params graph_oriented_layout_design_params{};
     graph_oriented_layout_design_params.mode = fiction::graph_oriented_layout_design_params::effort_mode::HIGH_EFFORT;
-    graph_oriented_layout_design_params.verbose          = true;
-    graph_oriented_layout_design_params.return_first     = false;
-    graph_oriented_layout_design_params.timeout = 100000;
-    graph_oriented_layout_design_params.planar = true;
+    graph_oriented_layout_design_params.verbose      = true;
+    graph_oriented_layout_design_params.return_first = false;
+    graph_oriented_layout_design_params.timeout      = 100000;
+    graph_oriented_layout_design_params.planar       = true;
 
     static constexpr const uint64_t bench_select = (fiction_experiments::full_adder);
 
@@ -83,15 +84,15 @@ int main()  // NOLINT
         continue;
         fmt::print("[i] processing {}\n", entry.path().filename().string());
 
-        if ( "C432.v" == entry.path().filename().string())
+        if ("C432.v" == entry.path().filename().string())
         {
             continue;
         }
-        if ( "ex4p.v" == entry.path().filename().string())
+        if ("ex4p.v" == entry.path().filename().string())
         {
             continue;
         }
-        if ( "apex1.v" == entry.path().filename().string())
+        if ("apex1.v" == entry.path().filename().string())
         {
             continue;
         }
@@ -121,15 +122,16 @@ int main()  // NOLINT
         fiction::network_balancing_params ps;
         ps.unify_outputs = true;
 
-        const auto tec_b = fiction::network_balancing<fiction::technology_network>(fiction::fanout_substitution<fiction::technology_network>(net), ps);
+        const auto tec_b = fiction::network_balancing<fiction::technology_network>(
+            fiction::fanout_substitution<fiction::technology_network>(net), ps);
 
         if (tec_b.size() > 10000)
         {
             continue;
         }
 
-        const auto tec_r = fiction::mutable_rank_view(tec_b);
-        auto network = fiction::node_duplication_planarization(tec_r);
+        const auto tec_r   = fiction::mutable_rank_view(tec_b);
+        auto       network = fiction::node_duplication_planarization(tec_r);
 
         /*if (network.num_gates() > 1000)
         {
@@ -137,7 +139,7 @@ int main()  // NOLINT
         }*/
 
         const auto planar = network.clone();
-        const auto ntk = fiction::remove_buffer(planar);
+        const auto ntk    = fiction::remove_buffer(planar);
 
         if (ntk.num_gates() > 1000)
         {
@@ -184,7 +186,7 @@ int main()  // NOLINT
             fiction::gate_level_drvs(*gate_level_layout, ps, &st);
             // fiction::print_gate_level_layout(std::cout, *gate_level_layout);
 
-            const auto layout_copy       = gate_level_layout->clone();
+            const auto layout_copy = gate_level_layout->clone();
             fiction::post_layout_optimization(*gate_level_layout, params, &post_layout_optimization_stats);
 
             // calculate bounding box
@@ -194,11 +196,11 @@ int main()  // NOLINT
             const auto height_after_optimization = bounding_box_after_optimization.get_y_size() + 1;
             const auto area_after_optimization   = width_after_optimization * height_after_optimization;
 
-            const float improv = 100 * static_cast<float>((area - area_after_optimization)) /
-                                 static_cast<float>(area);
+            const float improv = 100 * static_cast<float>((area - area_after_optimization)) / static_cast<float>(area);
 
             // check equivalence
-            const auto eq_stats_plo = fiction::equivalence_checking<gate_lyt, gate_lyt>(layout_copy, *gate_level_layout);
+            const auto eq_stats_plo =
+                fiction::equivalence_checking<gate_lyt, gate_lyt>(layout_copy, *gate_level_layout);
 
             const std::string eq_result_plo = eq_stats_plo == fiction::eq_type::STRONG ? "STRONG" :
                                               eq_stats_plo == fiction::eq_type::WEAK   ? "WEAK" :
@@ -206,15 +208,18 @@ int main()  // NOLINT
 
             // log results
             graph_oriented_layout_design_exp(
-                entry.path().filename().string(), ntk.num_pis(), ntk.num_pos(), ntk.num_gates(), width, height, width_after_optimization, height_after_optimization, area,
-                area_after_optimization,
-                mockturtle::to_seconds(graph_oriented_layout_design_stats.time_total), mockturtle::to_seconds(post_layout_optimization_stats.time_total), improv, eq_result, eq_result_plo);
+                entry.path().filename().string(), ntk.num_pis(), ntk.num_pos(), ntk.num_gates(), width, height,
+                width_after_optimization, height_after_optimization, area, area_after_optimization,
+                mockturtle::to_seconds(graph_oriented_layout_design_stats.time_total),
+                mockturtle::to_seconds(post_layout_optimization_stats.time_total), improv, eq_result, eq_result_plo);
         }
         else
         {
             // log results
             graph_oriented_layout_design_exp(
-                entry.path().filename().string(), ntk.num_pis(), ntk.num_pos(), ntk.num_gates(), 0, 0, 0, 0, 0, 0, mockturtle::to_seconds(graph_oriented_layout_design_stats.time_total), mockturtle::to_seconds(post_layout_optimization_stats.time_total), 0, "?", "?");
+                entry.path().filename().string(), ntk.num_pis(), ntk.num_pos(), ntk.num_gates(), 0, 0, 0, 0, 0, 0,
+                mockturtle::to_seconds(graph_oriented_layout_design_stats.time_total),
+                mockturtle::to_seconds(post_layout_optimization_stats.time_total), 0, "?", "?");
         }
 
         graph_oriented_layout_design_exp.save();
@@ -224,6 +229,7 @@ int main()  // NOLINT
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
         // continue;
+
         fiction::technology_network tec{};
         const auto                  pi0 = tec.create_pi();  // Cin
         const auto                  pi1 = tec.create_pi();  // A
@@ -270,17 +276,31 @@ int main()  // NOLINT
         tec.create_po(s8);
         tec.create_po(s80);
 
-        auto net = read_ntk<fiction::tec_nt>(benchmark);
+        auto       net = read_ntk<fiction::tec_nt>(benchmark);
+        const auto eq =
+            fiction::equivalence_checking<fiction::technology_network, fiction::technology_network>(net, tec);
+        const std::string eq_str = eq == fiction::eq_type::STRONG ? "STRONG" :
+                                   eq == fiction::eq_type::WEAK   ? "WEAK" :
+                                                                    "NO";
+
+        std::cout << "Equivalence is " << eq_str << std::endl;
         fiction::network_balancing_params ps;
         ps.unify_outputs = true;
-        fiction::debug::write_dot_network(net);
+        // fiction::debug::write_dot_network(net);
 
-        const auto tec_b = fiction::network_balancing<fiction::technology_network>(fiction::fanout_substitution<fiction::technology_network>(net), ps);
+        const auto tec_b = fiction::network_balancing<fiction::technology_network>(
+            fiction::fanout_substitution<fiction::technology_network>(tec), ps);
 
         const auto tec_r = fiction::mutable_rank_view(tec_b);
-        auto ntk = fiction::node_duplication_planarization(tec_r);
+        auto       ntk   = fiction::node_duplication_planarization(tec_r);
 
-        const auto planar = ntk.clone();
+        fiction::mincross_stats        st{};
+        const fiction::mincross_params p{};
+        auto                           ntk_mincross = mincross(tec_r, p, &st);
+        std::cout << "Num crossings: " << st.num_crossings << std::endl;
+        fiction::debug::write_dot_network(ntk_mincross, "mincross");
+
+        const auto planar  = ntk.clone();
         const auto network = fiction::remove_buffer(planar);
         fiction::debug::write_dot_network(network, "planar");
 
@@ -294,12 +314,12 @@ int main()  // NOLINT
             const auto eq_stats =
                 fiction::equivalence_checking<decltype(network), gate_lyt>(network, *gate_level_layout, &eq_s);
 
-           /* std::cout << eq_s.impl_drv_stats.report;
-            std::cout << "\n";
-            std::cout << "Counter example: ";
-            for (auto i : eq_s.counter_example)
-                std::cout << i;
-            std::cout << "\n";*/
+            /* std::cout << eq_s.impl_drv_stats.report;
+             std::cout << "\n";
+             std::cout << "Counter example: ";
+             for (auto i : eq_s.counter_example)
+                 std::cout << i;
+             std::cout << "\n";*/
 
             const std::string eq_result = eq_stats == fiction::eq_type::STRONG ? "STRONG" :
                                           eq_stats == fiction::eq_type::WEAK   ? "WEAK" :
@@ -318,7 +338,7 @@ int main()  // NOLINT
             fiction::gate_level_drvs(*gate_level_layout, ps, &st);
             // fiction::print_gate_level_layout(std::cout, *gate_level_layout);
 
-            const auto layout_copy       = gate_level_layout->clone();
+            const auto layout_copy = gate_level_layout->clone();
             fiction::post_layout_optimization(*gate_level_layout, params, &post_layout_optimization_stats);
             fiction::debug::write_dot_layout(*gate_level_layout);
 
@@ -329,11 +349,11 @@ int main()  // NOLINT
             const auto height_after_optimization = bounding_box_after_optimization.get_y_size() + 1;
             const auto area_after_optimization   = width_after_optimization * height_after_optimization;
 
-            const float improv = 100 * static_cast<float>((area - area_after_optimization)) /
-                                 static_cast<float>(area);
+            const float improv = 100 * static_cast<float>((area - area_after_optimization)) / static_cast<float>(area);
 
             // check equivalence
-            const auto eq_stats_plo = fiction::equivalence_checking<gate_lyt, gate_lyt>(layout_copy, *gate_level_layout);
+            const auto eq_stats_plo =
+                fiction::equivalence_checking<gate_lyt, gate_lyt>(layout_copy, *gate_level_layout);
 
             const std::string eq_result_plo = eq_stats_plo == fiction::eq_type::STRONG ? "STRONG" :
                                               eq_stats_plo == fiction::eq_type::WEAK   ? "WEAK" :
@@ -341,15 +361,18 @@ int main()  // NOLINT
 
             // log results
             graph_oriented_layout_design_exp(
-                benchmark, network.num_pis(), network.num_pos(), network.num_gates(), width, height, width_after_optimization, height_after_optimization, area,
-                area_after_optimization,
-                mockturtle::to_seconds(graph_oriented_layout_design_stats.time_total), mockturtle::to_seconds(post_layout_optimization_stats.time_total), improv, eq_result, eq_result_plo);
+                benchmark, network.num_pis(), network.num_pos(), network.num_gates(), width, height,
+                width_after_optimization, height_after_optimization, area, area_after_optimization,
+                mockturtle::to_seconds(graph_oriented_layout_design_stats.time_total),
+                mockturtle::to_seconds(post_layout_optimization_stats.time_total), improv, eq_result, eq_result_plo);
         }
         else
         {
             // log results
             graph_oriented_layout_design_exp(
-                benchmark, network.num_pis(), network.num_pos(), network.num_gates(), 0, 0, 0, 0, 0, 0, mockturtle::to_seconds(graph_oriented_layout_design_stats.time_total), mockturtle::to_seconds(post_layout_optimization_stats.time_total), 0, "?", "?");
+                benchmark, network.num_pis(), network.num_pos(), network.num_gates(), 0, 0, 0, 0, 0, 0,
+                mockturtle::to_seconds(graph_oriented_layout_design_stats.time_total),
+                mockturtle::to_seconds(post_layout_optimization_stats.time_total), 0, "?", "?");
         }
 
         graph_oriented_layout_design_exp.save();
