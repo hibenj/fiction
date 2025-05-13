@@ -10382,6 +10382,20 @@ Template parameter ``ChargeLyt``:
 Parameter ``charge_layout``:
     Initialized charge layout.)doc";
 
+static const char *__doc_fiction_detail_rc_adder_gen_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_rc_adder_gen_impl_insert_fa = R"doc()doc";
+
+static const char *__doc_fiction_detail_rc_adder_gen_impl_num_bits = R"doc()doc";
+
+static const char *__doc_fiction_detail_rc_adder_gen_impl_pos = R"doc()doc";
+
+static const char *__doc_fiction_detail_rc_adder_gen_impl_pos_pos = R"doc()doc";
+
+static const char *__doc_fiction_detail_rc_adder_gen_impl_rc_adder_gen_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_rc_adder_gen_impl_run = R"doc()doc";
+
 static const char *__doc_fiction_detail_read_fgl_layout_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_read_fgl_layout_impl_gate_storage =
@@ -19655,6 +19669,8 @@ R"doc(Standard constructor with forward reference.
 
 Parameter ``range``:
     Begin and end iterator pair.)doc";
+
+static const char *__doc_fiction_rc_adder_gen = R"doc()doc";
 
 static const char *__doc_fiction_read_fgl_layout =
 R"doc(Reads a gate-level layout from an FGL file provided as an input
