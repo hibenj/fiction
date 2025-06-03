@@ -127,7 +127,7 @@ int main()  // NOLINT
     for (const auto& entry :
          std::filesystem::directory_iterator("/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93"))
     {
-        // continue;
+        continue;
         fmt::print("[i] processing {}\n", entry.path().filename().string());
 
         /*if ("C432.v" == entry.path().filename().string())
@@ -274,11 +274,11 @@ int main()  // NOLINT
     }
 
     // For all fiction benchmarks
-    static constexpr const uint64_t bench_select = (fiction_experiments::trindade16 | fiction_experiments::fontes18);
+    static constexpr const uint64_t bench_select = (fiction_experiments::full_adder);
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
-        continue;
+        // continue;
         auto benchmark_network = read_ntk<fiction::tec_nt>(benchmark);
 
         /*fiction::technology_network benchmark_network;
@@ -326,7 +326,7 @@ int main()  // NOLINT
         const auto _b = fiction::network_balancing<fiction::technology_network>(
             fiction::fanout_substitution<fiction::technology_network>(benchmark_network), b_ps);
 
-        // fiction::debug::write_dot_network(_b, "balanced_ntk");
+        fiction::debug::write_dot_network(_b, "balanced_ntk");
 
         if (_b.size() > 10000)
         {
@@ -337,7 +337,7 @@ int main()  // NOLINT
         auto planarized_b = fiction::node_duplication_planarization(_r);
         //const auto ortho = fiction::orthogonal<gate_lyt>(planarized_b);
         //const auto mapped_to_cells = fiction::apply_gate_library<fiction::qca_cell_clk_lyt, fiction::qca_one_library>(ortho);
-        //fiction::debug::write_dot_network(planarized_b, "planarized_ntk");
+        fiction::debug::write_dot_network(planarized_b, "planarized_ntk");
         //fiction::debug::write_dot_layout(ortho, "ortho_lyt");
         //fiction::write_qca_layout_svg(mapped_to_cells, "ortho_cell_lyt");
 
@@ -373,7 +373,7 @@ int main()  // NOLINT
 
         fiction::gate_level_drvs(gate_level_layout_proposed, ps_p, &st_p);
 
-        // fiction::debug::write_dot_layout(gate_level_layout);
+        fiction::debug::write_dot_layout(gate_level_layout_proposed);
 
         // check equivalence for the planar layout
         const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout_proposed);
