@@ -1114,6 +1114,108 @@ static const char *__doc_fiction_bdl_wire_selection_OUTPUT = R"doc(Select only B
 
 static const char *__doc_fiction_bdl_wire_update_direction = R"doc(Update the port of the wire based on the current BDL pairs.)doc";
 
+static const char *__doc_fiction_bfs_topo_view =
+R"doc(Specialization for non-topologically sorted networks.
+
+Template parameter ``Ntk``:
+    Logic network type.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_2 =
+R"doc(Deduction guide for bfs_topo_view.
+
+Template parameter ``T``:
+    Logic network type.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_3 =
+R"doc(Deduction guide for bfs_topo_view from a network and signal.
+
+Template parameter ``T``:
+    Logic network type.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_bfs_topo_view =
+R"doc(Constructs a breadth-first topological view from a given network.
+
+Parameter ``ntk``:
+    Logic network to be wrapped with a topological view.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_fanout_ntk = R"doc(Fanout-augmented view of the original network for efficient traversal.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_foreach_gate =
+R"doc(Iterates over all gates (excluding constants and primary inputs) in
+topological order.
+
+Template parameter ``Fn``:
+    Callable function or lambda to be applied to each gate.
+
+Parameter ``fn``:
+    Function to apply to each gate.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_foreach_gate_reverse =
+R"doc(Iterates over all gates (excluding constants and primary inputs) in
+reverse topological order.
+
+Template parameter ``Fn``:
+    Callable function or lambda to be applied to each gate.
+
+Parameter ``fn``:
+    Function to apply to each gate.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_foreach_node =
+R"doc(Iterates over all nodes in topological order.
+
+Template parameter ``Fn``:
+    Callable function or lambda to be applied to each node.
+
+Parameter ``fn``:
+    Function to apply to each node.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_foreach_node_reverse =
+R"doc(Iterates over all nodes in reverse topological order.
+
+Template parameter ``Fn``:
+    Callable function or lambda to be applied to each node.
+
+Parameter ``fn``:
+    Function to apply to each node.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_index_to_node =
+R"doc(Returns the node at a given topological index.
+
+Parameter ``index``:
+    Index into the topological order.
+
+Returns:
+    Node at the specified index.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_node_to_index =
+R"doc(Returns the topological index of a node.
+
+Parameter ``n``:
+    Node whose index is to be determined.
+
+Returns:
+    Index of the node in the topological order.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_num_gates =
+R"doc(Returns the number of gates in the topological view.
+
+Returns:
+    Number of gates excluding constants and primary inputs.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_size =
+R"doc(Returns the number of nodes in the topological view.
+
+Returns:
+    Total number of visited nodes in the topological order.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_topo_order =
+R"doc(Stores nodes in topological order from constants and PIs to reachable
+gates.)doc";
+
+static const char *__doc_fiction_bfs_topo_view_update_bfs_topo =
+R"doc(Updates the breadth-first topological order of the network. Called
+once during construction.)doc";
+
 static const char *__doc_fiction_binomial_coefficient =
 R"doc(Calculates the binomial coefficient :math:`\binom{n}{k}`.
 
@@ -2578,6 +2680,54 @@ Template parameter ``Dist``:
 
 static const char *__doc_fiction_chebyshev_distance_functor_chebyshev_distance_functor = R"doc()doc";
 
+static const char *__doc_fiction_check_planarity =
+R"doc(Checks if a logic network is planar for a network that is path
+balanced and has ranks assigned.
+
+If the network is not balanced, an exception is thrown. To balance the
+network, insert buffers to divide multi-level edges.
+
+It checks if the network represented by the variable `ntk` is planar.
+The network is planar if, for any edge with starting point :math:`m`
+and endpoint :math:`n` (represented by the node ranks), there is never
+another edge with starting point :math:`m' > m` and endpoint :math:`n'
+< n`, or vice versa. When iterating through the ranks of one level,
+the endpoints are always increasing. Therefore, only the starting
+points need to be checked. Thus, the highest connected starting point
+in the fan-in gives a border :math:`m_{\text{max}}` for every
+subsequent edge.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``ntk``:
+    The logic network to check for planarity.
+
+Returns:
+    `true` if the network is planar, `false` otherwise.)doc";
+
+static const char *__doc_fiction_check_planarity_impl = R"doc()doc";
+
+static const char *__doc_fiction_check_planarity_impl_check_planarity_impl = R"doc()doc";
+
+static const char *__doc_fiction_check_planarity_impl_ntk = R"doc()doc";
+
+static const char *__doc_fiction_check_planarity_impl_run =
+R"doc(Checks if a given network is planar.
+
+This function checks if the network represented by the variable `ntk`
+is planar. The network is planar if, for any edge with starting point
+:math:`m` and endpoint :math:`n` (represented by the node ranks),
+there is never another edge with starting point :math:`m' > m` and
+endpoint :math:`n' < n`, or vice versa. When iterating through the
+ranks of one level, the endpoints are always increasing. Therefore,
+only the starting points need to be checked. Thus, the highest
+connected starting point in the fan-in gives a border
+:math:`m_{\text{max}}` for every subsequent edge.
+
+Returns:
+    `true` if the network is planar, `false` otherwise.)doc";
+
 static const char *__doc_fiction_check_simulation_results_for_equivalence =
 R"doc(This function compares two SiDB simulation results for equivalence.
 Two results are considered equivalent if they have the same number of
@@ -3130,6 +3280,18 @@ Parameter ``n``:
 
 Returns:
     Columnar clocking scheme.)doc";
+
+static const char *__doc_fiction_constains_buffer =
+R"doc(Checks if a given logic network contains a buffer gate.
+
+Template parameter ``Ntk``:
+    The type of the logic network.
+
+Parameter ``ntk``:
+    The logic network.
+
+Returns:
+    true if the network contains a buffer gate, false otherwise.)doc";
 
 static const char *__doc_fiction_convert_array =
 R"doc(Converts an array of size `N` and type `T` to an array of size `N` and
@@ -4901,6 +5063,8 @@ Template parameter ``WiringReductionLyt``:
 Parameter ``lyt``:
     The wiring_reduction_layout to which obstructions will be added.)doc";
 
+static const char *__doc_fiction_detail_adjust_final_values = R"doc()doc";
+
 static const char *__doc_fiction_detail_adjust_tile =
 R"doc(This function adjusts the tile and gates in the layout after deleting
 wires. It shifts gates to fill the empty coordinates and adjusts the
@@ -5086,6 +5250,12 @@ Parameter ``defect_lyt``:
 Returns:
     A `CellLyt` object representing the generated cell layout.)doc";
 
+static const char *__doc_fiction_detail_calculate_allowed_orientation = R"doc()doc";
+
+static const char *__doc_fiction_detail_calculate_connection = R"doc()doc";
+
+static const char *__doc_fiction_detail_calculate_fanout_connection_type = R"doc()doc";
+
 static const char *__doc_fiction_detail_calculate_offset_matrix =
 R"doc(Calculate an offset matrix based on a to-delete list in a
 `wiring_reduction_layout`.
@@ -5111,6 +5281,29 @@ Parameter ``to_delete``:
 
 Returns:
     A 2D vector representing the calculated offset matrix.)doc";
+
+static const char *__doc_fiction_detail_calculate_pairs =
+R"doc(Calculates pairs of nodes from a given vector of nodes.
+
+This function takes a vector of nodes and returns a vector of node
+pairs. Each node pair consists of two nodes from the input vector and
+an optional vector of middle nodes. The delay of each node pair is
+initialized to infinity.
+
+Template parameter ``Ntk``:
+    The network type.
+
+Parameter ``nodes``:
+    The vector of nodes.
+
+Returns:
+    The vector of node pairs.)doc";
+
+static const char *__doc_fiction_detail_calculate_predecessor_gap = R"doc()doc";
+
+static const char *__doc_fiction_detail_calculate_start_orientation = R"doc()doc";
+
+static const char *__doc_fiction_detail_calculate_two_input_new_lines = R"doc()doc";
 
 static const char *__doc_fiction_detail_clustercomplete_impl = R"doc()doc";
 
@@ -5742,9 +5935,42 @@ Returns:
     The number of primary outputs that are placed to the right of the
     middle primary output.)doc";
 
+static const char *__doc_fiction_detail_compute_two_input_indices = R"doc()doc";
+
 static const char *__doc_fiction_detail_connect_and_place = R"doc()doc";
 
 static const char *__doc_fiction_detail_connect_and_place_2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_connect_children_to_gates_unaffected =
+R"doc(This function connects gates that aren't affected by the inverter
+substitution. It means that all the gates without any fan-ins or fan-
+outs impacted by the inverter substitution retain their functionality
+and are subsequently connected to their children.
+
+Template parameter ``Ntk``:
+    Type of the input logic network.
+
+Template parameter ``NtkDest``:
+    Type of the returned logic network.
+
+Parameter ``ntk``:
+    Input network.
+
+Parameter ``ntk_dest``:
+    Output network.
+
+Parameter ``old2new``:
+    `node_map` to assign the nodes of the old network to the new
+    network.
+
+Parameter ``children``:
+    Children of the current gate.
+
+Parameter ``g``:
+    Currently viewed gate.
+
+Returns:
+    'true' iff the assignment was successful.)doc";
 
 static const char *__doc_fiction_detail_convert_array =
 R"doc(Based on https://stackoverflow.com/questions/57756557/initializing-a-
@@ -5775,6 +6001,37 @@ static const char *__doc_fiction_detail_count_gate_types_impl_run = R"doc()doc";
 static const char *__doc_fiction_detail_create_array =
 R"doc(From https://stackoverflow.com/questions/57756557/initializing-a-
 stdarray-with-a-constant-value)doc";
+
+static const char *__doc_fiction_detail_create_virtual_pi_ntk_from_duplicated_nodes =
+R"doc(Constructs a planar `virtual_pi_network` based on the `ntk_lvls`
+array, which holds the ranks of the duplicated nodes for each level in
+the new network. This function creates new nodes for the duplicated
+ones and restores their fanin relations using the
+`gather_fanin_signals` function.
+
+For duplicated PIs (Primary Inputs), virtual PIs are created, and the
+original PI is stored in a map.
+
+The auxiliary function `gather_fanin_signals` collects fanin data for
+a node and matches it in the `virtual_pi_network`.
+
+Example: For a level (2, 3, 2, 4, 2), new nodes are created for
+duplications (e.g., 2) and stored in the `old2new_v` node_map. This
+map is used by `gather_fanin_signals` to establish the correct fanin
+relations.
+
+Template parameter ``Ntk``:
+    Network type.
+
+Parameter ``ntk``:
+    Source network to be utilized for the creation of the
+    virtual_pi_network.
+
+Parameter ``ntk_lvls``:
+    Levels of nodes in the source network.
+
+Parameter ``ntk_lvls_new``:
+    Levels of newly created nodes in the virtual_pi_network.)doc";
 
 static const char *__doc_fiction_detail_create_wiring_reduction_layout =
 R"doc(Create a wiring_reduction_layout suitable for finding excess wiring
@@ -7416,6 +7673,10 @@ static const char *__doc_fiction_detail_fanout_substitution_impl_rng = R"doc(Opt
 
 static const char *__doc_fiction_detail_fanout_substitution_impl_run = R"doc()doc";
 
+static const char *__doc_fiction_detail_fill_gap_array_zeros = R"doc()doc";
+
+static const char *__doc_fiction_detail_fill_gap_array_zeros_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_gate_level_drvs_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_gate_level_drvs_impl_border_io_check =
@@ -7649,6 +7910,10 @@ static const char *__doc_fiction_detail_generate_edge_intersection_graph_impl_ps
 static const char *__doc_fiction_detail_generate_edge_intersection_graph_impl_pst = R"doc(Statistics.)doc";
 
 static const char *__doc_fiction_detail_generate_edge_intersection_graph_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_get_buffer_lookup = R"doc()doc";
+
+static const char *__doc_fiction_detail_get_fanout_lookup = R"doc()doc";
 
 static const char *__doc_fiction_detail_get_offset =
 R"doc(Utility function to calculate the offset that has to be subtracted
@@ -8546,6 +8811,26 @@ static const char *__doc_fiction_detail_hexagonalization_impl_pst = R"doc(Hexago
 
 static const char *__doc_fiction_detail_hexagonalization_impl_run = R"doc()doc";
 
+static const char *__doc_fiction_detail_inverter_substitution_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_connect_children_to_gates = R"doc()doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_fo_ntk = R"doc(This is a fan-out view of the network 'ntk'.)doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_gather_fanin_signals = R"doc()doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_inverter_substitution_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_is_rerun = R"doc()doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_mode = R"doc(The operation mode of inverter substitution.)doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_ntk = R"doc(A topologically ordered input logic network.)doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_rerun = R"doc(An indicator to check if optimizations can be applied or not.)doc";
+
+static const char *__doc_fiction_detail_inverter_substitution_impl_run = R"doc()doc";
+
 static const char *__doc_fiction_detail_is_balanced_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_is_balanced_impl_balanced = R"doc()doc";
@@ -9123,6 +9408,97 @@ static const char *__doc_fiction_detail_new_gate_location_NONE = R"doc(Do not ch
 
 static const char *__doc_fiction_detail_new_gate_location_SRC = R"doc(Check if the source tile is empty.)doc";
 
+static const char *__doc_fiction_detail_node_duplication_planarization_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_impl_compute_slice_delays =
+R"doc(The H-graph represents all possible orderings of node pairs within a
+single network level. A "slice" is created by adding all possible
+combinations of a `node_pair` to the H-graph of the level. These
+combinations are formed by selecting pairs of nodes from the fan-ins
+of the input node: - If the input node has only one fan-in, it is
+treated as a single combination. - If the input node has two fan-ins,
+there are two possible combinations.
+
+Each `node_pair` consists of a first and second element. The objective
+is to find an ordering of node pairs that maximizes the instances
+where the first element of a node_pair matches the second element of
+the preceding node_pair. This ordering is given as a linked list.
+
+This function computes the optimal ordering by calculating delays as
+follows: - All combinations of node pairs are iteratively added to a
+linked list. - For each combination, the first element of the current
+node_pair is compared with the last element of the preceding
+node_pairs. - If a connection exists between two node_pairs, the delay
+increases by 1; otherwise, it increases by 2. The default delay for
+the first node is 1. - If a node_pair lacks a connection, and its
+updated delay (increased by 2) is less than the existing delay, the
+node_pair's delay is updated accordingly.
+
+Processed node_pairs are stored in the `lvl_pairs` member for
+subsequent delay calculations.
+
+Parameter ``nd``:
+    Node in the H-graph.
+
+Parameter ``border_pis``:
+    A boolean indicating whether the input PIs (Primary Inputs) should
+    be propagated to the next)doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_impl_insert_if_not_first =
+R"doc(Inserts a node into a vector if it is unique.
+
+`This function inserts a node into a vector only if the vector is
+empty or the node is not equal to the first element of the vector. If
+the vector is not empty and the node is equal to the first element, it
+does nothing. An exception occurs if the node was skipped on the
+previous insertion attempt due to `vec.front() == node`; in that case,
+the node will be inserted this time.
+
+Parameter ``node``:
+    The node to be inserted.
+
+Parameter ``vec``:
+    The vector to insert the node into.)doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_impl_lvl_pairs = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_impl_node_duplication_planarization_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_impl_ps = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_pair =
+R"doc(A structure representing a pair of nodes in an H-graph.
+
+The nodes stored in this struct describe the fanin-edges of a node in
+an H-graph. A node pair object holds two nodes, which are saved in the
+member 'pair'. These two outer nodes are connected through zero or
+more 'middle_nodes'. The fanin order starts with the first node in
+'pair', then proceeds through the 'middle_nodes', and ends with the
+second node in 'pair'. The order of 'middle_nodes' is arbitrary as
+they cannot be further connected to any other nodes. For the
+planarization, only the nodes inside the 'pair' are relevant.
+
+Template parameter ``Ntk``:
+    Network type for the nodes in the pair.)doc";
+
+static const char *__doc_fiction_detail_node_pair_delay = R"doc(Specifies the delay value for the node.)doc";
+
+static const char *__doc_fiction_detail_node_pair_fanin_pair =
+R"doc(Shared pointer to another instance of node_pair detailing fanin-edge
+alignment.)doc";
+
+static const char *__doc_fiction_detail_node_pair_node_pair =
+R"doc(Standard constructor.
+
+Parameter ``node1``:
+    The first node of the fanin-edged node.
+
+Parameter ``node2``:
+    The second node of the fanin-edged node.
+
+Parameter ``delay_value``:
+    The delay value for the node.)doc";
+
 static const char *__doc_fiction_detail_non_operationality_reason = R"doc(Reason why a layout is non-operational.)doc";
 
 static const char *__doc_fiction_detail_non_operationality_reason_KINKS = R"doc(Kinks induced the layout to become non-operational.)doc";
@@ -9132,6 +9508,14 @@ static const char *__doc_fiction_detail_non_operationality_reason_LOGIC_MISMATCH
 static const char *__doc_fiction_detail_non_operationality_reason_NONE = R"doc(No reason for non-operationality could be determined.)doc";
 
 static const char *__doc_fiction_detail_non_operationality_reason_POTENTIAL_POSITIVE_CHARGES = R"doc(Positive charges may occur but the simulation base is set to `2`.)doc";
+
+static const char *__doc_fiction_detail_operation_mode = R"doc()doc";
+
+static const char *__doc_fiction_detail_operation_mode_ALL_NODES = R"doc()doc";
+
+static const char *__doc_fiction_detail_operation_mode_AND_OR_ONLY = R"doc()doc";
+
+static const char *__doc_fiction_detail_operation_mode_FO_ONLY = R"doc()doc";
 
 static const char *__doc_fiction_detail_operational_domain_impl = R"doc()doc";
 
@@ -9539,6 +9923,30 @@ static const char *__doc_fiction_detail_orthogonal_impl_ps = R"doc()doc";
 static const char *__doc_fiction_detail_orthogonal_impl_pst = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_orthogonal_planar_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_po_counter = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_ps = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_pst = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl_orthogonal_planar_v2_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl_po_counter = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl_ps = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl_pst = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_v2_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_physical_population_stability_impl =
 R"doc(This class implements the simulation of the population stability for a
@@ -9953,6 +10361,10 @@ Parameter ``item``:
 Parameter ``priority``:
     The priority of the element.)doc";
 
+static const char *__doc_fiction_detail_propagate_backward = R"doc()doc";
+
+static const char *__doc_fiction_detail_propagate_forward = R"doc()doc";
+
 static const char *__doc_fiction_detail_qca_energy_dissipation_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_qca_energy_dissipation_impl_lyt = R"doc()doc";
@@ -10244,6 +10656,16 @@ Parameter ``cell``:
 
 static const char *__doc_fiction_detail_recursively_paint_edges = R"doc()doc";
 
+static const char *__doc_fiction_detail_remove_buffer_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_remove_buffer_impl_ntk = R"doc()doc";
+
+static const char *__doc_fiction_detail_remove_buffer_impl_remove_buffer_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_remove_buffer_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_remove_buffer_impl_skip_buffer_chain_rec = R"doc()doc";
+
 static const char *__doc_fiction_detail_rng_state =
 R"doc(A lightweight container that groups together the two objects required
 for random fan-out selection and only lives when `strategy == RANDOM`.)doc";
@@ -10477,6 +10899,28 @@ R"doc(Enum indicating if primary inputs (PIs) can be placed at the top or
 left.)doc";
 
 static const char *__doc_fiction_detail_search_space_graph_planar = R"doc(Create planar layouts.)doc";
+
+static const char *__doc_fiction_detail_set_level_and_rank =
+R"doc(Set the level and rank of a node by calling its correxponding `on_add`
+function.
+
+Template parameter ``Ntk``:
+    Type of the input logic network.
+
+Template parameter ``NtkDest``:
+    Type of the returned logic network.
+
+Parameter ``ntk_dest``:
+    Output network.
+
+Parameter ``old2new``:
+    `node_map` to assign the nodes of the old network to the new
+    network.
+
+Parameter ``g``:
+    Currently viewed gate.`)doc";
+
+static const char *__doc_fiction_detail_start_orientation = R"doc()doc";
 
 static const char *__doc_fiction_detail_sweep_parameter_to_string =
 R"doc(Converts a sweep parameter to a string representation. This is used to
@@ -15923,6 +16367,22 @@ Returns:
     `ntk.node_to_index(n)` is the position where `n`'s inverse level
     is stored.)doc";
 
+static const char *__doc_fiction_inverter_substitution =
+R"doc(A network optimization algorithm that substitutes inverters at the
+outputs of all fan-out nodes with one single inverter at their inputs.
+Thereby, the total number of inverters is reduced. This is part of the
+Signal Distribution Networks I: Input Ordering.
+
+Template parameter ``Ntk``:
+    Logic network type.
+
+Parameter ``ntk``:
+    The input logic network whose inverter count is to be optimized.
+
+Returns:
+    A network that is logically equivalent to `ntk`, but with an
+    optimized inverter count.)doc";
+
 static const char *__doc_fiction_is_balanced =
 R"doc(Checks if a logic network is properly path-balanced with regard to the
 provided parameters.
@@ -16550,6 +17010,189 @@ Template parameter ``Dist``:
 
 static const char *__doc_fiction_manhattan_distance_functor_manhattan_distance_functor = R"doc()doc";
 
+static const char *__doc_fiction_mincross =
+R"doc(Reimplementation of Graphviz's `crossing.c` algorithm for edge
+crossing minimization. This function reorders nodes in a leveled logic
+network to minimize the number of edge crossings using iterative
+median and transpose heuristics.
+
+Template parameter ``Ntk``:
+    A logic network type with level and fanout support.
+
+Parameter ``ntk``:
+    The input leveled network whose ranks are to be reordered.
+
+Parameter ``ps``:
+    Configuration parameters for the minimization algorithm.
+
+Parameter ``pst``:
+    Optional pointer to a statistics structure for storing the
+    resulting number of crossings.
+
+Parameter ``optimize``:
+    If false, skips optimization and only reports the current number
+    of crossings.
+
+Returns:
+    A copy of the input network with reordered ranks to reduce edge
+    crossings.)doc";
+
+static const char *__doc_fiction_mincross_impl =
+R"doc(Implements the crossing minimization algorithm inspired by Graphviz's
+`mincross`. This algorithm reorders nodes in ranks to reduce edge
+crossings in a leveled graph representation of the logic network.
+
+Template parameter ``Ntk``:
+    Logic network type that models a leveled circuit with rank
+    information.)doc";
+
+static const char *__doc_fiction_mincross_impl_count_crossings =
+R"doc(Computes the number of crossings between two sets of ranked positions.
+
+Parameter ``a``:
+    Positions from first set of connections.
+
+Parameter ``b``:
+    Positions from second set of connections.
+
+Returns:
+    Total number of crossings between the sets.)doc";
+
+static const char *__doc_fiction_mincross_impl_fanout_ntk =
+R"doc(Fanout-augmented view of the network for efficient traversal and
+connectivity queries.)doc";
+
+static const char *__doc_fiction_mincross_impl_in_cross =
+R"doc(Counts the number of edge crossings between fanins of two nodes in the
+previous rank.
+
+Parameter ``left``:
+    First node.
+
+Parameter ``right``:
+    Second node.
+
+Returns:
+    Number of crossings.)doc";
+
+static const char *__doc_fiction_mincross_impl_median_map =
+R"doc(Stores median values used to sort nodes within ranks during
+optimization.)doc";
+
+static const char *__doc_fiction_mincross_impl_medians =
+R"doc(Computes median values for the nodes in rank `r0` based on their
+connections to `r1`.
+
+Parameter ``r0``:
+    Current rank.
+
+Parameter ``r1``:
+    Adjacent rank to which connections are considered.)doc";
+
+static const char *__doc_fiction_mincross_impl_mincross_impl =
+R"doc(Constructs the crossing minimization implementation object.
+
+Parameter ``src``:
+    The logic network on which to perform crossing minimization.
+
+Parameter ``optimize``:
+    Whether to run the optimization procedure or only count current
+    crossings.
+
+Parameter ``p``:
+    Configuration parameters for the algorithm.
+
+Parameter ``st``:
+    Statistics object to store the resulting number of crossings.)doc";
+
+static const char *__doc_fiction_mincross_impl_mincross_step =
+R"doc(Executes one full up/down pass of median ordering followed by
+transposition to reduce crossings.
+
+Parameter ``pass``:
+    The current pass number, determines direction and ordering.)doc";
+
+static const char *__doc_fiction_mincross_impl_minimize_crossings =
+R"doc(Performs the main iterative crossing minimization using median and
+transpose heuristics.)doc";
+
+static const char *__doc_fiction_mincross_impl_ncross =
+R"doc(Computes the total number of edge crossings in the current network
+state.)doc";
+
+static const char *__doc_fiction_mincross_impl_ntk = R"doc(Logic network being reordered.)doc";
+
+static const char *__doc_fiction_mincross_impl_opt =
+R"doc(Flag indicating whether to perform optimization or only count
+crossings.)doc";
+
+static const char *__doc_fiction_mincross_impl_out_cross =
+R"doc(Counts the number of edge crossings between fanouts of two nodes in
+the next rank.
+
+Parameter ``left``:
+    First node.
+
+Parameter ``right``:
+    Second node.
+
+Returns:
+    Number of crossings.)doc";
+
+static const char *__doc_fiction_mincross_impl_ps = R"doc(Parameters for crossing minimization.)doc";
+
+static const char *__doc_fiction_mincross_impl_pst =
+R"doc(Statistics that store the final number of crossings after
+optimization.)doc";
+
+static const char *__doc_fiction_mincross_impl_reorder =
+R"doc(Reorders the nodes in a given rank according to computed medians.
+
+Parameter ``r``:
+    The rank index.
+
+Parameter ``reverse``:
+    If true, sorts in descending order of medians.)doc";
+
+static const char *__doc_fiction_mincross_impl_run =
+R"doc(Runs the crossing minimization algorithm and returns a reordered
+network.
+
+Returns:
+    A network with reordered nodes in ranks to reduce edge crossings.)doc";
+
+static const char *__doc_fiction_mincross_impl_total_crossings = R"doc(Current total number of edge crossings in the network.)doc";
+
+static const char *__doc_fiction_mincross_impl_transpose =
+R"doc(Performs pairwise transpositions within ranks to further reduce
+crossings.
+
+Parameter ``reverse``:
+    If true, applies reversed heuristic for tie-breaking.)doc";
+
+static const char *__doc_fiction_mincross_impl_transpose_step =
+R"doc(Performs a single transposition pass for rank `r`.
+
+Parameter ``r``:
+    Rank index.
+
+Parameter ``reverse``:
+    If true, applies reversed heuristic for tie-breaking.
+
+Returns:
+    The number of crossings reduced.)doc";
+
+static const char *__doc_fiction_mincross_params = R"doc(Parameters for the `mincross` crossing minimization algorithm.)doc";
+
+static const char *__doc_fiction_mincross_params_fixed_pis =
+R"doc(Whether the rank positions of primary inputs (PIs) should remain fixed
+during the minimization process. If set to `true`, PIs will not be
+reordered.)doc";
+
+static const char *__doc_fiction_mincross_stats = R"doc(Statistics collected during the execution of the `mincross` algorithm.)doc";
+
+static const char *__doc_fiction_mincross_stats_num_crossings = R"doc(The total number of edge crossings after optimization.)doc";
+
 static const char *__doc_fiction_minimum_energy =
 R"doc(Computes the minimum energy of a range of
 `charge_distribution_surface` objects. If the range is empty, infinity
@@ -16705,6 +17348,52 @@ Parameter ``file``:
 
 Parameter ``rfun``:
     The actual parsing function.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization =
+R"doc(Implements a planarization mechanism for networks using a H-Graph
+strategy for node duplication.
+
+The planarization achieved by this function solves the Node
+Duplication Crossing Minimization (NDCE) problem by finding the
+shortest x-y path in the H-graph for every level in the network. An
+H-graph describes edge relations between two levels in a network, with
+one level assumed as fixed, starting at the Primary Outputs (POs). By
+finding the shortest path from the source (x) to the sink (y) in this
+H-graph, an optimal solution for the NDCE problem for each level is
+found. The function constructs an H-graph that captures edge relations
+between two levels within the graph and computes the shortest x-y
+paths on the H-graph, traversing from the POs towards the Primary
+Inputs (PIs).
+
+Template parameter ``NtkDest``:
+    Destination network type.
+
+Template parameter ``NtkSrc``:
+    Source network type.
+
+Parameter ``ntk_src``:
+    Source network to be utilized for the planarization.
+
+Parameter ``ps``:
+    Node duplication parameters used in the computation.
+
+Returns:
+    A view of the planarized virtual_pi_network created in the format
+    of mutable_rank_view.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_params = R"doc(Parameters for the node duplication algorithm.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_params_output_order =
+R"doc(The output order determines the starting layer for this algorithm. If
+this option is turned off, the output order remains the same as in the
+provided network. If it is turned on, the outputs are ordered
+randomly.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_params_output_order_KEEP_PO_ORDER = R"doc(Keep the PO order from the input network.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_params_output_order_RANDOM_PO_ORDER = R"doc(Randomize the PO order.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_params_po_order = R"doc()doc";
 
 static const char *__doc_fiction_normalize_layout_coordinates =
 R"doc(A new layout is constructed and returned that is equivalent to the
@@ -17633,6 +18322,10 @@ static const char *__doc_fiction_orthogonal_physical_design_stats_report = R"doc
 static const char *__doc_fiction_orthogonal_physical_design_stats_x_size = R"doc()doc";
 
 static const char *__doc_fiction_orthogonal_physical_design_stats_y_size = R"doc()doc";
+
+static const char *__doc_fiction_orthogonal_planar = R"doc(Description)doc";
+
+static const char *__doc_fiction_orthogonal_planar_v2 = R"doc(Description)doc";
 
 static const char *__doc_fiction_out_of_cell_names_exception = R"doc()doc";
 
@@ -19319,6 +20012,24 @@ Parameter ``relative_c``:
 
 Returns:
     Absolute cell position in a layout.)doc";
+
+static const char *__doc_fiction_remove_buffer =
+R"doc(Removes buffer nodes in a network. The idea is the same as in
+mockturtle::remove_buffer_chains()`, but node deletion is not
+supported for `buffered_klut_networks`, and therefore, an approach
+similar to `fiction::convert_network` is chosen.
+
+@note Fanout nodes are also flagged with `is_buf` in fiction, but not
+removed by this class.
+
+Template parameter ``Ntk``:
+    The network type.
+
+Parameter ``ntk``:
+    The original network.
+
+Returns:
+    The network with buffers removed.)doc";
 
 static const char *__doc_fiction_res_clocking =
 R"doc(Returns the RES clocking as defined in \"An efficient clocking scheme
@@ -22318,8 +23029,6 @@ Returns:
     or `std::nullopt` if the networks are incompatible.)doc";
 
 static const char *__doc_fiction_virtual_pi_network = R"doc()doc";
-
-static const char *__doc_fiction_virtual_pi_network_clone = R"doc(Clones the `virtual_pi_network` object.)doc";
 
 static const char *__doc_fiction_virtual_pi_network_create_virtual_pi =
 R"doc(Create a virtual PI, which is a mapping to a real PI.
