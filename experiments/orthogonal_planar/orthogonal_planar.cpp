@@ -278,50 +278,10 @@ int main()  // NOLINT
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
-        // continue;
         auto benchmark_network = read_ntk<fiction::tec_nt>(benchmark);
-
-        /*fiction::technology_network benchmark_network;
-        const auto pi0 = benchmark_network.create_pi();
-        const auto pi1 = benchmark_network.create_pi();
-        const auto pi2 = benchmark_network.create_pi();
-        const auto pi3 = benchmark_network.create_pi();
-        const auto pi4 = benchmark_network.create_pi();
-        const auto pi5 = benchmark_network.create_pi();
-
-        const auto n2 = benchmark_network.create_not(pi2);
-        const auto n3 = benchmark_network.create_not(pi3);
-        const auto a0 = benchmark_network.create_and(pi0, pi1);
-        const auto a1 = benchmark_network.create_and(pi4, pi5);
-        const auto a2 = benchmark_network.create_and(a0, pi2);
-        const auto a3 = benchmark_network.create_and(n2, n3);
-        const auto a4 = benchmark_network.create_and(a1, pi3);
-        const auto o0 = benchmark_network.create_or(pi4, pi5);
-
-        benchmark_network.create_po(a2);
-        benchmark_network.create_po(a3);
-        benchmark_network.create_po(a4);
-        benchmark_network.create_po(o0);*/
-
-        // fiction::debug::write_dot_network(benchmark_network, "original_ntk");
 
         fiction::network_balancing_params b_ps;
         b_ps.unify_outputs = true;
-
-        /*bool cont = false;
-        benchmark_network.foreach_pi(
-            [&benchmark_network, &cont](auto pi)
-            {
-                if (benchmark_network.is_po(pi))
-                {
-                    cont = true;
-                    std::cout << "Pi is Po\n";
-                }
-            });
-        if (cont)
-        {
-            continue;
-        }*/
 
         const auto _b = fiction::network_balancing<fiction::technology_network>(
             fiction::fanout_substitution<fiction::technology_network>(benchmark_network), b_ps);
@@ -335,11 +295,7 @@ int main()  // NOLINT
 
         auto _r = fiction::mutable_rank_view(_b);
         auto planarized_b = fiction::node_duplication_planarization(_r);
-        //const auto ortho = fiction::orthogonal<gate_lyt>(planarized_b);
-        //const auto mapped_to_cells = fiction::apply_gate_library<fiction::qca_cell_clk_lyt, fiction::qca_one_library>(ortho);
         fiction::debug::write_dot_network(planarized_b, "planarized_ntk");
-        //fiction::debug::write_dot_layout(ortho, "ortho_lyt");
-        //fiction::write_qca_layout_svg(mapped_to_cells, "ortho_cell_lyt");
 
         if (planarized_b.size() > 100000)
         {
