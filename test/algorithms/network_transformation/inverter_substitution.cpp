@@ -6,7 +6,7 @@
 
 #include "fiction/algorithms/properties/count_gate_types.hpp"
 #include "fiction/algorithms/verification/virtual_miter.hpp"
-#include "fiction/networks/views/extended_rank_view.hpp"
+#include "fiction/networks/views/mutable_rank_view.hpp"
 
 #include <fiction/algorithms/network_transformation/inverter_substitution.hpp>
 #include <fiction/networks/technology_network.hpp>
@@ -30,7 +30,7 @@ TEST_CASE("Minimal FO inverter substitution, [inverter-substitution]")
     tec.create_po(buf1);
     tec.create_po(buf2);
 
-    const auto tec_rank            = extended_rank_view(tec);
+    const auto tec_rank            = mutable_rank_view(tec);
     auto       substituted_network = inverter_substitution(tec_rank);
 
     count_gate_types_stats st_before{};
