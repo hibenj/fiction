@@ -43,7 +43,8 @@ struct mincross_stats
 
 /**
  * Implements the crossing minimization algorithm inspired by Graphviz's `mincross`.
- * This algorithm reorders nodes in ranks to reduce edge crossings in a leveled graph representation of the logic network.
+ * This algorithm reorders nodes in ranks to reduce edge crossings in a leveled graph representation of the logic
+ * network.
  *
  * @tparam Ntk Logic network type that models a leveled circuit with rank information.
  */
@@ -77,7 +78,9 @@ class mincross_impl
     [[nodiscard]] Ntk run()
     {
         if (opt)
+        {
             minimize_crossings();
+        }
         ncross();
         pst.num_crossings = total_crossings;
         return ntk;
@@ -90,7 +93,7 @@ class mincross_impl
     void minimize_crossings()
     {
         constexpr int    max_iter    = 24;
-        constexpr int    min_quit    = 4;
+        constexpr int    min_quit    = 8;
         constexpr double convergence = 0.995;
 
         uint64_t best_cross = UINT64_MAX;
@@ -100,7 +103,7 @@ class mincross_impl
         cur_cross  = total_crossings;
         best_cross = cur_cross;
 
-        std::vector<std::vector<node>> best_ranks = fanout_ntk.get_all_ranks();
+        auto best_ranks = fanout_ntk.get_all_ranks();
 
         // Passes: 0 = init, 1 = refinement, 2 = full optimization
         for (int pass = 0; pass <= 2; ++pass)
@@ -111,7 +114,9 @@ class mincross_impl
             for (int iter = 0; iter < max_this_pass; ++iter)
             {
                 if (trying++ >= min_quit || cur_cross == 0)
+                {
                     break;
+                }
 
                 // Core step: reorder ranks to reduce crossings
                 mincross_step(iter);
@@ -123,9 +128,11 @@ class mincross_impl
                 if (cur_cross <= best_cross)
                 {
                     best_ranks = fanout_ntk.get_all_ranks();
-                    best_cross = cur_cross;
                     if (static_cast<double>(cur_cross) < convergence * best_cross)
+                    {
                         trying = 0;
+                    }
+                    best_cross = cur_cross;
                 }
             }
 
@@ -136,6 +143,18 @@ class mincross_impl
                 break;
             }
         }
+
+        if (best_cross > 0)
+        {
+            transpose(false);
+            ncross();
+            cur_cross = total_crossings;
+            if (cur_cross < best_cross)
+            {
+                best_ranks = fanout_ntk.get_all_ranks();
+            }
+        }
+        fanout_ntk.set_all_ranks(best_ranks);
         ntk.set_all_ranks(best_ranks);
     }
 
@@ -146,7 +165,7 @@ class mincross_impl
      */
     void mincross_step(int pass)
     {
-        const bool reverse = pass % 4 < 2;
+        const bool reverse = false;  // pass % 4 < 2;
 
         int max_rank = static_cast<int>(fanout_ntk.depth());
 
@@ -168,13 +187,15 @@ class mincross_impl
         for (int r = first; r != last + dir; r += dir)
         {
             if (r == 0 && ps.fixed_pis)
+            {
                 continue;
+            }
 
             const int other = r - dir;
 
-            medians(r, other);
+            medians(static_cast<uint32_t>(r), static_cast<uint32_t>(other));
 
-            reorder(r, reverse);
+            reorder(static_cast<uint32_t>(r), reverse);
         }
 
         transpose(!reverse);
@@ -186,7 +207,7 @@ class mincross_impl
      * @param r0 Current rank.
      * @param r1 Adjacent rank to which connections are considered.
      */
-    void medians(int r0, int r1)
+    void medians(uint32_t r0, uint32_t r1)
     {
         median_map.clear();
 
@@ -195,7 +216,7 @@ class mincross_impl
             r0,
             [&](auto const& n)
             {
-                std::vector<int> positions;
+                std::vector<uint32_t> positions;
 
                 if (r1 > r0)
                 {
@@ -216,7 +237,7 @@ class mincross_impl
                                              [&](auto const& fi)
                                              {
                                                  const auto src = fanout_ntk.get_node(fi);
-                                                 if (fanout_ntk.level(src) == r1)
+                                                 if (fanout_ntk.level(src) == r1 && !fanout_ntk.is_constant(src))
                                                  {
                                                      positions.push_back(fanout_ntk.rank_position(src));
                                                  }
@@ -249,10 +270,10 @@ class mincross_impl
                     else
                     {
                         // Weighted median
-                        const size_t rm    = j / 2;
-                        const size_t lm    = rm - 1;
-                        int const    lspan = positions[lm] - positions.front();
-                        const int    rspan = positions.back() - positions[rm];
+                        const size_t   rm    = j / 2;
+                        const size_t   lm    = rm - 1;
+                        const uint32_t lspan = positions[lm] - positions.front();
+                        const uint32_t rspan = positions.back() - positions[rm];
 
                         if (lspan == rspan)
                         {
@@ -260,8 +281,8 @@ class mincross_impl
                         }
                         else
                         {
-                            const double w =
-                                positions[lm] * static_cast<double>(rspan) + positions[rm] * static_cast<double>(lspan);
+                            const double w = (positions[lm] * static_cast<double>(rspan)) +
+                                             (positions[rm] * static_cast<double>(lspan));
                             median_map[n] = w / (lspan + rspan);
                         }
                     }
@@ -275,7 +296,7 @@ class mincross_impl
      * @param r The rank index.
      * @param reverse If true, sorts in descending order of medians.
      */
-    void reorder(int r, bool reverse)
+    void reorder(uint32_t r, bool reverse)
     {
         // Get the nodes at rank r
         auto rank = fanout_ntk.get_ranks(r);
@@ -289,9 +310,13 @@ class mincross_impl
 
                       // Handle -1 (no connections) as infinity to push to the back
                       if (m1 == -1)
+                      {
                           return false;
+                      }
                       if (m2 == -1)
+                      {
                           return true;
+                      }
 
                       return reverse ? (m1 > m2) : (m1 < m2);
                   });
@@ -307,18 +332,20 @@ class mincross_impl
      */
     void transpose(bool reverse)
     {
-        std::vector<bool> candidate(fanout_ntk.depth(), true);
-        int               delta = 0;
-        int max_iterations = 0;
+        std::vector<bool> candidate(fanout_ntk.depth() + 1, true);
+        int               delta          = 0;
+        int               max_iterations = 0;
 
         while (true)
         {
             delta = 0;
 
-            for (int l = 0; l <= fanout_ntk.depth(); ++l)
+            for (uint32_t l = 0; l <= fanout_ntk.depth(); ++l)
             {
                 if (l == 0 && ps.fixed_pis)
+                {
                     continue;
+                }
 
                 if (candidate[l])
                 {
@@ -331,7 +358,9 @@ class mincross_impl
             ++max_iterations;
 
             if (delta < 1 || max_iterations == 1000)
+            {
                 break;
+            }
         }
     }
 
@@ -342,16 +371,18 @@ class mincross_impl
      * @param reverse If true, applies reversed heuristic for tie-breaking.
      * @return The number of crossings reduced.
      */
-    int transpose_step(int r, bool reverse)
+    int transpose_step(uint32_t r, bool reverse)
     {
         auto rank = fanout_ntk.get_ranks(r);
 
         if (rank.size() <= 1)
+        {
             return 0;
+        }
 
         int rv = 0;
 
-        for (int i = 0; i < rank.size() - 1; ++i)
+        for (uint32_t i = 0; i < rank.size() - 1; ++i)
         {
             auto const& v = rank[i];
             auto const& w = rank[i + 1];
@@ -367,7 +398,7 @@ class mincross_impl
                 c1 += in_cross(w, v);
             }
 
-            if (r + 1 < static_cast<int>(fanout_ntk.depth()))
+            if (r + 1 < fanout_ntk.depth())
             {
                 c0 += out_cross(v, w);
                 c1 += out_cross(w, v);
@@ -392,12 +423,14 @@ class mincross_impl
      */
     int in_cross(const node& left, const node& right)
     {
-        std::vector<int> left_sources, right_sources;
+        std::vector<uint32_t> left_sources, right_sources;
 
         fanout_ntk.foreach_fanin(left,
                                  [&](auto const& f)
                                  {
                                      auto src = fanout_ntk.get_node(f);
+                                     if (fanout_ntk.is_constant(src))
+                                         return;
                                      left_sources.push_back(fanout_ntk.rank_position(src));
                                  });
 
@@ -405,6 +438,8 @@ class mincross_impl
                                  [&](auto const& f)
                                  {
                                      auto src = fanout_ntk.get_node(f);
+                                     if (fanout_ntk.is_constant(src))
+                                         return;
                                      right_sources.push_back(fanout_ntk.rank_position(src));
                                  });
 
@@ -420,7 +455,7 @@ class mincross_impl
      */
     int out_cross(const node& left, const node& right)
     {
-        std::vector<int> left_targets, right_targets;
+        std::vector<uint32_t> left_targets, right_targets;
 
         fanout_ntk.foreach_fanout(left,
                                   [&](auto const& tgt) { left_targets.push_back(fanout_ntk.rank_position(tgt)); });
@@ -438,7 +473,7 @@ class mincross_impl
      * @param b Positions from second set of connections.
      * @return Total number of crossings between the sets.
      */
-    int count_crossings(const std::vector<int>& a, const std::vector<int>& b)
+    int count_crossings(const std::vector<uint32_t>& a, const std::vector<uint32_t>& b)
     {
         int count = 0;
         for (auto x : a)
@@ -446,7 +481,9 @@ class mincross_impl
             for (auto y : b)
             {
                 if (x > y)
+                {
                     ++count;
+                }
             }
         }
         return count;
@@ -459,7 +496,7 @@ class mincross_impl
     {
         total_crossings = 0;
 
-        for (int r = 0; r < fanout_ntk.depth(); ++r)
+        for (uint32_t r = 0; r < fanout_ntk.depth(); ++r)
         {
             std::vector<uint64_t> penalty_array(fanout_ntk.rank_width(r + 1) + 1, 0);
             uint64_t              max_pos = 0;
