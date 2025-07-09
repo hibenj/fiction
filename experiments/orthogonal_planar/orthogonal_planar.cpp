@@ -11,6 +11,7 @@
 #include "fiction/algorithms/physical_design/graph_oriented_layout_design.hpp"  // graph-oriented layout design algorithm
 #include "fiction/algorithms/physical_design/orthogonal.hpp"  // graph-oriented layout design algorithm
 #include "fiction/algorithms/physical_design/orthogonal_planar_v2.hpp"
+#include "fiction/algorithms/properties/critical_path_length_and_throughput.hpp"
 #include "fiction/algorithms/verification/design_rule_violations.hpp"
 #include "fiction/algorithms/verification/equivalence_checking.hpp"  // SAT-based equivalence checking
 #include "fiction/algorithms/verification/virtual_miter.hpp"
@@ -87,6 +88,73 @@ Ntk read_ntk(const std::string& name)
     return *nets.front();
 }
 
+/**
+ * Critical path length and throughput storage struct.
+ */
+struct cp_and_tp
+{
+    /**
+     * Length of the critical path in tiles.
+     */
+    uint64_t critical_path_length{0ull};
+    /**
+     * Throughput of the layout in clock cycles as \f$\frac{1}{x}\f$ where only \f$x\f$ is stored.
+     */
+    uint64_t throughput{0ull};
+};
+
+template <typename Lyt>
+uint64_t critical_path_length_grid(const Lyt& lyt)
+{
+    static_assert(fiction::is_gate_level_layout_v<Lyt>, "Lyt is not a gate-level layout");
+
+    using tile_t = fiction::tile<Lyt>;
+
+    // reachability cache: tile  ➜  1 = already explored
+    phmap::flat_hash_set<tile_t> visited;
+
+    uint64_t crit_len = 0;
+
+    /* ---------- 1. iterate over every primary output ---------- */
+    lyt.foreach_po([&](const auto& po)
+                   {
+                       // BFS queue holds <current tile , accumulated geometric length>
+                       std::queue<std::pair<tile_t, uint64_t>> q;
+                       q.emplace(po, 0);
+                       visited.insert(static_cast<tile_t>(po));
+
+                       /* ---------- 2. reverse walk until we hit the driving PI ---------- */
+                       while (!q.empty())
+                       {
+                           auto [t, len] = q.front();
+                           q.pop();
+
+                           /* 2a. PI reached → update candidate for critical path length */
+                           if (lyt.is_pi_tile(t))
+                           {
+                               crit_len = std::max(crit_len, len);
+                               continue;          // done with this branch
+                           }
+
+                           /* 2b. enqueue all fan-ins that have not been explored yet */
+                           for (const tile_t& src : lyt.incoming_data_flow(t))
+                           {
+                               if (visited.insert(src).second)            // 1st time we see this tile?
+                               {
+                                   // add Manhattan distance from t to src (|Δx|+|Δy|) to current length
+                                   const uint64_t step =
+                                       std::abs(int(src.x) - int(t.x)) +
+                                       std::abs(int(src.y) - int(t.y));
+
+                                   q.emplace(src, len + step);
+                               }
+                           }
+                       }
+                   });
+
+    return crit_len + 1;          // ← critical path in *tiles*
+}
+
 int main()  // NOLINT
 {
     using gate_lyt =
@@ -95,8 +163,8 @@ int main()  // NOLINT
         fiction::cell_level_layout<fiction::qca_technology,
                                    fiction::clocked_layout<fiction::cartesian_layout<fiction::offset::ucoord_t>>>;
 
-    experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, double, uint64_t, uint64_t,
-                            uint64_t, double, double, double, bool, bool, bool>
+    experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t, double, uint64_t, uint64_t,
+                            uint64_t, uint64_t, double, double, double, double, bool, bool, bool>
         orthogonal_planar_exp{"orthogonal_planar_exp",
                               "benchmark",
                               "inputs",
@@ -105,19 +173,22 @@ int main()  // NOLINT
                               "layout width sota",
                               "layout height sota",
                               "layout area sota",
+                              "cp sota",
                               "runtime sota",
                               "layout width proposed",
                               "layout height proposed",
                               "layout area proposed",
+                              "cp proposed",
                               "runtime proposed",
                               "diff area (%)",
+                              "diff cp (%)",
                               "diff runtime (%)",
                               "planar_layout",
                               "eq (ntks)",
                               "eq (ortho_p)"};
 
-    fiction::orthogonal_physical_design_stats orthogonal_planar_stats{};
     fiction::orthogonal_physical_design_stats orthogonal_planar_stats_sota{};
+    fiction::orthogonal_physical_design_stats orthogonal_planar_stats_proposed{};
     fiction::post_layout_optimization_params  params{};
     params.max_gate_relocations = 0;
     params.timeout              = 100000;
@@ -127,7 +198,7 @@ int main()  // NOLINT
     for (const auto& entry :
          std::filesystem::directory_iterator("/home/benjamin/Documents/Repositories/working/fiction/benchmarks/IWLS93"))
     {
-        continue;
+        // continue;
         fmt::print("[i] processing {}\n", entry.path().filename().string());
 
         /*if ("C432.v" == entry.path().filename().string())
@@ -209,7 +280,7 @@ int main()  // NOLINT
         assert(cec_m.has_value());
 
         const auto gate_level_layout_sota = fiction::orthogonal_planar<gate_lyt>(planarized_b, {}, &orthogonal_planar_stats_sota);
-        const auto gate_level_layout_proposed = fiction::orthogonal_planar_v2<gate_lyt>(planarized_b, {}, &orthogonal_planar_stats);
+        const auto gate_level_layout_proposed = fiction::orthogonal_planar_v2<gate_lyt>(planarized_b, {}, &orthogonal_planar_stats_proposed);
 
         std::cout << "layout finished\n";
 
@@ -225,18 +296,19 @@ int main()  // NOLINT
         fiction::gate_level_drv_params ps_p{};
         fiction::gate_level_drv_stats  st_p{};
 
-        fiction::gate_level_drvs(gate_level_layout_proposed, ps_p, &st_p);
+        //fiction::gate_level_drvs(gate_level_layout_sota, ps_p, &st_p);
+        //fiction::gate_level_drvs(gate_level_layout_proposed, ps_p, &st_p);
 
         // check equivalence for the planar layout
-        const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout_proposed);
+        // const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout_proposed);
         bool       eq = false;
-        if (miter)
+        /*if (miter)
         {
             mockturtle::equivalence_checking_stats st;
 
             const auto ce = mockturtle::equivalence_checking(*miter, {}, &st);
             eq            = ce.value();
-        }
+        }*/
 
         std::cout << "equivalence finished\n";
 
@@ -249,21 +321,24 @@ int main()  // NOLINT
         const auto height_sota = bounding_box_sota.get_y_size() + 1;
         const auto area_sota   = width_sota * height_sota;
         const auto time_sota   = mockturtle::to_seconds(orthogonal_planar_stats_sota.time_total);
+        const auto cp_sota = critical_path_length_grid(gate_level_layout_sota);
 
         // calculate bounding box
         const auto bounding_box_proposed = fiction::bounding_box_2d(gate_level_layout_proposed);
         const auto width_proposed  = bounding_box_proposed.get_x_size() + 1;
         const auto height_proposed = bounding_box_proposed.get_y_size() + 1;
         const auto area_proposed   = width_proposed * height_proposed;
-        const auto time_proposed   = mockturtle::to_seconds(orthogonal_planar_stats.time_total);
+        const auto time_proposed   = mockturtle::to_seconds(orthogonal_planar_stats_proposed.time_total);
+        const auto cp_proposed = critical_path_length_grid(gate_level_layout_proposed);
 
         const auto area_diff = (static_cast<double>(area_sota - area_proposed) / area_sota) * 100.0;
         const auto time_diff = (static_cast<double>(time_sota - time_proposed) / time_sota) * 100.0;
+        const auto cp_diff = (static_cast<double>(cp_sota - cp_proposed) / cp_sota) * 100.0;
 
         orthogonal_planar_exp(entry.path().filename().string(), planarized_b.num_pis(), planarized_b.num_pos(),
-                              planarized_b.num_gates(), width_sota, height_sota, area_sota, time_sota,
-                              width_proposed, height_proposed, area_proposed, time_proposed,
-                              area_diff,
+                              planarized_b.num_gates(), width_sota, height_sota, area_sota, cp_sota, time_sota,
+                              width_proposed, height_proposed, area_proposed, cp_proposed, time_proposed,
+                              area_diff, cp_diff,
                               time_diff, planar_layout,
                               cec_m.value(), eq);
 
@@ -274,11 +349,11 @@ int main()  // NOLINT
     }
 
     // For all fiction benchmarks
-    static constexpr const uint64_t bench_select = (fiction_experiments::full_adder);
+    static constexpr const uint64_t bench_select = (fiction_experiments::fontes18);
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
-        // continue;
+        continue;
         auto benchmark_network = read_ntk<fiction::tec_nt>(benchmark);
 
         /*fiction::technology_network benchmark_network;
@@ -326,7 +401,7 @@ int main()  // NOLINT
         const auto _b = fiction::network_balancing<fiction::technology_network>(
             fiction::fanout_substitution<fiction::technology_network>(benchmark_network), b_ps);
 
-        fiction::debug::write_dot_network(_b, "balanced_ntk");
+        // fiction::debug::write_dot_network(_b, "balanced_ntk");
 
         if (_b.size() > 10000)
         {
@@ -337,7 +412,7 @@ int main()  // NOLINT
         auto planarized_b = fiction::node_duplication_planarization(_r);
         //const auto ortho = fiction::orthogonal<gate_lyt>(planarized_b);
         //const auto mapped_to_cells = fiction::apply_gate_library<fiction::qca_cell_clk_lyt, fiction::qca_one_library>(ortho);
-        fiction::debug::write_dot_network(planarized_b, "planarized_ntk");
+        // fiction::debug::write_dot_network(planarized_b, "planarized_ntk");
         //fiction::debug::write_dot_layout(ortho, "ortho_lyt");
         //fiction::write_qca_layout_svg(mapped_to_cells, "ortho_cell_lyt");
 
@@ -357,8 +432,8 @@ int main()  // NOLINT
             *fiction::virtual_miter<fiction::technology_network>(benchmark_network, planarized_b), {}, &eq_st);
         assert(cec_m.has_value());
 
-        const auto gate_level_layout_sota = fiction::orthogonal_planar<gate_lyt>(planarized_b, {}, &orthogonal_planar_stats);
-        const auto gate_level_layout_proposed = fiction::orthogonal_planar_v2<gate_lyt>(planarized_b, {}, &orthogonal_planar_stats);
+        const auto gate_level_layout_sota = fiction::orthogonal_planar<gate_lyt>(planarized_b, {}, &orthogonal_planar_stats_sota);
+        const auto gate_level_layout_proposed = fiction::orthogonal_planar_v2<gate_lyt>(planarized_b, {}, &orthogonal_planar_stats_proposed);
         //const auto mapped_to_cells_planar = fiction::apply_gate_library<fiction::qca_cell_clk_lyt, fiction::qca_one_library>(gate_level_layout);
         //fiction::write_qca_layout_svg(mapped_to_cells_planar, "planar_cell_lyt");
 
@@ -373,7 +448,7 @@ int main()  // NOLINT
 
         fiction::gate_level_drvs(gate_level_layout_proposed, ps_p, &st_p);
 
-        fiction::debug::write_dot_layout(gate_level_layout_proposed);
+        // fiction::debug::write_dot_layout(gate_level_layout_proposed);
 
         // check equivalence for the planar layout
         const auto miter = mockturtle::miter<mockturtle::klut_network>(planarized_b, gate_level_layout_proposed);
@@ -411,22 +486,25 @@ int main()  // NOLINT
         const auto width_sota  = bounding_box_sota.get_x_size() + 1;
         const auto height_sota = bounding_box_sota.get_y_size() + 1;
         const auto area_sota   = width_sota * height_sota;
-        const auto time_sota   = mockturtle::to_seconds(orthogonal_planar_stats.time_total);
+        const auto time_sota   = mockturtle::to_seconds(orthogonal_planar_stats_sota.time_total);
+        const auto cp_sota = critical_path_length_grid(gate_level_layout_sota);
 
         // calculate bounding box
         const auto bounding_box_proposed = fiction::bounding_box_2d(gate_level_layout_proposed);
         const auto width_proposed  = bounding_box_proposed.get_x_size() + 1;
         const auto height_proposed = bounding_box_proposed.get_y_size() + 1;
         const auto area_proposed   = width_proposed * height_proposed;
-        const auto time_proposed   = mockturtle::to_seconds(orthogonal_planar_stats.time_total);
+        const auto time_proposed   = mockturtle::to_seconds(orthogonal_planar_stats_proposed.time_total);
+        const auto cp_proposed = critical_path_length_grid(gate_level_layout_proposed);
 
         const auto area_diff = (static_cast<double>(area_sota - area_proposed) / area_sota) * 100.0;
         const auto time_diff = (static_cast<double>(time_sota - time_proposed) / time_sota) * 100.0;
+        const auto cp_diff = (static_cast<double>(cp_sota - cp_proposed) / cp_sota) * 100.0;
 
         orthogonal_planar_exp(benchmark, planarized_b.num_pis(), planarized_b.num_pos(),
-                              planarized_b.num_gates(), width_sota, height_sota, area_sota, time_sota,
-                              width_proposed, height_proposed, area_proposed, time_proposed,
-                              area_diff,
+                              planarized_b.num_gates(), width_sota, height_sota, area_sota, cp_sota, time_sota,
+                              width_proposed, height_proposed, area_proposed, cp_proposed, time_proposed,
+                              area_diff, cp_diff,
                               time_diff, planar_layout,
                               cec_m.value(), eq);
 
