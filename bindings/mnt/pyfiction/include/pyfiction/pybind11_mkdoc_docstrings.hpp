@@ -4928,6 +4928,14 @@ static const char *__doc_fiction_design_sidb_gates_stats_sim_engine =
 R"doc(The simulation engine to be used for the operational domain
 computation.)doc";
 
+static const char *__doc_fiction_detail_Edge = R"doc()doc";
+
+static const char *__doc_fiction_detail_Edge_dst = R"doc()doc";
+
+static const char *__doc_fiction_detail_Edge_id = R"doc()doc";
+
+static const char *__doc_fiction_detail_Edge_src = R"doc()doc";
+
 static const char *__doc_fiction_detail_a_star_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_a_star_impl_a_star_impl = R"doc()doc";
@@ -5308,6 +5316,8 @@ static const char *__doc_fiction_detail_calculate_predecessor_gap = R"doc()doc";
 static const char *__doc_fiction_detail_calculate_start_orientation = R"doc()doc";
 
 static const char *__doc_fiction_detail_calculate_two_input_new_lines = R"doc()doc";
+
+static const char *__doc_fiction_detail_clear_bit = R"doc()doc";
 
 static const char *__doc_fiction_detail_clustercomplete_impl = R"doc()doc";
 
@@ -7681,6 +7691,8 @@ static const char *__doc_fiction_detail_fill_gap_array_zeros = R"doc()doc";
 
 static const char *__doc_fiction_detail_fill_gap_array_zeros_2 = R"doc()doc";
 
+static const char *__doc_fiction_detail_first_set = R"doc()doc";
+
 static const char *__doc_fiction_detail_gate_level_drvs_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_gate_level_drvs_impl_border_io_check =
@@ -8814,6 +8826,22 @@ static const char *__doc_fiction_detail_hexagonalization_impl_ps = R"doc(Hexagon
 static const char *__doc_fiction_detail_hexagonalization_impl_pst = R"doc(Hexagonalization statistics.)doc";
 
 static const char *__doc_fiction_detail_hexagonalization_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_insert_planar_crossings_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_insert_planar_crossings_impl_collect_crossing_matrix = R"doc()doc";
+
+static const char *__doc_fiction_detail_insert_planar_crossings_impl_eliminate_and_insert = R"doc()doc";
+
+static const char *__doc_fiction_detail_insert_planar_crossings_impl_fanout_ntk = R"doc()doc";
+
+static const char *__doc_fiction_detail_insert_planar_crossings_impl_insert_crossing = R"doc()doc";
+
+static const char *__doc_fiction_detail_insert_planar_crossings_impl_insert_planar_crossings_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_insert_planar_crossings_impl_ntk = R"doc()doc";
+
+static const char *__doc_fiction_detail_insert_planar_crossings_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_inverter_substitution_impl = R"doc()doc";
 
@@ -10129,6 +10157,8 @@ static const char *__doc_fiction_detail_placement_info_current_po = R"doc(The in
 
 static const char *__doc_fiction_detail_placement_info_node2pos = R"doc(Mapping of nodes to their positions in the layout.)doc";
 
+static const char *__doc_fiction_detail_popcount_row = R"doc()doc";
+
 static const char *__doc_fiction_detail_post_layout_optimization_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_post_layout_optimization_impl_add_fanin_to_route =
@@ -10904,6 +10934,8 @@ left.)doc";
 
 static const char *__doc_fiction_detail_search_space_graph_planar = R"doc(Create planar layouts.)doc";
 
+static const char *__doc_fiction_detail_set_bit = R"doc()doc";
+
 static const char *__doc_fiction_detail_set_level_and_rank =
 R"doc(Set the level and rank of a node by calling its correxponding `on_add`
 function.
@@ -10965,6 +10997,8 @@ Returns:
 static const char *__doc_fiction_detail_technology_mapping_impl_stats = R"doc(Technology mapping statistics.)doc";
 
 static const char *__doc_fiction_detail_technology_mapping_impl_technology_mapping_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_test_bit = R"doc()doc";
 
 static const char *__doc_fiction_detail_to_hex =
 R"doc(Utility function to transform a Cartesian tile into a hexagonal one.
@@ -16335,6 +16369,8 @@ Parameter ``t``:
 Returns:
     ToPoliNano gate representation of `t` including I/Os, rotation,
     etc.)doc";
+
+static const char *__doc_fiction_insert_planar_crossings = R"doc()doc";
 
 static const char *__doc_fiction_integral_abs =
 R"doc(Takes the absolute value of an integral number if it is signed, and
