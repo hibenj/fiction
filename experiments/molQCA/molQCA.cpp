@@ -375,12 +375,12 @@ auto compute_slacks_and_layout_extension(Lyt& gate_lyt)
 
             if (gate_lyt.is_at_western_border(pi_tile))
             {
-                x_slack_pi      = std::max(x_slack_pi, slack);
+                x_slack_pi            = std::max(x_slack_pi, slack);
                 border_properties[pi] = 0;
             }
             else if (gate_lyt.is_at_northern_border(pi_tile))
             {
-                y_slack_pi      = std::max(y_slack_pi, slack);
+                y_slack_pi            = std::max(y_slack_pi, slack);
                 border_properties[pi] = 1;
             }
         });
@@ -413,12 +413,12 @@ auto compute_slacks_and_layout_extension(Lyt& gate_lyt)
 
             if (gate_lyt.is_at_eastern_border(po_tile))
             {
-                x_slack_po           = std::max(x_slack_po, slack);
+                x_slack_po                 = std::max(x_slack_po, slack);
                 border_properties[po_node] = 2;
             }
             else if (gate_lyt.is_at_southern_border(po_tile))
             {
-                y_slack_po           = std::max(y_slack_po, slack);
+                y_slack_po                 = std::max(y_slack_po, slack);
                 border_properties[po_node] = 3;
             }
         });
@@ -426,7 +426,7 @@ auto compute_slacks_and_layout_extension(Lyt& gate_lyt)
     const auto x_extension = static_cast<uint32_t>(x_slack_pi + x_slack_po);
     const auto y_extension = static_cast<uint32_t>(y_slack_pi + y_slack_po);
 
-    return std::tuple{slack_pis,  slack_pos,   x_slack_pi,  y_slack_pi, x_slack_po,
+    return std::tuple{slack_pis,  slack_pos,   x_slack_pi,  y_slack_pi,       x_slack_po,
                       y_slack_po, x_extension, y_extension, border_properties};
 }
 
@@ -469,6 +469,66 @@ void move_and_extend_layout(Lyt& gate_lyt, uint64_t x_extension, uint64_t y_exte
         }
     }
     gate_lyt.resize({gate_lyt.x() + x_extension, gate_lyt.y() + y_extension, gate_lyt.z()});
+}
+
+template <typename Lyt>
+void move_layout(Lyt& gate_lyt, int move_x, int move_y)
+{
+    // Create new layout
+    Lyt gate_lyt_moved{{gate_lyt.x(), gate_lyt.y(), gate_lyt.z()}, gate_lyt.get_clocking_scheme()};
+
+    // Old → new signal map
+    std::unordered_map<mockturtle::signal<Lyt>, mockturtle::signal<Lyt>> signal_map{};
+
+    // Topological view
+    mockturtle::topo_view topo{gate_lyt};
+
+    // Lambda to collect fanins
+    auto collect_fanins = [&gate_lyt, &signal_map](const auto& n)
+    {
+        std::vector<mockturtle::signal<Lyt>> fanins;
+        gate_lyt.foreach_fanin(n, [&signal_map, &fanins](const auto fi) { fanins.push_back(signal_map[fi]); });
+        return fanins;
+    };
+
+    // Copy and shift nodes
+    topo.foreach_node(
+        [&gate_lyt, &gate_lyt_moved, &signal_map, &move_x, &move_y, &collect_fanins](const auto& n)
+        {
+            if (gate_lyt.is_constant(n))
+            {
+                return;
+            }
+
+            auto t = gate_lyt.get_tile(n);
+            assert(!(move_x < 0 && static_cast<uint64_t>(-move_x) > t.x) && "Invalid move: x would be negative");
+            assert(!(move_y < 0 && static_cast<uint64_t>(-move_y) > t.y) && "Invalid move: y would be negative");
+            t.x += move_x;
+            t.y += move_y;
+
+            const auto sig = gate_lyt.make_signal(n);
+
+            if (gate_lyt.is_pi(n))
+            {
+                auto node       = gate_lyt_moved.create_pi(gate_lyt.get_name(n), t);
+                signal_map[sig] = node;
+            }
+            else if (gate_lyt.is_po(n))
+            {
+                auto fanins     = collect_fanins(n);
+                auto node       = gate_lyt_moved.create_po(fanins[0], gate_lyt.get_name(n), t);
+                signal_map[sig] = node;
+            }
+            else
+            {
+                auto fanins     = collect_fanins(n);
+                auto node       = gate_lyt_moved.create_node(fanins, gate_lyt.node_function(n), t);
+                signal_map[sig] = node;
+            }
+        });
+
+    // Replace the original layout
+    gate_lyt = gate_lyt_moved;
 }
 
 template <typename Lyt>
@@ -525,11 +585,7 @@ void move_and_reconnect_pis_and_pos(Lyt& gate_lyt, std::unordered_map<mockturtle
         }
 
         std::vector<mockturtle::signal<Lyt>> fanin{};
-        gate_lyt.foreach_fanin(po_node,
-                               [&fanin](auto const& fi)
-                               {
-                                   fanin.push_back(fi);
-                               });
+        gate_lyt.foreach_fanin(po_node, [&fanin](auto const& fi) { fanin.push_back(fi); });
 
         // move this PO south and wire south to new position
         if (border_properties[po_node] == 3)
@@ -538,9 +594,9 @@ void move_and_reconnect_pis_and_pos(Lyt& gate_lyt, std::unordered_map<mockturtle
             auto new_t = t;
             new_t.y += slack;
             gate_lyt.move_node(po_node, new_t);
-            auto sig_buf = gate_lyt.create_buf(fanin[0], t);
+            auto sig_buf  = gate_lyt.create_buf(fanin[0], t);
             auto buf_tile = gate_lyt.get_tile(gate_lyt.get_node(sig_buf));
-            auto sig = fiction::detail::wire_south(gate_lyt, buf_tile, new_t);
+            auto sig      = fiction::detail::wire_south(gate_lyt, buf_tile, new_t);
             gate_lyt.connect(sig, po_node);
         }
         // move this PO east and wire east to new position
@@ -550,9 +606,9 @@ void move_and_reconnect_pis_and_pos(Lyt& gate_lyt, std::unordered_map<mockturtle
             auto new_t = t;
             new_t.x += slack;
             gate_lyt.move_node(po_node, new_t);
-            auto sig_buf = gate_lyt.create_buf(fanin[0], t);
+            auto sig_buf  = gate_lyt.create_buf(fanin[0], t);
             auto buf_tile = gate_lyt.get_tile(gate_lyt.get_node(sig_buf));
-            auto sig = fiction::detail::wire_east(gate_lyt, t, new_t);
+            auto sig      = fiction::detail::wire_east(gate_lyt, t, new_t);
             gate_lyt.connect(sig, po_node);
         }
     }
@@ -564,8 +620,11 @@ void synchronize_pis_pos(Lyt& gate_lyt)
     // Returns [slack_pis, slack_pos, x_slack_pi, y_slack_pi, x_slack_po, y_slack_po, x_extension, y_extension,
     // border_properties]
     auto value_container = compute_slacks_and_layout_extension(gate_lyt);
-    move_and_extend_layout(gate_lyt, std::get<6>(value_container), std::get<7>(value_container),
-                           std::get<2>(value_container), std::get<3>(value_container));
+    move_layout(gate_lyt, std::get<2>(value_container), std::get<3>(value_container));
+    gate_lyt.resize(
+        {gate_lyt.x() + std::get<6>(value_container), gate_lyt.y() + std::get<7>(value_container), gate_lyt.z()});
+    /*move_and_extend_layout(gate_lyt, std::get<6>(value_container), std::get<7>(value_container),
+                            std::get<2>(value_container), std::get<3>(value_container));*/
     move_and_reconnect_pis_and_pos(gate_lyt, std::get<0>(value_container), std::get<1>(value_container),
                                    std::get<8>(value_container));
 }
