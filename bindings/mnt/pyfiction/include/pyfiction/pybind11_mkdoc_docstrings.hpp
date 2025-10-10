@@ -16708,9 +16708,9 @@ static const char *__doc_fiction_mol_qca_technology_is_vertical_cell_mode = R"do
 static const char *__doc_fiction_mol_qca_technology_mol_qca_technology = R"doc()doc";
 
 static const char *__doc_fiction_molecular_qca_library =
-R"doc(A concrete molQCA gate library was proposed by the Politecnico di
-Torino and is based on simulations using the SCERPA tool. Tiles in the
-molQCA library are :math:`10 \times 10` molQCA cells.)doc";
+R"doc(This concrete molQCA gate library was proposed by the Politecnico di
+Torino and is based on physical simulations using the SCERPA tool.
+Tiles in the molQCA library are :math:`10 \times 10` molQCA cells.)doc";
 
 static const char *__doc_fiction_molecular_qca_library_determine_port_routing = R"doc()doc";
 
