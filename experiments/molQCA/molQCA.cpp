@@ -25,6 +25,22 @@
 #include <string>
 
 template <typename Ntk>
+mockturtle::names_view<Ntk> anb()
+{
+    mockturtle::names_view<Ntk> ntk{};
+
+    const auto x1 = ntk.create_pi("a");
+    const auto x2 = ntk.create_pi("b");
+
+    const auto not1 = ntk.create_not(x2);
+    const auto and2 = ntk.create_and(x1, not1);
+
+    ntk.create_po(and2, "anb");
+
+    return ntk;
+}
+
+template <typename Ntk>
 mockturtle::names_view<Ntk> and3()
 {
     mockturtle::names_view<Ntk> ntk{};
@@ -157,6 +173,26 @@ mockturtle::names_view<Ntk> xor2()
 }
 
 template <typename Ntk>
+mockturtle::names_view<Ntk> mux21()
+{
+    mockturtle::names_view<Ntk> ntk{};
+
+    const auto x1 = ntk.create_pi("a");
+    const auto x2 = ntk.create_pi("b");
+    const auto x3 = ntk.create_pi("a");
+
+    const auto not1 = ntk.create_not(x2);
+    const auto and1 = ntk.create_and(x1, not1);
+    const auto and2 = ntk.create_and(x3, x2);
+    const auto or1  = ntk.create_or(and1, and2);
+
+    // outputs
+    ntk.create_po(or1, "mux21");
+
+    return ntk;
+}
+
+template <typename Ntk>
 mockturtle::names_view<Ntk> comparator1bit()
 {
     mockturtle::names_view<Ntk> ntk{};
@@ -246,13 +282,13 @@ mockturtle::names_view<Ntk> c17()
     const auto x5 = ntk.create_pi("5");
     const auto x6 = ntk.create_pi("6");
 
-    const auto a1    = ntk.create_and(x4, x1);
-    const auto a2    = ntk.create_and(x3, x5);
+    const auto a1  = ntk.create_and(x4, x1);
+    const auto a2  = ntk.create_and(x3, x5);
     const auto na2 = ntk.create_not(a2);
-    const auto a3    = ntk.create_and(na2, x2);
-    const auto a4    = ntk.create_and(na2, x6);
-    const auto o1    = ntk.create_or(a3, a4);
-    const auto o2    = ntk.create_or(a1, a3);
+    const auto a3  = ntk.create_and(na2, x2);
+    const auto a4  = ntk.create_and(na2, x6);
+    const auto o1  = ntk.create_or(a3, a4);
+    const auto o2  = ntk.create_or(a1, a3);
 
     ntk.create_po(o1, "po1");
     ntk.create_po(o2, "po2");
@@ -699,7 +735,7 @@ void synchronize_pis_pos(Lyt& gate_lyt)
         const auto pi_node = entry.first;
         const auto slack   = entry.second;
 
-        if(slack == 0)
+        if (slack == 0)
         {
             continue;
         }
@@ -724,7 +760,7 @@ void synchronize_pis_pos(Lyt& gate_lyt)
             ++t.x;
             fiction::detail::wire_east(gate_lyt, new_t, t);
         }
-        if(gate_lyt.is_dead(pi_node))
+        if (gate_lyt.is_dead(pi_node))
         {
             gate_lyt.revive_from_dead(pi_node);
         }
@@ -849,10 +885,10 @@ int main()  // NOLINT
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
-        //auto benchmark_network = read_ntk<fiction::tec_nt>(benchmark);
+        // auto benchmark_network = read_ntk<fiction::tec_nt>(benchmark);
 
-        std::string bench_name = "c17";
-        auto benchmark_network = c17<fiction::tec_nt>();
+        std::string bench_name        = "anb";
+        auto        benchmark_network = anb<fiction::tec_nt>();
 
         fiction::debug::write_dot_network(benchmark_network);
 
@@ -868,9 +904,9 @@ int main()  // NOLINT
         fiction::graph_oriented_layout_design_params graph_oriented_layout_design_params{};
         graph_oriented_layout_design_params.mode =
             fiction::graph_oriented_layout_design_params::effort_mode::MAXIMUM_EFFORT;
-        graph_oriented_layout_design_params.return_first = true;
+        graph_oriented_layout_design_params.return_first          = true;
         graph_oriented_layout_design_params.enable_multithreading = true;
-        graph_oriented_layout_design_params.planar = true;
+        graph_oriented_layout_design_params.planar                = true;
 
         auto gate_layout_opt = fiction::graph_oriented_layout_design<gate_layout, fiction::tec_nt>(
             benchmark_network, graph_oriented_layout_design_params, &graph_oriented_layout_design_stats);
