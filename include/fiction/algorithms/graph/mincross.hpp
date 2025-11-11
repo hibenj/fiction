@@ -5,6 +5,8 @@
 #ifndef FICTION_MINCROSS_HPP
 #define FICTION_MINCROSS_HPP
 
+#include "fiction/algorithms/network_transformation/network_balancing.hpp"
+
 #include <mockturtle/traits.hpp>
 #include <mockturtle/views/fanout_view.hpp>
 
