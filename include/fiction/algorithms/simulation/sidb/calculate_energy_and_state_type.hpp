@@ -6,11 +6,13 @@
 #define FICTION_CALCULATE_ENERGY_AND_STATE_TYPE_HPP
 
 #include "fiction/algorithms/simulation/sidb/detect_bdl_pairs.hpp"
+#include "fiction/algorithms/simulation/sidb/detect_bdl_wires.hpp"
 #include "fiction/algorithms/simulation/sidb/energy_distribution.hpp"
+#include "fiction/algorithms/simulation/sidb/is_operational.hpp"
+#include "fiction/algorithms/simulation/sidb/verify_logic_match.hpp"
 #include "fiction/technology/charge_distribution_surface.hpp"
-#include "fiction/technology/physical_constants.hpp"
+#include "fiction/technology/constants.hpp"
 #include "fiction/traits.hpp"
-#include "fiction/utils/math_utils.hpp"
 
 #include <kitty/bit_operations.hpp>
 #include <kitty/traits.hpp>
@@ -25,14 +27,29 @@ namespace fiction
 {
 
 /**
+ * Label to categorize ground and excited states of an SiDB layout.
+ */
+enum class state_type
+{
+    /**
+     * A state is accepted if the charge distribution encodes the desired logic.
+     */
+    ACCEPTED,
+    /**
+     * A state is rejected if the charge distributiion does not encode the desired logic. Moreover, if kinks are
+     * rejected, a charge distribution that encodes the logic, but does show kinks, is rejected.
+     */
+    REJECTED
+};
+/**
  *  Data type to collect electrostatic potential energies (in eV) of charge distributions with corresponding state types
  * (i.e., `true` = transparent, `false` = erroneous).
  */
-using sidb_energy_and_state_type = std::vector<std::pair<double, bool>>;
+using sidb_energy_and_state_type = std::vector<std::pair<double, state_type>>;
 
 /**
  * This function takes in an SiDB energy distribution. For each charge distribution, the state type is determined (i.e.
- * erroneous, transparent).
+ * erroneous, transparent) while kinks are accepted, meaning a state with kinks is considered transparent.
  *
  * @tparam Lyt SiDB cell-level layout type.
  * @tparam TT The type of the truth table specifying the gate behavior.
@@ -44,11 +61,11 @@ using sidb_energy_and_state_type = std::vector<std::pair<double, bool>>;
  * @return Electrostatic potential energy of all charge distributions with state type.
  */
 template <typename Lyt, typename TT>
-[[nodiscard]] sidb_energy_and_state_type
-calculate_energy_and_state_type(const sidb_energy_distribution&                      energy_distribution,
-                                const std::vector<charge_distribution_surface<Lyt>>& valid_charge_distributions,
-                                const std::vector<bdl_pair<cell<Lyt>>>& output_bdl_pairs, const std::vector<TT>& spec,
-                                const uint64_t input_index) noexcept
+[[nodiscard]] sidb_energy_and_state_type calculate_energy_and_state_type_with_kinks_accepted(
+    const energy_distribution&                           energy_distribution,
+    const std::vector<charge_distribution_surface<Lyt>>& valid_charge_distributions,
+    const std::vector<bdl_pair<cell<Lyt>>>& output_bdl_pairs, const std::vector<TT>& spec,
+    const uint64_t input_index) noexcept
 
 {
     static_assert(is_cell_level_layout_v<Lyt>, "Lyt is not a cell-level layout");
@@ -60,31 +77,87 @@ calculate_energy_and_state_type(const sidb_energy_distribution&                 
 
     sidb_energy_and_state_type energy_and_state_type{};
 
-    for (const auto& [energy, occurrence] : energy_distribution)
-    {
-        // round the energy value to six decimal places to overcome potential rounding errors.
-        const auto energy_value = round_to_n_decimal_places(energy, 6);
-        for (const auto& valid_layout : valid_charge_distributions)
+    energy_distribution.for_each(
+        [&](const double energy, const uint64_t occurrence [[maybe_unused]])
         {
-            // round the energy value of the given valid_layout to six decimal places to overcome possible rounding
-            // errors and to provide comparability with the energy_value from before.
-            if (std::abs(round_to_n_decimal_places(valid_layout.get_system_energy(), 6) - energy_value) <
-                physical_constants::POP_STABILITY_ERR)
+            for (const auto& valid_layout : valid_charge_distributions)
             {
-                bool correct_output = true;
-                for (auto i = 0u; i < output_bdl_pairs.size(); i++)
+                if (std::abs(valid_layout.get_electrostatic_potential_energy() - energy) < constants::ERROR_MARGIN)
                 {
-                    if (static_cast<bool>(-charge_state_to_sign(valid_layout.get_charge_state(
-                            output_bdl_pairs[i].lower))) != kitty::get_bit(spec[i], input_index))
+                    state_type type_of_considered_state = state_type::ACCEPTED;
+
+                    for (auto i = 0u; i < output_bdl_pairs.size(); i++)
                     {
-                        correct_output = false;
+                        if (static_cast<bool>(-charge_state_to_sign(valid_layout.get_charge_state(
+                                output_bdl_pairs[i].lower))) != kitty::get_bit(spec[i], input_index))
+                        {
+                            // The output SiDB matches the truth table entry. Hence, the state is called transparent.
+                            type_of_considered_state = state_type::REJECTED;
+                            break;
+                        }
+                    }
+                    energy_and_state_type.emplace_back(energy, type_of_considered_state);
+                }
+            }
+        });
+
+    std::sort(energy_and_state_type.begin(), energy_and_state_type.end(),
+              [](const auto& a, const auto& b) { return a.first < b.first; });
+
+    return energy_and_state_type;
+}
+
+/**
+ * This function takes in an SiDB energy distribution. For each charge distribution, the state type is determined (i.e.
+ * erroneous, transparent) while kinks are rejected, meaning a state with kinks is considered erroneous.
+ *
+ * @tparam Lyt SiDB cell-level layout type.
+ * @tparam TT The type of the truth table specifying the gate behavior.
+ * @param energy_distribution Energy distribution.
+ * @param valid_charge_distributions Physically valid charge distributions.
+ * @param spec Expected Boolean function of the layout given as a multi-output truth table.
+ * @param input_index The index of the current input configuration.
+ * @param input_bdl_wires Input BDL wires.
+ * @param output_bdl_wires Output BDL wires.
+ * @return Electrostatic potential energy of all charge distributions with state type.
+ */
+template <typename Lyt, typename TT>
+[[nodiscard]] sidb_energy_and_state_type calculate_energy_and_state_type_with_kinks_rejected(
+    const energy_distribution&                           energy_distribution,
+    const std::vector<charge_distribution_surface<Lyt>>& valid_charge_distributions, const std::vector<TT>& spec,
+    const uint64_t input_index, const std::vector<bdl_wire<Lyt>>& input_bdl_wires,
+    std::vector<bdl_wire<Lyt>>& output_bdl_wires) noexcept
+{
+    static_assert(is_cell_level_layout_v<Lyt>, "Lyt is not a cell-level layout");
+    static_assert(has_sidb_technology_v<Lyt>, "Lyt is not an SiDB layout");
+    static_assert(kitty::is_truth_table<TT>::value, "TT is not a truth table");
+
+    sidb_energy_and_state_type energy_and_state_type{};
+
+    energy_distribution.for_each(
+        [&](const double energy, const uint64_t occurrence [[maybe_unused]])
+        {
+            for (const auto& valid_layout : valid_charge_distributions)
+            {
+                if (std::abs(valid_layout.get_electrostatic_potential_energy() - energy) < constants::ERROR_MARGIN)
+                {
+                    // The output SiDB matches the truth table entry. Hence, state is called transparent.
+                    energy_and_state_type.emplace_back(energy, state_type::ACCEPTED);
+
+                    is_operational_params params{};
+                    params.op_condition = is_operational_params::operational_condition::REJECT_KINKS;
+
+                    const auto operational_status =
+                        verify_logic_match(valid_layout, params, spec, input_index, input_bdl_wires, output_bdl_wires);
+                    if (operational_status == operational_status::NON_OPERATIONAL)
+                    {
+                        // The output SiDB matches the truth table entry. Hence, state is called transparent.
+                        energy_and_state_type.emplace_back(energy, state_type::REJECTED);
+                        break;
                     }
                 }
-                // The output SiDB matches the truth table entry. Hence, state is called transparent.
-                energy_and_state_type.emplace_back(energy, correct_output);
             }
-        }
-    }
+        });
 
     return energy_and_state_type;
 }

@@ -6,6 +6,7 @@
 #define FICTION_HASH_HPP
 
 #include <array>
+#include <cstddef>
 #include <functional>
 #include <set>
 #include <utility>
@@ -66,6 +67,25 @@ template <typename T>
 struct hash<std::set<T>>
 {
     std::size_t operator()(const std::set<T>& s) const noexcept
+    {
+        std::size_t h = 0;
+        for (const auto& e : s)
+        {
+            fiction::hash_combine(h, e);
+        }
+
+        return h;
+    }
+};
+/**
+ * Provides a hash implementation for `std::multiset<T>`.
+ *
+ * @tparam T Object type in `std::multiset`.
+ */
+template <typename T>
+struct hash<std::multiset<T>>
+{
+    std::size_t operator()(const std::multiset<T>& s) const noexcept
     {
         std::size_t h = 0;
         for (const auto& e : s)

@@ -44,8 +44,8 @@ class write_location_and_ground_state_impl
         std::vector<charge_distribution_surface<Lyt>> ground_state_layouts{};
         for (const auto& valid_layout : sim_result.charge_distributions)
         {
-            if (std::fabs(round_to_n_decimal_places(valid_layout.get_system_energy(), 6) - min_energy) <
-                std::numeric_limits<double>::epsilon())
+            if (std::fabs(round_to_n_decimal_places(valid_layout.get_electrostatic_potential_energy(), 6) -
+                          min_energy) < constants::ERROR_MARGIN)
             {
                 ground_state_layouts.emplace_back(charge_distribution_surface<Lyt>{valid_layout});
             }
@@ -99,7 +99,7 @@ class write_location_and_ground_state_impl
  *
  * This overload uses an output stream to write into.
  *
- * @tparam Lyt Cell-level SiDB layout type.
+ * @tparam Lyt SiDB cell-level SiDB layout type.
  * @param sim_result The simulation result to write.
  * @param os The output stream to write into.
  */
@@ -120,13 +120,16 @@ void write_location_and_ground_state(const sidb_simulation_result<Lyt>& sim_resu
  *
  * This overload uses a file name to create and write into.
  *
- * @tparam Lyt Cell-level SiDB layout type.
+ * @tparam Lyt SiDB cell-level SiDB layout type.
  * @tparam sim_result The simulation result to write.
  * @param filename The file name to create and write into.
  */
 template <typename Lyt>
 void write_location_and_ground_state(const sidb_simulation_result<Lyt>& sim_result, const std::string_view& filename)
 {
+    static_assert(is_cell_level_layout_v<Lyt>, "Lyt is not a cell-level layout");
+    static_assert(has_sidb_technology_v<Lyt>, "Lyt is not an SiDB layout");
+
     std::ofstream os{filename.data(), std::ofstream::out};
 
     if (!os.is_open())

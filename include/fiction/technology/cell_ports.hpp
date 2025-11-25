@@ -8,12 +8,13 @@
 #include "fiction/utils/hash.hpp"
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 
 #include <cassert>
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
 #include <set>
-#include <unordered_map>
 #include <utility>
 
 namespace fiction
@@ -86,14 +87,42 @@ struct port_direction
      */
     enum cardinal : uint8_t
     {
+        /**
+         * North direction.
+         */
         NORTH = 0,
+        /**
+         * North-East direction.
+         */
         NORTH_EAST,
+        /**
+         * East direction.
+         */
         EAST,
+        /**
+         * South-East direction.
+         */
         SOUTH_EAST,
+        /**
+         * South direction.
+         */
         SOUTH,
+        /**
+         * South-West direction.
+         */
         SOUTH_WEST,
+        /**
+         * West direction.
+         */
         WEST,
-        NORTH_WEST
+        /**
+         * North-West direction.
+         */
+        NORTH_WEST,
+        /**
+         * None direction.
+         */
+        NONE
     };
     /**
      * Default constructor.
@@ -174,7 +203,7 @@ struct port_list
      */
     std::set<PortType> inp{}, out{};
     /**
-     * Comparator for unordered_set/map.
+     * Comparator for port lists.
      *
      * @param p Ports to compare to.
      * @return `true` iff these ports are equal to `p`.
@@ -184,7 +213,7 @@ struct port_list
         return this->inp == p.inp && this->out == p.out;
     }
     /**
-     * Merges two port_list objects together. The given port_list might be altered.
+     * Merges two `port_list` objects together. The given `port_list` might be altered.
      *
      * @param p Ports to merge.
      * @return Merged port lists.
@@ -252,9 +281,9 @@ struct formatter<fiction::port_position>
     }
 
     template <typename FormatContext>
-    auto format(const fiction::port_position& p, FormatContext& ctx)
+    auto format(const fiction::port_position& p, FormatContext& ctx) const
     {
-        return format_to(ctx.out(), "({},{})", p.x, p.y);
+        return format_to(ctx.out(), runtime("({},{})"), p.x, p.y);
     }
 };
 // make port_direction compatible with fmt::format
@@ -268,17 +297,55 @@ struct formatter<fiction::port_direction>
     }
 
     template <typename FormatContext>
-    auto format(const fiction::port_direction& p, FormatContext& ctx)
+    auto format(const fiction::port_direction& p, FormatContext& ctx) const
     {
-        return format_to(ctx.out(), p.dir == fiction::port_direction::NORTH      ? "N" :
-                                    p.dir == fiction::port_direction::NORTH_EAST ? "NE" :
-                                    p.dir == fiction::port_direction::EAST       ? "E" :
-                                    p.dir == fiction::port_direction::SOUTH_EAST ? "SE" :
-                                    p.dir == fiction::port_direction::SOUTH      ? "S" :
-                                    p.dir == fiction::port_direction::SOUTH_WEST ? "SW" :
-                                    p.dir == fiction::port_direction::WEST       ? "W" :
-                                    p.dir == fiction::port_direction::NORTH_WEST ? "NW" :
-                                                                                   "?");
+        const auto* dir = "?";
+
+        switch (p.dir)
+        {
+            case fiction::port_direction::NORTH:
+            {
+                dir = "N";
+                break;
+            }
+            case fiction::port_direction::NORTH_EAST:
+            {
+                dir = "NE";
+                break;
+            }
+            case fiction::port_direction::EAST:
+            {
+                dir = "E";
+                break;
+            }
+            case fiction::port_direction::SOUTH_EAST:
+            {
+                dir = "SE";
+                break;
+            }
+            case fiction::port_direction::SOUTH:
+            {
+                dir = "S";
+                break;
+            }
+            case fiction::port_direction::SOUTH_WEST:
+            {
+                dir = "SW";
+                break;
+            }
+            case fiction::port_direction::WEST:
+            {
+                dir = "W";
+                break;
+            }
+            case fiction::port_direction::NORTH_WEST:
+            {
+                dir = "NW";
+                break;
+            }
+        }
+
+        return format_to(ctx.out(), dir);
     }
 };
 // make port_list compatible with fmt::format
@@ -292,9 +359,9 @@ struct formatter<fiction::port_list<PortType>>
     }
 
     template <typename FormatContext>
-    auto format(const fiction::port_list<PortType>& pl, FormatContext& ctx)
+    auto format(const fiction::port_list<PortType>& pl, FormatContext& ctx) const
     {
-        return format_to(ctx.out(), "inp: {}, out: {}", join(pl.inp, ", "), join(pl.out, ", "));
+        return format_to(ctx.out(), runtime("inp: {}, out: {}"), join(pl.inp, ", "), join(pl.out, ", "));
     }
 };
 }  // namespace fmt

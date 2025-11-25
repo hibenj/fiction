@@ -11,8 +11,10 @@
 #include <phmap.h>
 
 #include <cassert>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <type_traits>
 #include <unordered_set>
 #include <utility>
@@ -143,6 +145,22 @@ class sidb_defect_surface<Lyt, false> : public Lyt
         }
     }
     /**
+     * Moves an SiDB defect from one cell to another.
+     *
+     * @param source Source coordinate of the defect.
+     * @param target Target coordinate to move the defect to.
+     */
+    void move_sidb_defect(const typename Lyt::coordinate& source, const typename Lyt::coordinate& target) noexcept
+    {
+        if (const auto defect = get_sidb_defect(source); defect.type != sidb_defect_type::NONE)
+        {
+            strg->defective_coordinates.insert({target, defect});
+
+            // delete defect at the old coordinate
+            strg->defective_coordinates.erase(source);
+        }
+    }
+    /**
      * Returns the given coordinate's assigned defect type. If no defect type has been assigned, NONE is returned.
      *
      * @param c Coordinate to check.
@@ -167,6 +185,75 @@ class sidb_defect_surface<Lyt, false> : public Lyt
         return strg->defective_coordinates.size();
     }
     /**
+     * Number of positively charged defects on the surface.
+     *
+     * @return Number of positively charged defects.
+     */
+    [[nodiscard]] std::size_t num_positively_charged_defects() const noexcept
+    {
+        std::size_t number_of_positively_charged_defects = 0;
+
+        this->foreach_sidb_defect(
+            [&number_of_positively_charged_defects](const auto& defect)
+            {
+                if (is_positively_charged_defect(defect.second))
+                {
+                    number_of_positively_charged_defects++;
+                }
+            });
+
+        return number_of_positively_charged_defects;
+    }
+    /**
+     * Returns the number of negatively charged defects.
+     *
+     * @return Number of negatively charged defects.
+     */
+    [[nodiscard]] std::size_t num_negatively_charged_defects() const noexcept
+    {
+        std::size_t number_of_negatively_charged_defects = 0;
+
+        this->foreach_sidb_defect(
+            [&number_of_negatively_charged_defects](const auto& defect)
+            {
+                if (is_negatively_charged_defect(defect.second))
+                {
+                    number_of_negatively_charged_defects++;
+                }
+            });
+
+        return number_of_negatively_charged_defects;
+    }
+    /**
+     * Returns the number of charged defects.
+     *
+     * @return Number of charged defects.
+     */
+    [[nodiscard]] std::size_t num_charged_defects() const noexcept
+    {
+        return num_positively_charged_defects() + num_negatively_charged_defects();
+    }
+    /**
+     * Returns the number of neutral defects.
+     *
+     * @return Number of neutral defects.
+     */
+    [[nodiscard]] std::size_t num_neutral_defects() const noexcept
+    {
+        std::size_t number_of_neutral_defects = 0;
+
+        this->foreach_sidb_defect(
+            [&number_of_neutral_defects](const auto& defect)
+            {
+                if (is_neutral_defect_type(defect.second))
+                {
+                    number_of_neutral_defects++;
+                }
+            });
+
+        return number_of_neutral_defects;
+    }
+    /**
      * Applies a function to all defects on the surface. Since the defects are fetched directly from the storage map,
      * the given function has to receive a pair of a coordinate and a defect type as its parameter.
      *
@@ -186,16 +273,24 @@ class sidb_defect_surface<Lyt, false> : public Lyt
      * If the given coordinate is defect-free, the empty set is returned.
      *
      * @param c Coordinate whose defect extent is to be determined.
+     * @param charged_defect_spacing_overwrite Override the default influence distance of charged atomic defects on
+     * SiDBs with an optional pair of horizontal and vertical distances.
+     * @param neutral_defect_spacing_overwrite Override the default influence distance of neutral atomic defects on
+     * SiDBs with an optional pair of horizontal and vertical distances.
      * @return All SiDB positions affected by the defect at coordinate c.
      */
     [[nodiscard]] std::unordered_set<typename Lyt::coordinate>
-    affected_sidbs(const typename Lyt::coordinate& c) const noexcept
+    affected_sidbs(const typename Lyt::coordinate&                     c,
+                   const std::optional<std::pair<uint16_t, uint16_t>>& charged_defect_spacing_overwrite = std::nullopt,
+                   const std::optional<std::pair<uint16_t, uint16_t>>& neutral_defect_spacing_overwrite =
+                       std::nullopt) const noexcept
     {
         std::unordered_set<typename Lyt::coordinate> influenced_sidbs{};
 
         if (const auto d = get_sidb_defect(c); d.type != sidb_defect_type::NONE)
         {
-            const auto [horizontal_extent, vertical_extent] = defect_extent(d);
+            const auto [horizontal_extent, vertical_extent] =
+                defect_extent(d, charged_defect_spacing_overwrite, neutral_defect_spacing_overwrite);
 
             for (auto y = static_cast<int64_t>(c.y - vertical_extent); y <= static_cast<int64_t>(c.y + vertical_extent);
                  ++y)
@@ -219,14 +314,26 @@ class sidb_defect_surface<Lyt, false> : public Lyt
      *
      * If the given surface is defect-free, the empty set is returned.
      *
+     * @param charged_defect_spacing_overwrite Override the default influence distance of charged atomic defects on
+     * SiDBs with an optional pair of horizontal and vertical distances.
+     * @param neutral_defect_spacing_overwrite Override the default influence distance of neutral atomic defects on
+     * SiDBs with an optional pair of horizontal and vertical distances.
      * @return All SiDB positions affected by any defect on the surface.
      */
-    [[nodiscard]] std::unordered_set<typename Lyt::coordinate> all_affected_sidbs() const noexcept
+    [[nodiscard]] std::unordered_set<typename Lyt::coordinate> all_affected_sidbs(
+        const std::optional<std::pair<uint64_t, uint64_t>>& charged_defect_spacing_overwrite = std::nullopt,
+        const std::optional<std::pair<uint64_t, uint64_t>>& neutral_defect_spacing_overwrite =
+            std::nullopt) const noexcept
     {
         std::unordered_set<typename Lyt::coordinate> influenced_sidbs{};
 
-        foreach_sidb_defect([&influenced_sidbs, this](const auto& it)
-                            { influenced_sidbs.merge(affected_sidbs(it.first)); });
+        foreach_sidb_defect(
+            [&influenced_sidbs, &charged_defect_spacing_overwrite, &neutral_defect_spacing_overwrite,
+             this](const auto& it)
+            {
+                influenced_sidbs.merge(
+                    affected_sidbs(it.first, charged_defect_spacing_overwrite, neutral_defect_spacing_overwrite));
+            });
 
         return influenced_sidbs;
     }

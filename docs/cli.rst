@@ -75,8 +75,8 @@ Truth tables
 ############
 
 The ``truth_table`` store (``-t``) can hold logic descriptions in binary format as implemented in the ``kitty`` library
-by Mathias Soeken. These can either be loaded via command ``tt`` by specifying a bit/hex string or a Boolean expression,
-or be obtained by :ref:`simulating<command simulate>` a ``network`` or ``gate_layout`` via command
+by Mathias Soeken. These can either be loaded via command ``tt`` by specifying a bit/hex string (``-t``) or a Boolean
+expression (``-e``), or be obtained by :ref:`simulating<command simulate>` a ``network`` or ``gate_layout`` via command
 ``simulate``. Generating a ``truth_table`` from an expression uses the following syntax (from the
 `kitty documentation <https://libkitty.readthedocs.io/en/latest/reference.html#_CPPv4I0EN5kitty22create_from_expressionEbR2TTRKNSt6stringE>`_):
 
@@ -87,7 +87,7 @@ if-then-else, or ``!{!a!b}`` to describe the application of De Morgan's law to `
 fit the largest variable in the expression, e.g., if ``c`` is the largest variable, then the truth table has at least
 three variables.
 
-Alternatively, ``tt 0110`` or ``tt 0xaffe`` generate a ``truth_table`` from bit/hex strings.
+For example, ``tt -t 0110`` and ``tt -t 0xaffe`` generate a ``truth_table`` from bit and hex strings, respectively.
 
 Logic synthesis
 ###############
@@ -102,6 +102,32 @@ However, most importantly, a technology mapping command ``map`` is available tha
 technology network that exclusively uses gates from a given set but computes the same Boolean function.
 For instance, ``map -oxi`` produces a logic network that only uses OR gates, XOR gates, and inverters. This is extremely
 helpful for FCN gate libraries that do not support certain gate types.
+
+.. _abc-cli:
+
+ABC Callback
+------------
+
+`ABC <https://github.com/berkeley-abc/abc/>`_ can be configured as a callback for logic synthesis and optimization from
+within the CLI. The command ``abc -c "<command>"`` will launch ABC and execute the given command string. Internally, it will
+first write *fiction*'s current network to a temporary AIGER file, have ABC parse this file as an AIG
+using ``read <filename>; strash``, and then execute the given command string. Finally, ABC will write the result back to
+the temporary file which will be read back into *fiction* as a new network.
+
+The ABC command string construction can be customized to
+- omit the network read command in ABC (``--dont_read,-r``)
+- omit the network strash command in ABC (``--dont_strash,-s``)
+- omit the network write command in ABC (``--dont_write,-w``)
+
+.. note::
+   There are known limitations to this approach as an AIGER file is used for interfacing the two tools, which leads to
+   the decomposition of all gates into ANDs and inverters. Furthermore, ABC's ``abc`` script for shortcuts to common
+   commands might not be included, leading to the absence of those abbreviations and scripts. The user is encouraged to
+   use the full command strings instead, e.g., ``balance; refactor; rewrite; resub`` instead of ``b; rf; rw; rs``.
+
+.. note::
+    See :ref:`ABC <abc-cmake>` on how to enable ABC in the *fiction* CLI.
+
 
 Structural manipulation
 #######################
@@ -192,11 +218,47 @@ FCN circuit implementation of some specification under the provided parameters. 
 
 The possible parameters are similar to the ones used for ``exact``. See ``onepass -h`` for a full list.
 
+Graph-oriented layout design (``gold``)
+#######################################
+
+Generates gate-level layouts from logic network specifications by spanning a search space graph where each placement event can be represented as a search space vertex characterized by a partial layout at that instance. Edges between a partial layout ``a`` and ``b`` exist iff a can be transformed into ``b`` via a single placement event. Similar to navigating through a maze, A*-search can be employed to discover a path from the starting vertex (the empty layout) to the exit of the maze (a layout with all gates placed). This approach is scalable but requires that the input network is restricted to a 3-graph. At the same time, the output layout will always be 2DDWave-clocked and is not always optimal. For more information, see
+`the paper <https://www.cda.cit.tum.de/files/eda/2024_ieee_nano_a_star_is_born.pdf>`_.
+
+Possible parameters:
+
+- Timeout (``-t``): Timeout for the algorithm in seconds.
+- Number of vertex expansions (``-n``): Specifies the number of vertex expansions during the search for each vertex in the search space graph (defaults to ``4`` if not provided).
+- Effort mode (``-e``): Determines the computational effort used by the algorithm. Possible values are:
+    - ``0`` (``high_efficiency``): Uses minimal computational resources, resulting in fewer search space graphs and potentially lower quality solutions.
+    - ``1`` (``high_effort``): Uses increased computational resources to generate more search space graphs, thereby improving the chance of finding an optimal solution.
+    - ``2`` (``highest_effort``): Utilizes more computational resources to produce even more search space graphs, ensuring a higher probability of obtaining the best possible layout.
+    - ``3`` (``maximum_effort``): Utilizes maximum computational resources to produce the most search space graphs, including random fanout substitution strategies and topological ordering, ensuring the highest probability of obtaining the best possible layout.
+- Cost objective (``-c``): Specifies the cost objective for the layout design. Options include:
+    - ``0`` (area): Minimize the layout area.
+    - ``1`` (wires): Minimize the number of wire segments.
+    - ``2`` (crossings): Minimize the number of crossings.
+    - ``3`` (acp): Minimize the area-crossing product (ACP), balancing area and number of crossings.
+- Return first (``-r``): Terminate the search as soon as the first valid layout is found, which reduces runtime but might sacrifice result quality.
+- Planar (``-p``): Enable planar layout generation to constrain routing to be free of crossings.
+- Multithreading (``-m``): Enable multithreading (currently a beta feature) to potentially accelerate computation.
+- Verbose (``-v``): Output detailed runtime statistics after the algorithm completes.
+- Seed (``-s``): Set a random seed for random fanout substitution, random topological ordering in maximum-effort mode, and randomized skip tile placement.
+- Straight inverters (``-i``): Enforce NOT gates to be routed non-bending only.
+- Skip tiles when placing PIs (``-g``):  For each primary input (PI) considered during placement, reserve this many empty tiles after the current frontier.
+- Randomize skip tiles PI placement (``-j``): Randomize the number of skipped tiles for each PI placement. When enabled, each PI will use a random number of skipped tiles between ``tiles_to_skip_between_pis - 1`` and ``tiles_to_skip_between_pis`` (inclusive). When ``tiles_to_skip_between_pis`` is 0, only 0 will be used. This can help explore different placement strategies and potentially find better layouts.
+
 Hexagonalization (``hex``)
 ##########################
 
 Transforms a 2DDWave-clocked Cartesian layout into a hexagonal row-clocked layout suitable for SiDBs by
 remapping all gates and wires. For more information, see `the paper <https://ieeexplore.ieee.org/document/10231278>`_.
+
+Possible parameters:
+
+- Input pin extension (``-i``): Extend primary inputs to the top row.
+- Output pin extension (``-o``): Extend primary outputs to the bottom row.
+- Planar (``-p``): If ``-i`` and/or (``-o``) is set, enforce planar rerouting when extending primary inputs and/or outputs, ensuring that the routing is free of crossings.
+- Verbose (``-v``): Output detailed runtime statistics after the algorithm completes.
 
 Post-Layout Optimization (``optimize``)
 #######################################
@@ -209,8 +271,11 @@ For more information, see `this paper <https://dl.acm.org/doi/10.1145/3611315.36
 
 Possible parameters:
 
-- Number of maximum gate relocations (``-m``), should be set to 1 for layouts with more than 100000 tiles, defaults to the number of tiles in the layout.
-- Wiring reduction only (``-w``), should be set for layouts with more than 20000000 tiles, not set by default.
+- Timeout (``-t``): Timeout for the algorithm in seconds.
+- Number of maximum gate relocations (``-m``): Should be set to ``1`` for layouts with more than 100000 tiles, defaults to the number of tiles in the layout.
+- Wiring reduction only (``-w``): Should be set for layouts with more than 20000000 tiles, not set by default.
+- Planar optimization (``-p``): Only relocate gates if the new wiring contains no crossings, not set by default.
+- Verbose (``-v``): Output detailed runtime statistics after the algorithm completes.
 
 Design rule checking (``check``)
 --------------------------------
@@ -289,8 +354,8 @@ Physical Simulation of SiDBs
 Performing physical simulation of SiDB layouts is crucial for understanding layout behavior and
 facilitating rapid prototyping, eliminating the need for expensive and time-intensive fabrication processes.
 The command ``read --sqd`` (or ``read -s``) is used to import a SiDB layout from an sqd-file, a format compatible with `SiQAD <https://github.com/siqad/siqad>`_.
-The SiDB layout can be visualized using the ``print -c`` command. Currently, *fiction* provides two electrostatic physical simulators:
-the exact one *QuickExact* and the scalable one *QuickSim*.
+The SiDB layout can be visualized using the ``print -c`` command. Currently, *fiction* provides three electrostatic physical simulators:
+the two exact ones: *QuickExact* and *ClusterComplete*, and the scalable one *QuickSim*.
 
 QuickExact (``quickexact``)
 ###########################
@@ -308,6 +373,33 @@ Most important parameters:
 - Energy transition level (0/-) :math:`\mu_-` (``-m``)
 
 See ``quickexact -h`` for a full list.
+
+The simulated ground state charge distribution can be printed with ``print -c``.
+
+ClusterComplete (``clustercomplete``)
+#####################################
+
+*ClusterComplete* too serves as an exact simulator in much the same way as *QuickExact*, yet it introduces a new
+dimension of scalability for the purpose of SiDB logic simulation. For the first time, it enables exact simulation of
+layouts with multiple gates in base 3, incorporating efficient consideration of positive charges.
+Similar to *QuickExact*, it considers all possible charge distributions, though through intricate analysis of bounds on
+local potentials, it is able to prune charge assignments to clusters of SiDBs in a hierarchy, thus providing scalability
+to exact simulation of SiDB logic to an extent that was previously thought to be impossible.
+
+Most important parameters:
+
+- Relative permittivity :math:`\epsilon_r` (``-e``)
+- Thomas-Fermi screening length :math:`\lambda_{tf}` (``-l``)
+- Energy transition level (0/-) :math:`\mu_-` (``-m``)
+- Witness partitioning limits (``-w``, ``-o``)
+- Report pruning statistics (``-r``)
+
+See ``clustercomplete -h`` for a full list.
+
+Pruning statistics may be useful to optimise the efficacy of the first pruning stage with the witness partitioning
+limits to save time on time intensive simulation problems. These statistics can also provide an indication for the
+complexity of the remaining problem that is solved in the second stage. Thus, through experience with *ClusterComplete*
+and these statistics, the expected time required to terminate may be gauged.
 
 The simulated ground state charge distribution can be printed with ``print -c``.
 
@@ -347,7 +439,7 @@ Most important parameters:
 - Relative permittivity :math:`\epsilon_r` (``-e``)
 - Thomas-Fermi screening :math:`\lambda_{tf}` (``-l``)
 - Energy transition level (0/-) :math:`\mu_-` (``-m``)
-
+- SiDB simulation engine to use (``--engine``)
 
 Operational Domain (``opdom``)
 ##############################
@@ -364,8 +456,9 @@ processed by other tools.
 The parameter space to sweep over can be specified by the user via the flags
 - ``--x_sweep``
 - ``--y_sweep``
+- ``--z_sweep``
 which have to be either ``epsilon_r``, ``lambda_tf``, or ``mu_minus``. The default is ``epsilon_r`` for ``--x_sweep`` and
-``lambda_tf`` for ``--y_sweep``.
+``lambda_tf`` for ``--y_sweep``, with ``--z_sweep`` being an optional third sweep dimension.
 
 Additionally, min, max, and step size values can be specified for each parameter using the flags
 - ``--x_min``
@@ -374,7 +467,12 @@ Additionally, min, max, and step size values can be specified for each parameter
 - ``--y_min``
 - ``--y_max``
 - ``--y_step``
-respectively. The default values are 1, 10, and 0.1 on both axis, for min, max, and step, respectively.
+- ``--z_min``
+- ``--z_max``
+- ``--z_step``
+respectively. The default values are 1, 10, and 0.1 on x and y axis, for min, max, and step, respectively. The z axis
+is not used by default. However, if ``--z_sweep`` is specified, the default values are -0.5, -0.1, and 0.025 for min, max,
+and step, respectively, assuming z to be used for ``mu_minus``.
 
 By default, grid search is applied to explore the operational domain. The algorithm can be changed by specifying one of
 the following options:
@@ -382,6 +480,9 @@ the following options:
 - ``--flood_fill``/``-f``
 - ``--contour_tracing``/``-c``
 each of which start from a set of random samples, whose number has to be passed as an argument to the flag.
+
+Operational domain calculation may be powered by *QuickExact*, *ClusterComplete*, *ExGS* or *QuickSim*. The simulation
+engine to use can be set with ``--engine``.
 
 See ``opdom -h`` for a full list of arguments.
 

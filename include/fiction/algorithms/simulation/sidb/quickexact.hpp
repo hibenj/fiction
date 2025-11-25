@@ -9,6 +9,7 @@
 #include "fiction/algorithms/simulation/sidb/sidb_simulation_engine.hpp"
 #include "fiction/algorithms/simulation/sidb/sidb_simulation_parameters.hpp"
 #include "fiction/algorithms/simulation/sidb/sidb_simulation_result.hpp"
+#include "fiction/layouts/coordinates.hpp"
 #include "fiction/technology/charge_distribution_surface.hpp"
 #include "fiction/technology/sidb_charge_state.hpp"
 #include "fiction/technology/sidb_defects.hpp"
@@ -26,14 +27,16 @@ namespace fiction
 
 /**
  * This struct stores the parameters for the *QuickExact* algorithm.
+ *
+ * @tparam CellType Cell type.
  */
-template <typename CellType>
+template <typename CellType = offset::ucoord_t>
 struct quickexact_params
 {
     /**
      * Modes to use for the *QuickExact* algorithm.
      */
-    enum class automatic_base_number_detection
+    enum class automatic_base_number_detection : uint8_t
     {
         /**
          * Simulation is conducted with the required base number (i.e., if positively charged SiDBs can occur, three
@@ -102,7 +105,7 @@ class quickexact_impl
                     required_simulation_base_number::THREE :
                     required_simulation_base_number::TWO;
 
-            // If layout has at least two SiDBs, all SiDBs that have to be negatively charged are erased from the
+            // If the layout has at least two SiDBs, all SiDBs that have to be negatively charged are erased from the
             // layout.
             if (number_of_sidbs > 1)
             {
@@ -111,31 +114,15 @@ class quickexact_impl
                 // If the layout consists of SiDBs that do not need to be negatively charged.
                 if (!all_sidbs_in_lyt_without_negative_preassigned_ones.empty())
                 {
-                    if constexpr (has_get_sidb_defect_v<Lyt>)
-                    {
-                        charge_distribution_surface charge_layout{static_cast<Lyt>(layout)};
-                        conduct_simulation(charge_layout, base_number);
-                    }
-                    else
-                    {
-                        charge_distribution_surface charge_layout{static_cast<Lyt>(layout)};
-                        conduct_simulation(charge_layout, base_number);
-                    }
+                    charge_distribution_surface charge_layout{layout};
+                    conduct_simulation(charge_layout, base_number);
                 }
 
-                // If the layout consists of only pre-assigned negatively-charged SiDBs
+                // If the layout consists of only pre-assigned negatively charged SiDBs
                 // (i.e., only SiDBs that are far away from each other).
                 else if (all_sidbs_in_lyt_without_negative_preassigned_ones.empty())
                 {
-                    charge_distribution_surface<Lyt> charge_lyt_copy{charge_lyt};
-                    if constexpr (has_get_sidb_defect_v<Lyt>)
-                    {
-                        for (const auto& [cell, defect] : real_placed_defects)
-                        {
-                            charge_lyt_copy.assign_sidb_defect(cell, defect);
-                        }
-                    }
-                    result.charge_distributions.push_back(charge_lyt_copy);
+                    result.charge_distributions.emplace_back(charge_lyt);
                 }
             }
             // If there is only one SiDB in the layout, this single SiDB can be neutrally or even positively charged due
@@ -157,34 +144,18 @@ class quickexact_impl
                 {
                     if (charge_lyt.is_physically_valid())
                     {
-                        charge_distribution_surface<Lyt> charge_lyt_copy{charge_lyt};
-                        if constexpr (has_get_sidb_defect_v<Lyt>)
-                        {
-                            for (const auto& [cell, defect] : real_placed_defects)
-                            {
-                                charge_lyt_copy.assign_sidb_defect(cell, defect);
-                            }
-                        }
-                        result.charge_distributions.push_back(charge_lyt_copy);
+                        result.charge_distributions.emplace_back(charge_lyt);
                     }
 
                     charge_lyt.increase_charge_index_by_one(
-                        dependent_cell_mode::VARIABLE);  // "Variable" allows that the charge state of the dependent
-                                                         // cell is automatically changed based on the new charge
-                                                         // distribution.
+                        dependent_cell_mode::VARIABLE);  // `dependent_cell_mode::VARIABLE` allows that the charge state
+                                                         // of the dependent cell is automatically changed based on the
+                                                         // new charge distribution.
                 }
 
                 if (charge_lyt.is_physically_valid())
                 {
-                    charge_distribution_surface<Lyt> charge_lyt_copy{charge_lyt};
-                    if constexpr (has_get_sidb_defect_v<Lyt>)
-                    {
-                        for (const auto& [cell, defect] : real_placed_defects)
-                        {
-                            charge_lyt_copy.assign_sidb_defect(cell, defect);
-                        }
-                    }
-                    result.charge_distributions.push_back(charge_lyt_copy);
+                    result.charge_distributions.emplace_back(charge_lyt);
                 }
             }
 
@@ -215,7 +186,7 @@ class quickexact_impl
     /**
      * Indices of all SiDBs that are pre-assigned to be negatively charged in a physically valid layout.
      */
-    std::vector<int64_t> preassigned_negative_sidb_indices{};
+    std::vector<uint64_t> preassigned_negative_sidb_indices{};
     /**
      * All SiDBs that are pre-assigned to be negatively charged in a physically valid layout.
      */
@@ -224,10 +195,6 @@ class quickexact_impl
      * All SiDBs of the layout but without the negatively-charged SiDBs.
      */
     std::vector<typename Lyt::cell> all_sidbs_in_lyt_without_negative_preassigned_ones{};
-    /**
-     * Collection of defects that are placed in addition to the SiDBs.
-     */
-    std::unordered_map<typename Lyt::cell, const sidb_defect> real_placed_defects{};
     /**
      * Number of SiDBs of the input layout.
      */
@@ -239,7 +206,7 @@ class quickexact_impl
     /**
      * Base number required for the correct physical simulation.
      */
-    enum class required_simulation_base_number
+    enum class required_simulation_base_number : uint8_t
     {
         /**
          * Two state simulation (i.e., negative and neutral) is sufficient.
@@ -254,8 +221,7 @@ class quickexact_impl
      * This function initializes the charge layout with necessary parameters, and conducts
      * the physical simulation based on whether a three-state simulation is required.
      *
-     * @tparam ChargeLyt The type of Charge Layout.
-     * @tparam ChargeLyt The type representing the charge layout to simulate.
+     * @tparam ChargeLyt Type of the charge distribution surface.
      * @param base_number `THREE` if a three-state simulation is required, `TWO` otherwise.
      */
     template <typename ChargeLyt>
@@ -273,12 +239,27 @@ class quickexact_impl
         {
             charge_lyt.assign_base_number(2);
         }
+        charge_layout.set_sidb_simulation_engine(sidb_simulation_engine::QUICKEXACT);
         charge_layout.assign_physical_parameters(params.simulation_parameters);
         charge_layout.assign_all_charge_states(sidb_charge_state::NEUTRAL);
+        charge_layout.update_after_charge_change(dependent_cell_mode::FIXED);
         charge_layout.assign_dependent_cell(all_sidbs_in_lyt_without_negative_preassigned_ones[0]);
 
         charge_layout.assign_local_external_potential(params.local_external_potential);
         charge_layout.assign_global_external_potential(params.global_potential);
+
+        if constexpr (is_sidb_defect_surface_v<Lyt> && is_charge_distribution_surface_v<Lyt>)
+        {
+            layout.foreach_sidb_defect(
+                [this, &charge_layout](const auto& cd)
+                {
+                    if (const auto& [cell, defect] = cd;
+                        defect.type != sidb_defect_type::NONE && is_charged_defect_type(cd.second))
+                    {
+                        charge_layout.add_sidb_defect_to_potential_landscape(cell, layout.get_sidb_defect(cell));
+                    }
+                });
+        }
 
         // IMPORTANT: The pre-assigned negatively charged SiDBs (they have to be negatively charged to
         // fulfill the population stability) are considered as negatively charged defects in the layout.
@@ -292,17 +273,9 @@ class quickexact_impl
         }
 
         // Update all local potentials, system energy, and physical validity. The flag is set to
-        // `VARIABLE` to allow the dependent cell to change its charge state based on the N-1 SiDBs to
-        // fulfill the local population stability at its position.
+        // `dependent_cell_mode::VARIABLE` to allow the dependent cell to change its charge state based on the N-1 SiDBs
+        // to fulfill the local population stability at its position.
         charge_layout.update_after_charge_change(dependent_cell_mode::VARIABLE);
-
-        if constexpr (has_get_sidb_defect_v<Lyt>)
-        {
-            for (const auto& [cell, defect] : real_placed_defects)
-            {
-                charge_layout.add_sidb_defect_to_potential_landscape(cell, defect);
-            }
-        }
 
         if (base_number == required_simulation_base_number::TWO)
         {
@@ -349,15 +322,18 @@ class quickexact_impl
 
                 charge_layout.foreach_cell(
                     [&charge_lyt_copy, &charge_layout](const auto& c)
-                    { charge_lyt_copy.assign_charge_state(c, charge_layout.get_charge_state(c)); });
+                    {
+                        charge_lyt_copy.assign_charge_state(c, charge_layout.get_charge_state(c),
+                                                            charge_index_mode::KEEP_CHARGE_INDEX);
+                    });
 
                 charge_lyt_copy.update_after_charge_change();
-                charge_lyt_copy.recompute_system_energy();
+                charge_lyt_copy.charge_distribution_to_index_general();
                 result.charge_distributions.push_back(charge_lyt_copy);
             }
         }
 
-        // The cells of the pre-assigned negatively-charged SiDBs are added to the cell level layout.
+        // The cells of the pre-assigned negatively charged SiDBs are added to the cell level layout.
         for (const auto& cell : preassigned_negative_sidbs)
         {
             layout.assign_cell_type(cell, Lyt::cell_type::NORMAL);
@@ -393,20 +369,21 @@ class quickexact_impl
 
                     charge_layout.foreach_cell(
                         [&charge_lyt_copy, &charge_layout](const auto& c)
-                        { charge_lyt_copy.assign_charge_state(c, charge_layout.get_charge_state(c)); });
+                        {
+                            charge_lyt_copy.assign_charge_state(c, charge_layout.get_charge_state(c),
+                                                                charge_index_mode::KEEP_CHARGE_INDEX);
+                        });
 
                     charge_lyt_copy.update_after_charge_change();
-                    charge_lyt_copy.recompute_system_energy();
                     charge_lyt_copy.charge_distribution_to_index_general();
                     result.charge_distributions.push_back(charge_lyt_copy);
                 }
 
                 charge_layout.increase_charge_index_of_sub_layout_by_one(
                     dependent_cell_mode::VARIABLE, energy_calculation::KEEP_OLD_ENERGY_VALUE,
-                    charge_distribution_history::CONSIDER,
-                    exhaustive_sidb_simulation_engine::QUICKEXACT);  // "false" allows that the charge state of the
-                                                                     // dependent cell is automatically changed based on
-                                                                     // the new charge distribution.
+                    charge_distribution_history::CONSIDER);  // `dependent_cell_mode::VARIABLE` allows that the
+                                                             // charge state of the dependent cell is automatically
+                                                             // changed based on the new charge distribution.
             }
 
             if (charge_layout.is_physically_valid())
@@ -415,10 +392,12 @@ class quickexact_impl
 
                 charge_layout.foreach_cell(
                     [&charge_lyt_copy, &charge_layout](const auto& c)
-                    { charge_lyt_copy.assign_charge_state(c, charge_layout.get_charge_state(c)); });
+                    {
+                        charge_lyt_copy.assign_charge_state(c, charge_layout.get_charge_state(c),
+                                                            charge_index_mode::KEEP_CHARGE_INDEX);
+                    });
 
                 charge_lyt_copy.update_after_charge_change();
-                charge_lyt_copy.recompute_system_energy();
                 charge_lyt_copy.charge_distribution_to_index_general();
                 result.charge_distributions.push_back(charge_lyt_copy);
             }
@@ -429,11 +408,10 @@ class quickexact_impl
             }
 
             charge_layout.increase_charge_index_by_one(
-                dependent_cell_mode::VARIABLE, energy_calculation::KEEP_OLD_ENERGY_VALUE,
-                charge_distribution_history::NEGLECT,
-                exhaustive_sidb_simulation_engine::QUICKEXACT);  // "false" allows that the charge state of the
-                                                                 // dependent cell is automatically changed based on the
-                                                                 // new charge distribution.
+                dependent_cell_mode::VARIABLE,
+                energy_calculation::KEEP_OLD_ENERGY_VALUE);  // `dependent_cell_mode::VARIABLE` allows that the charge
+                                                             // state of the dependent cell is automatically changed
+                                                             // based on the new charge distribution.
         }
 
         // charge configurations of the sublayout are iterated
@@ -445,28 +423,33 @@ class quickexact_impl
 
                 charge_layout.foreach_cell(
                     [&charge_lyt_copy, &charge_layout](const auto& c)
-                    { charge_lyt_copy.assign_charge_state(c, charge_layout.get_charge_state(c)); });
+                    {
+                        charge_lyt_copy.assign_charge_state(c, charge_layout.get_charge_state(c),
+                                                            charge_index_mode::KEEP_CHARGE_INDEX);
+                    });
 
                 charge_lyt_copy.update_after_charge_change();
-                charge_lyt_copy.recompute_system_energy();
                 charge_lyt_copy.charge_distribution_to_index_general();
                 result.charge_distributions.push_back(charge_lyt_copy);
             }
 
-            charge_layout.increase_charge_index_of_sub_layout_by_one(
-                dependent_cell_mode::VARIABLE, energy_calculation::KEEP_OLD_ENERGY_VALUE,
-                charge_distribution_history::CONSIDER, exhaustive_sidb_simulation_engine::QUICKEXACT);
+            charge_layout.increase_charge_index_of_sub_layout_by_one(dependent_cell_mode::VARIABLE,
+                                                                     energy_calculation::KEEP_OLD_ENERGY_VALUE,
+                                                                     charge_distribution_history::CONSIDER);
         }
 
         if (charge_layout.is_physically_valid())
         {
             charge_distribution_surface<Lyt> charge_lyt_copy{charge_lyt};
 
-            charge_layout.foreach_cell([&charge_lyt_copy, &charge_layout](const auto& c)
-                                       { charge_lyt_copy.assign_charge_state(c, charge_layout.get_charge_state(c)); });
+            charge_layout.foreach_cell(
+                [&charge_lyt_copy, &charge_layout](const auto& c)
+                {
+                    charge_lyt_copy.assign_charge_state(c, charge_layout.get_charge_state(c),
+                                                        charge_index_mode::KEEP_CHARGE_INDEX);
+                });
 
             charge_lyt_copy.update_after_charge_change();
-            charge_lyt_copy.recompute_system_energy();
             charge_lyt_copy.charge_distribution_to_index_general();
             result.charge_distributions.push_back(charge_lyt_copy);
         }
@@ -491,14 +474,15 @@ class quickexact_impl
      */
     void initialize_charge_layout() noexcept
     {
-        if constexpr (has_foreach_sidb_defect_v<Lyt>)
+        // If Lyt is already a charge distribution surface, the layout was copied directly to the charge layout,
+        // and initialization was skipped. Therefore, the electrostatic influence of the defects is needed.
+        if constexpr (is_sidb_defect_surface_v<Lyt> && is_charge_distribution_surface_v<Lyt>)
         {
             layout.foreach_sidb_defect(
                 [this](const auto& cd)
                 {
-                    const auto& [cell, defect] = cd;
-
-                    if (defect.type != sidb_defect_type::NONE)
+                    if (const auto& [cell, defect] = cd;
+                        defect.type != sidb_defect_type::NONE && is_charged_defect_type(cd.second))
                     {
                         charge_lyt.add_sidb_defect_to_potential_landscape(cell, layout.get_sidb_defect(cell));
                     }
@@ -506,13 +490,12 @@ class quickexact_impl
         }
 
         charge_lyt.assign_local_external_potential(params.local_external_potential);
-        charge_lyt.assign_global_external_potential(params.global_potential, dependent_cell_mode::VARIABLE);
+        charge_lyt.assign_global_external_potential(params.global_potential);
 
         preassigned_negative_sidb_indices = charge_lyt.negative_sidb_detection();
         preassigned_negative_sidbs.reserve(preassigned_negative_sidb_indices.size());
 
         all_sidbs_in_lyt_without_negative_preassigned_ones = charge_lyt.get_sidb_order();
-        real_placed_defects                                = charge_lyt.get_defects();
         // store the number of SiDBs, since the number of active cells changes during simulation.
         number_of_sidbs = charge_lyt.num_cells();
     }
@@ -525,12 +508,12 @@ class quickexact_impl
     {
         for (const auto& index : preassigned_negative_sidb_indices)
         {
-            const auto cell = charge_lyt.index_to_cell(static_cast<uint64_t>(index));
+            const auto cell = charge_lyt.index_to_cell(index);
             preassigned_negative_sidbs.push_back(cell);
             layout.assign_cell_type(cell, Lyt::cell_type::EMPTY);
         }
 
-        // All pre-assigned negatively-charged SiDBs are erased from the
+        // all pre-assigned negatively charged SiDBs are erased from the
         // all_sidbs_in_lyt_without_negative_preassigned_ones vector.
         all_sidbs_in_lyt_without_negative_preassigned_ones.erase(
             std::remove_if(all_sidbs_in_lyt_without_negative_preassigned_ones.begin(),

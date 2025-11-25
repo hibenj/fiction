@@ -6,12 +6,11 @@
 #define FICTION_WRITE_SQD_SIM_RESULT_HPP
 
 #include "fiction/algorithms/simulation/sidb/sidb_simulation_result.hpp"
-#include "fiction/technology/cell_technologies.hpp"
 #include "fiction/technology/charge_distribution_surface.hpp"
 #include "fiction/technology/sidb_charge_state.hpp"
-#include "fiction/technology/sidb_lattice_orientations.hpp"
 #include "fiction/technology/sidb_nm_position.hpp"
 #include "fiction/traits.hpp"
+#include "fiction/utils/stl_utils.hpp"
 #include "utils/version_info.hpp"
 
 #include <fmt/chrono.h>
@@ -19,17 +18,14 @@
 
 #include <algorithm>
 #include <any>
-#include <chrono>
 #include <cstdint>
 #include <ctime>
 #include <fstream>
 #include <functional>
 #include <ostream>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <typeindex>
-#include <typeinfo>
 #include <unordered_map>
 #include <vector>
 
@@ -180,8 +176,9 @@ class write_sqd_sim_result_impl
      */
     void write_engine_info()
     {
+        const auto current_time = std::time(nullptr);
         os << fmt::format(siqad::ENG_INFO_BLOCK, sim_result.algorithm_name, FICTION_VERSION, FICTION_REPO, 0,
-                          fmt::format("{:%Y-%m-%d %H:%M:%S}", fmt::localtime(std::time(nullptr))),
+                          fmt::format("{:%Y-%m-%d %H:%M:%S}", safe_localtime(current_time)),
                           sim_result.simulation_runtime.count());
     }
 
@@ -248,8 +245,8 @@ class write_sqd_sim_result_impl
                       { ordered_surface_pointers.push_back(&surface); });
 
         // sort the surface references by their system energy
-        std::sort(ordered_surface_pointers.begin(), ordered_surface_pointers.end(),
-                  [](const auto& a, const auto& b) { return a->get_system_energy() < b->get_system_energy(); });
+        std::sort(ordered_surface_pointers.begin(), ordered_surface_pointers.end(), [](const auto& a, const auto& b)
+                  { return a->get_electrostatic_potential_energy() < b->get_electrostatic_potential_energy(); });
 
         // write the distributions to the output stream
         std::for_each(
@@ -265,9 +262,9 @@ class write_sqd_sim_result_impl
 
                 os << fmt::format(
                     siqad::DIST_ENERGY,
-                    surface->get_system_energy(),            // system energy
-                    1,                                       // occurrence count
-                    surface->is_physically_valid() ? 1 : 0,  // physical validity
+                    surface->get_electrostatic_potential_energy(),  // system energy
+                    1,                                              // occurrence count
+                    surface->is_physically_valid() ? 1 : 0,         // physical validity
                     3,  // simulation state count (fixed to 3 since state count = 2 is not supported by SiQAD yet).
                     charge_configuration_to_string(ordered_charges)  // charge distribution as a string
                 );
@@ -285,7 +282,7 @@ class write_sqd_sim_result_impl
  *
  * This overload uses an output stream to write into.
  *
- * @tparam Lyt Cell-level SiDB layout type.
+ * @tparam Lyt SiDB cell-level SiDB layout type.
  * @param sim_result The simulation result to write.
  * @param os The output stream to write into.
  */
@@ -306,14 +303,17 @@ void write_sqd_sim_result(const sidb_simulation_result<Lyt>& sim_result, std::os
  *
  * This overload uses a file name to create and write into.
  *
- * @tparam Lyt Cell-level SiDB layout type.
+ * @tparam Lyt SiDB cell-level SiDB layout type.
  * @param sim_result The simulation result to write.
  * @param filename The file name to create and write into. Should preferably use the `.xml` extension.
  */
 template <typename Lyt>
 void write_sqd_sim_result(const sidb_simulation_result<Lyt>& sim_result, const std::string_view& filename)
 {
-    std::ofstream os{filename.data(), std::ofstream::out};
+    static_assert(is_cell_level_layout_v<Lyt>, "Lyt is not a cell-level layout");
+    static_assert(has_sidb_technology_v<Lyt>, "Lyt must be an SiDB layout");
+
+    std::ofstream os{std::string{filename}, std::ofstream::out};
 
     if (!os.is_open())
     {

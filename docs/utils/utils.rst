@@ -111,17 +111,26 @@ Layout Utils
         .. doxygenfunction:: fiction::relative_to_absolute_cell_position
         .. doxygenfunction:: fiction::port_direction_to_coordinate
         .. doxygenfunction:: fiction::normalize_layout_coordinates
-        .. doxygenfunction:: fiction::convert_to_siqad_coordinates
-        .. doxygenfunction:: fiction::convert_to_fiction_coordinates
+        .. doxygenfunction:: fiction::convert_layout_to_siqad_coordinates
+        .. doxygenfunction:: fiction::convert_layout_to_fiction_coordinates
         .. doxygenfunction:: fiction::random_coordinate
         .. doxygenfunction:: fiction::all_coordinates_in_spanned_area
 
     .. tab:: Python
         .. autofunction:: mnt.pyfiction.num_adjacent_coordinates
         .. autofunction:: mnt.pyfiction.normalize_layout_coordinates
-        .. autofunction:: mnt.pyfiction.convert_to_siqad_coordinates
-        .. autofunction:: mnt.pyfiction.convert_to_fiction_coordinates
+        .. autofunction:: mnt.pyfiction.convert_layout_to_siqad_coordinates
         .. autofunction:: mnt.pyfiction.random_coordinate
+
+
+Map utils
+---------
+
+.. tabs::
+    .. tab:: C++
+        **Header:** ``fiction/utils/map_utils.hpp``
+
+        .. doxygenfunction:: fiction::find_key_with_tolerance
 
 
 Placement Utils
@@ -218,8 +227,9 @@ STL Extensions
 **Header:** ``fiction/utils/stl_utils.hpp``
 
 .. doxygenfunction:: fiction::find_first_two_of
-
 .. doxygenclass:: fiction::searchable_priority_queue
+    :members:
+.. doxygenfunction:: fiction::safe_localtime
 
 
 Execution Policy Macros
@@ -278,6 +288,8 @@ Math Utils
 .. doxygenfunction:: fiction::integral_abs
 .. doxygenfunction:: fiction::binomial_coefficient
 .. doxygenfunction:: fiction::determine_all_combinations_of_distributing_k_entities_on_n_positions
+.. doxygenfunction:: fiction::cartesian_combinations
+
 
 ``phmap``
 ---------

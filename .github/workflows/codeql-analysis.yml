@@ -2,42 +2,42 @@ name: 📝 • CodeQL
 
 on:
   push:
-    branches: [ 'main' ]
+    branches: ["main"]
     paths:
-      - '**/*.hpp'
-      - '**/*.cpp'
-      - '**/*.cmake'
-      - '**/CMakeLists.txt'
-      - '**/*.py'
-      - 'libs/**'
-      - '.github/workflows/codeql-analysis.yml'
-      - '!bindings/pyfiction/include/pyfiction/pybind11_mkdoc_docstrings.hpp'
+      - "**/*.hpp"
+      - "**/*.cpp"
+      - "**/*.cmake"
+      - "**/CMakeLists.txt"
+      - "**/*.py"
+      - "libs/**"
+      - ".github/workflows/codeql-analysis.yml"
+      - "!bindings/mnt/pyfiction/include/pyfiction/pybind11_mkdoc_docstrings.hpp"
   pull_request:
-    branches: [ 'main' ]
+    branches: ["main"]
     paths:
-      - '**/*.hpp'
-      - '**/*.cpp'
-      - '**/*.cmake'
-      - '**/CMakeLists.txt'
-      - '**/*.py'
-      - 'libs/**'
-      - '.github/workflows/codeql-analysis.yml'
-      - '!bindings/pyfiction/include/pyfiction/pybind11_mkdoc_docstrings.hpp'
+      - "**/*.hpp"
+      - "**/*.cpp"
+      - "**/*.cmake"
+      - "**/CMakeLists.txt"
+      - "**/*.py"
+      - "libs/**"
+      - ".github/workflows/codeql-analysis.yml"
+      - "!bindings/mnt/pyfiction/include/pyfiction/pybind11_mkdoc_docstrings.hpp"
   merge_group:
   schedule:
-    - cron: '30 5 * * 6'
+    - cron: "30 5 * * 6"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
   cancel-in-progress: true
 
 env:
-  Z3_VERSION: 4.10.0
+  Z3_VERSION: 4.13.0
 
 jobs:
   analyze:
     name: Analyze ${{ matrix.language }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       actions: read
       contents: read
@@ -46,27 +46,27 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'cpp', 'python' ]
-        compiler: [ clang++-11 ]
-        build_type: [ Debug ]
+        language: ["cpp", "python"]
+        compiler: [clang++-17]
+        build_type: [Debug]
 
     steps:
       - name: Free Disk Space (Ubuntu)
         uses: jlumbroso/free-disk-space@main
         with:
-          tool-cache: false
+          tool-cache: true
           android: true
-          dotnet: false
-          haskell: false
-          large-packages: false
-          docker-images: false
-          swap-storage: false
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: Install libraries and the respective compiler
         run: sudo apt-get update && sudo apt-get install -yq libtbb-dev ${{matrix.compiler}}
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: recursive
           fetch-depth: 0
@@ -74,16 +74,16 @@ jobs:
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: '${{matrix.os}}-${{matrix.compiler}}'
+          key: "${{matrix.os}}-${{matrix.compiler}}"
           variant: ccache
           save: true
           max-size: 10G
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.10.x'
-          cache: 'pip'
+          python-version: "3.14.x"
+          cache: "pip"
 
       - name: Setup mold
         uses: rui314/setup-mold@v1
@@ -105,7 +105,7 @@ jobs:
 
       # Initializes the CodeQL tools for scanning.
       - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
+        uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           config-file: .github/codeql-config.yml
@@ -123,11 +123,12 @@ jobs:
           -DCMAKE_BUILD_TYPE=${{matrix.build_type}}
           -DFICTION_ENABLE_UNITY_BUILD=ON
           -DFICTION_ENABLE_PCH=ON
-          -DFICTION_CLI=ON
+          -DFICTION_CLI=OFF
           -DFICTION_TEST=ON
           -DFICTION_BENCHMARK=OFF
           -DFICTION_EXPERIMENTS=ON
           -DFICTION_Z3=ON
+          -DFICTION_ALGLIB=ON
           -DFICTION_ENABLE_MUGEN=ON
           -DFICTION_PROGRESS_BARS=OFF
           -DFICTION_WARNINGS_AS_ERRORS=OFF
@@ -139,7 +140,7 @@ jobs:
         run: cmake --build . --config ${{matrix.build_type}} -j4
 
       - name: Perform CodeQL Analysis
-        uses: github/codeql-action/analyze@v3
+        uses: github/codeql-action/analyze@v4
         with:
           upload: false
           output: sarif-results
@@ -155,6 +156,6 @@ jobs:
           output: sarif-results/${{ matrix.language }}.sarif
 
       - name: Upload SARIF to GitHub
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: sarif-results/${{ matrix.language }}.sarif

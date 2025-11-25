@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <variant>
 
@@ -118,7 +119,7 @@ ALICE_LOG_STORE_STATISTICS(fiction::logic_network_t, ln)
 }
 
 template <>
-bool can_show<fiction::logic_network_t>(std::string& extension, [[maybe_unused]] command& cmd)
+inline bool can_show<fiction::logic_network_t>(std::string& extension, [[maybe_unused]] command& cmd)
 {
     extension = "dot";
 
@@ -130,7 +131,8 @@ bool can_show<fiction::logic_network_t>(std::string& extension, [[maybe_unused]]
 
 template <>
 // NOLINTNEXTLINE
-void show<fiction::logic_network_t>(std::ostream& os, const fiction::logic_network_t& element, const command& cmd)
+inline void show<fiction::logic_network_t>(std::ostream& os, const fiction::logic_network_t& element,
+                                           const command& cmd)
 {
     const auto show_ntk = [&os, &cmd](auto&& ntk_ptr)
     {
@@ -151,7 +153,7 @@ void show<fiction::logic_network_t>(std::ostream& os, const fiction::logic_netwo
         }
         catch (const std::invalid_argument& e)
         {
-            cmd.env->out() << "[e] " << e.what() << std::endl;
+            cmd.env->out() << fmt::format("[e] {}\n", e.what());
         }
     };
 
@@ -185,10 +187,11 @@ ALICE_DESCRIBE_STORE(fiction::gate_layout_t, layout)
 
         const auto cp_tp = fiction::critical_path_length_and_throughput(*lyt_ptr);
 
-        return fmt::format("{} ({}) - {} × {}, I/O: {}/{}, gates: {}, wires: {}, CP: {}, TP: 1/{}, sync. elems.: {}",
-                           lyt_ptr->get_layout_name(), lyt_ptr->get_clocking_scheme().name, lyt_ptr->x() + 1,
-                           lyt_ptr->y() + 1, lyt_ptr->num_pis(), lyt_ptr->num_pos(), lyt_ptr->num_gates(),
-                           lyt_ptr->num_wires(), cp_tp.critical_path_length, cp_tp.throughput, num_se);
+        return fmt::format(
+            "{} ({}) - {} × {}, I/O: {}/{}, gates: {}, wires: {}, crossings: {}, CP: {}, TP: 1/{}, sync. elems.: {}",
+            lyt_ptr->get_layout_name(), lyt_ptr->get_clocking_scheme().name, lyt_ptr->x() + 1, lyt_ptr->y() + 1,
+            lyt_ptr->num_pis(), lyt_ptr->num_pos(), lyt_ptr->num_gates(), lyt_ptr->num_wires(),
+            lyt_ptr->num_crossings(), cp_tp.critical_path_length, cp_tp.throughput, num_se);
     };
 
     return std::visit(describe, layout);
@@ -196,7 +199,6 @@ ALICE_DESCRIBE_STORE(fiction::gate_layout_t, layout)
 
 ALICE_PRINT_STORE_STATISTICS(fiction::gate_layout_t, os, layout)
 {
-    // TODO crossings
     const auto print_statistics = [&os](auto&& lyt_ptr)
     {
         using Lyt = typename std::decay_t<decltype(lyt_ptr)>::element_type;
@@ -210,11 +212,12 @@ ALICE_PRINT_STORE_STATISTICS(fiction::gate_layout_t, os, layout)
 
         const auto cp_tp = fiction::critical_path_length_and_throughput(*lyt_ptr);
 
-        os << fmt::format(
-            "[i] {} ({}) - {} × {}, I/O: {}/{}, gates: {}, wires: {}, CP: {}, TP: 1/{}, sync. elems.: {}\n",
-            lyt_ptr->get_layout_name(), lyt_ptr->get_clocking_scheme().name, lyt_ptr->x() + 1, lyt_ptr->y() + 1,
-            lyt_ptr->num_pis(), lyt_ptr->num_pos(), lyt_ptr->num_gates(), lyt_ptr->num_wires(),
-            cp_tp.critical_path_length, cp_tp.throughput, num_se);
+        os << fmt::format("[i] {} ({}) - {} × {}, I/O: {}/{}, gates: {}, wires: {}, crossings: {}, CP: {}, TP: 1/{}, "
+                          "sync. elems.: {}\n",
+                          lyt_ptr->get_layout_name(), lyt_ptr->get_clocking_scheme().name, lyt_ptr->x() + 1,
+                          lyt_ptr->y() + 1, lyt_ptr->num_pis(), lyt_ptr->num_pos(), lyt_ptr->num_gates(),
+                          lyt_ptr->num_wires(), lyt_ptr->num_crossings(), cp_tp.critical_path_length, cp_tp.throughput,
+                          num_se);
     };
 
     std::visit(print_statistics, layout);
@@ -242,9 +245,9 @@ ALICE_LOG_STORE_STATISTICS(fiction::gate_layout_t, layout)
             {"outputs", lyt_ptr->num_pos()},
             {"gates", lyt_ptr->num_gates()},
             {"wires", lyt_ptr->num_wires()},
+            {"crossings", lyt_ptr->num_crossings()},
             {"layout", {{"x-size", lyt_ptr->x() + 1}, {"y-size", lyt_ptr->y() + 1}, {"area", lyt_ptr->area()}}},
             // {"free tiles", area - (gate_tiles + wire_tiles - crossings)},  // free tiles in ground layer
-            // {"crossings", crossings},
             {"synchronization elements", num_se},
             {"critical path", cp_tp.critical_path_length},
             {"throughput", fmt::format("1/{}", cp_tp.throughput)}};
@@ -254,7 +257,7 @@ ALICE_LOG_STORE_STATISTICS(fiction::gate_layout_t, layout)
 }
 
 template <>
-bool can_show<fiction::gate_layout_t>(std::string& extension, [[maybe_unused]] command& cmd)
+inline bool can_show<fiction::gate_layout_t>(std::string& extension, [[maybe_unused]] command& cmd)
 {
     extension = "dot";
 
@@ -268,7 +271,7 @@ bool can_show<fiction::gate_layout_t>(std::string& extension, [[maybe_unused]] c
 
 template <>
 // NOLINTNEXTLINE
-void show<fiction::gate_layout_t>(std::ostream& os, const fiction::gate_layout_t& element, const command& cmd)
+inline void show<fiction::gate_layout_t>(std::ostream& os, const fiction::gate_layout_t& element, const command& cmd)
 {
     const auto show_lyt = [&os, &cmd](auto&& lyt_ptr)
     {
@@ -358,7 +361,7 @@ void show<fiction::gate_layout_t>(std::ostream& os, const fiction::gate_layout_t
         }
         else
         {
-            cmd.env->out() << "[e] unsupported layout topology" << std::endl;
+            cmd.env->out() << "[e] unsupported layout topology\n";
         }
     };
 
@@ -443,7 +446,7 @@ ALICE_LOG_STORE_STATISTICS(fiction::cell_layout_t, layout)
 }
 
 template <>
-bool can_show<fiction::cell_layout_t>(std::string& extension, [[maybe_unused]] command& cmd)
+inline bool can_show<fiction::cell_layout_t>(std::string& extension, [[maybe_unused]] command& cmd)
 {
     cmd.add_flag("--simple,-s", "Simplified depiction abstracting from details")->group("cell_layout (-c)");
 
@@ -454,35 +457,42 @@ bool can_show<fiction::cell_layout_t>(std::string& extension, [[maybe_unused]] c
 
 template <>
 // NOLINTNEXTLINE
-void show<fiction::cell_layout_t>(std::ostream& os, const fiction::cell_layout_t& element,
-                                  const command& cmd)  // const & for pointer because alice says so...
+inline void show<fiction::cell_layout_t>(std::ostream& os, const fiction::cell_layout_t& element,
+                                         const command& cmd)  // const & for pointer because alice says so...
 {
     const auto show_lyt = [&os, &cmd](auto&& lyt_ptr)
     {
         using Lyt = typename std::decay_t<decltype(lyt_ptr)>::element_type;
 
-        if constexpr (!fiction::has_qca_technology_v<Lyt>)
+        if constexpr (!fiction::has_qca_technology_v<Lyt> && !fiction::has_sidb_technology_v<Lyt>)
         {
-            cmd.env->out() << fmt::format("[e] {} is not a QCA layout", lyt_ptr->get_layout_name()) << std::endl;
+            cmd.env->out() << fmt::format("[e] {} is neither a QCA layout nor an SiDB layout\n",
+                                          lyt_ptr->get_layout_name());
         }
-        else if constexpr (!std::is_same_v<fiction::coordinate<Lyt>, fiction::offset::ucoord_t>)
+        else if constexpr (fiction::has_qca_technology_v<Lyt> && !fiction::has_offset_ucoord_v<Lyt>)
         {
-            cmd.env->out() << fmt::format("[e] {} is not a Cartesian layout", lyt_ptr->get_layout_name()) << std::endl;
+            cmd.env->out() << fmt::format("[e] {} is not a Cartesian layout\n", lyt_ptr->get_layout_name());
         }
         else
         {
             try
             {
-                fiction::write_qca_layout_svg(*lyt_ptr, os, {cmd.is_set("simple")});
+                if constexpr (fiction::has_qca_technology_v<Lyt>)
+                {
+                    fiction::write_qca_layout_svg(*lyt_ptr, os, {cmd.is_set("simple")});
+                }
+                else if constexpr (fiction::has_sidb_technology_v<Lyt>)
+                {
+                    fiction::write_sidb_layout_svg(*lyt_ptr, os, {});
+                }
             }
             catch (const fiction::unsupported_cell_type_exception<fiction::coordinate<Lyt>>& e)
             {
-                cmd.env->out() << fmt::format("[e] unsupported cell type at cell position {}", e.where()) << std::endl;
+                cmd.env->out() << fmt::format("[e] unsupported cell type at cell position {}\n", e.where());
             }
             catch (...)
             {
-                cmd.env->out() << "[e] an error occurred while writing the SVG description to the output stream"
-                               << std::endl;
+                cmd.env->out() << "[e] an error occurred while writing the SVG description to the output stream\n";
             }
         }
     };

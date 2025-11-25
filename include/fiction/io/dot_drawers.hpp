@@ -12,6 +12,7 @@
 #include <fiction/layouts/hexagonal_layout.hpp>
 
 #include <fmt/format.h>
+#include <fmt/ranges.h>
 #include <kitty/print.hpp>
 #include <mockturtle/io/write_dot.hpp>
 #include <mockturtle/traits.hpp>
@@ -92,11 +93,81 @@ class technology_dot_drawer : public mockturtle::gate_dot_drawer<Ntk>
                 return "palegreen2";
             }
         }
+        if constexpr (has_is_xnor_v<Ntk>)
+        {
+            if (ntk.is_xnor(n))
+            {
+                return "lightskyblue";
+            }
+        }
+        if constexpr (has_is_lt_v<Ntk>)
+        {
+            if (ntk.is_lt(n))
+            {
+                return "seagreen1";
+            }
+        }
+        if constexpr (has_is_le_v<Ntk>)
+        {
+            if (ntk.is_le(n))
+            {
+                return "seagreen4";
+            }
+        }
+        if constexpr (has_is_gt_v<Ntk>)
+        {
+            if (ntk.is_gt(n))
+            {
+                return "firebrick1";
+            }
+        }
+        if constexpr (has_is_ge_v<Ntk>)
+        {
+            if (ntk.is_ge(n))
+            {
+                return "firebrick4";
+            }
+        }
         if constexpr (has_is_dot_v<Ntk>)
         {
             if (ntk.is_dot(n))
             {
                 return "thistle";
+            }
+        }
+        if constexpr (has_is_xor_and_v<Ntk>)
+        {
+            if (ntk.is_xor_and(n))
+            {
+                return "lightpink";
+            }
+        }
+        if constexpr (has_is_or_and_v<Ntk>)
+        {
+            if (ntk.is_or_and(n))
+            {
+                return "lightgreen";
+            }
+        }
+        if constexpr (has_is_onehot_v<Ntk>)
+        {
+            if (ntk.is_onehot(n))
+            {
+                return "lightgoldenrod";
+            }
+        }
+        if constexpr (has_is_gamble_v<Ntk>)
+        {
+            if (ntk.is_gamble(n))
+            {
+                return "lightsteelblue";
+            }
+        }
+        if constexpr (mockturtle::has_is_ite_v<Ntk>)
+        {
+            if (ntk.is_ite(n))
+            {
+                return "lightcyan";
             }
         }
 
@@ -141,11 +212,81 @@ class technology_dot_drawer : public mockturtle::gate_dot_drawer<Ntk>
                 return "NOR";
             }
         }
+        if constexpr (has_is_xnor_v<Ntk>)
+        {
+            if (ntk.is_xnor(n))
+            {
+                return "XNOR";
+            }
+        }
+        if constexpr (has_is_lt_v<Ntk>)
+        {
+            if (ntk.is_lt(n))
+            {
+                return "LT";
+            }
+        }
+        if constexpr (has_is_le_v<Ntk>)
+        {
+            if (ntk.is_le(n))
+            {
+                return "LE";
+            }
+        }
+        if constexpr (has_is_gt_v<Ntk>)
+        {
+            if (ntk.is_gt(n))
+            {
+                return "GT";
+            }
+        }
+        if constexpr (has_is_ge_v<Ntk>)
+        {
+            if (ntk.is_ge(n))
+            {
+                return "GE";
+            }
+        }
         if constexpr (has_is_dot_v<Ntk>)
         {
             if (ntk.is_dot(n))
             {
                 return "DOT";
+            }
+        }
+        if constexpr (has_is_xor_and_v<Ntk>)
+        {
+            if (ntk.is_xor_and(n))
+            {
+                return "XOR_AND";
+            }
+        }
+        if constexpr (has_is_or_and_v<Ntk>)
+        {
+            if (ntk.is_or_and(n))
+            {
+                return "OR_AND";
+            }
+        }
+        if constexpr (has_is_onehot_v<Ntk>)
+        {
+            if (ntk.is_onehot(n))
+            {
+                return "ONEHOT";
+            }
+        }
+        if constexpr (has_is_gamble_v<Ntk>)
+        {
+            if (ntk.is_gamble(n))
+            {
+                return "GAMBLE";
+            }
+        }
+        if constexpr (mockturtle::has_is_ite_v<Ntk>)
+        {
+            if (ntk.is_ite(n))
+            {
+                return "ITE";
             }
         }
 
@@ -415,12 +556,12 @@ class simple_gate_layout_tile_drawer : public technology_dot_drawer<Lyt, DrawInd
         return columns;
     }
 
-    [[nodiscard]] std::string same_rank(const std::vector<std::string>& rank) const noexcept
+    [[nodiscard]] static std::string same_rank(const std::vector<std::string>& rank) noexcept
     {
         return fmt::format("rank = same {{ {} }};\n", fmt::join(rank, " -> "));
     }
 
-    [[nodiscard]] std::string edge(const std::string_view& src, const std::string_view& tgt) const noexcept
+    [[nodiscard]] static std::string edge(const std::string_view& src, const std::string_view& tgt) noexcept
     {
         return fmt::format("{} -> {};\n", src, tgt);
     }
@@ -854,7 +995,7 @@ class gate_layout_hexagonal_drawer : public simple_gate_layout_tile_drawer<Lyt, 
   protected:
     using base_drawer = simple_gate_layout_tile_drawer<Lyt, ClockColors, DrawIndexes>;
 
-    [[nodiscard]] std::string invisible_node(const uint64_t i) const noexcept
+    [[nodiscard]] static std::string invisible_node(const uint64_t i) noexcept
     {
         return fmt::format("invis{}", i);
     }
@@ -896,7 +1037,7 @@ class gate_layout_hexagonal_drawer : public simple_gate_layout_tile_drawer<Lyt, 
 
     void shift_row(const Lyt& lyt, const uint64_t row, std::stringstream& stream) const noexcept
     {
-        stream << base_drawer::same_rank({{invisible_node(row), base_drawer::tile_id({0, row})}});
+        stream << base_drawer::same_rank(std::vector<std::string>{invisible_node(row), base_drawer::tile_id({0, row})});
 
         // previous row only exist if i != 0
         if (row != 0)

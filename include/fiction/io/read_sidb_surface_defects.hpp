@@ -5,7 +5,6 @@
 #ifndef FICTION_READ_SIDB_SURFACE_DEFECTS_HPP
 #define FICTION_READ_SIDB_SURFACE_DEFECTS_HPP
 
-#include "fiction/technology/cell_technologies.hpp"
 #include "fiction/technology/sidb_defect_surface.hpp"
 #include "fiction/technology/sidb_defects.hpp"
 #include "fiction/traits.hpp"
@@ -115,11 +114,11 @@ class read_sidb_surface_defects_impl
                 std::sregex_iterator()};
 
             // track x-dimension of the surface
-            if (row_matches.size() - 1 > max_cell_pos.x)
+            if (row_matches.size() - 1 > static_cast<std::size_t>(max_cell_pos.x))
             {
                 max_cell_pos.x = static_cast<decltype(max_cell_pos.x)>(row_matches.size() - 1);
             }
-            else if (row_matches.size() - 1 < max_cell_pos.x)
+            else if (static_cast<decltype(max_cell_pos.x)>(row_matches.size() - 1) < max_cell_pos.x)
             {
                 // row y has fewer SiDBs than previous rows
                 throw missing_sidb_position_exception(y);

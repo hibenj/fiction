@@ -5,6 +5,323 @@ All notable changes to this project will be documented in this file.
 
 The format is based on `Keep a Changelog <https://keepachangelog.com/en/1.0.0/>`_.
 
+Unreleased
+----------
+
+Changed
+#######
+- Build system:
+    - Restructured the CLI command implementation to improve code organization, modularity, and compilation speed
+
+
+v0.6.12 - 2025-10-29
+--------------------
+
+Added
+#####
+- Algorithms:
+    - Random fanout substitution strategy
+    - Maximum-effort mode in ``gold`` utilizing random fanout substitution strategies and random topological orderings to design high-quality layouts
+    - Flag in ``gold`` to enforce NOT gates to be routed non-bending only
+    - Parameter in ``gold`` to skip tiles when placing PIs, leading to higher success probabilities in discovering layouts
+    - Flag in ``gold`` to randomize the number of skipped tiles when placing PIs
+    - Improved performance of ``hexagonalization``
+    - Improved performance of SiDB simulation algorithms through changes in the underlying data structures
+    - Reimplementation of Graphviz's "Mincross" algorithm
+    - Breadth-first topological view
+    - ``PRUNING_BASED`` option for SiDB gate design to speed up the design process by pruning non-operational layouts
+- Experiments:
+    - Figures-of-Merit (FoM) SiDB layout analysis experiment script
+    - QuickCell experiment script
+    - Minimal SiDB gate design experiment script
+- Continuous integration:
+    - Python 3.14 support
+- Documentation:
+    - References to newly published papers
+
+Changed
+#######
+- CLI:
+    - ``area`` now outputs the layout width and height in addition to the area
+- Continuous integration:
+    - Switched to the `Ninja` generator for Windows CI builds
+- Documentation:
+    - Modernized README and Getting Started section of the documentation
+- Dependencies:
+    - Updated all dependencies to their latest versions
+
+Fixed
+#####
+- Data structures:
+    - Fixed I/O cell handling in ``cell_level_layout``'s ``assign_cell_type`` member function
+    - Fixed system energy calculation in ``charge_distribution_surface`` in corner cases
+    - Added missing ``clone`` member functions to *pyfiction*'s SiDB lattices
+- Algorithms:
+    - Fixed a corner case in ``hexagonalization`` when extending POs to the bottom border
+    - Fixed a bug in ``post_layout_optimization`` and ``wiring_reduction`` that lead to POs not being placed at the borders and possibly dying
+    - Fixed ``band_bending_resilience`` calculation of SiDB layouts for unspecified transition types
+- Experiments:
+    - Experiment scripts requiring ``ALGLIB`` now prompt an error message instead of failing to compile when the library is not found
+- Continuous integration:
+    - ``clang-tidy`` CI workflow no longer fails when run from forks
+- Code quality:
+    - Addressed several ``clang-tidy`` warnings throughout the code base
+
+Removed
+#######
+- Continuous integration:
+    - Dropped Windows 2019 and v142 support
+    - Dropped Python 3.9 support due to its end-of-life status
+
+
+v0.6.11 - 2025-04-23
+--------------------
+
+Added
+#####
+- Algorithms:
+    - Parameters to move inputs to top border or outputs to the bottom border after ``hexagonalization``
+- Experiments:
+    - Added experiment for a comprehensive analysis of the critical temperature domain
+    - Added total simulation runtime to physical simulation experiment
+- Python bindings:
+    - Pythonic dictionary-like interface for ``operational_domain`` and ``critical_temperature_domain``
+
+Changed
+#######
+- Documentation:
+    - Modernized the documentation builds by migrating the RTD build from ``pip`` to ``uv``
+- Algorithms:
+    - Refactored ``QuickSim`` to remove magic number for upper limit calculation
+    - Refactored random layout design functions
+
+Fixed
+#####
+- Fixed a bug in the z-dimension when determining the aspect ratio for cell-level layouts
+- Fixed an issue in the TTS calculation caused by the automatic base detection being activated
+- Fixed links in the README due to the migration of the ``mqt-core`` repository to a new namespace
+- Exclude ``ClusterComplete`` from simulation engine selection when ALGBLIB is disabled
+- Fixed inconsistencies and various bugs in SiDB simulation/analysis
+- Fixed LT, LE, GT, and LE gate handling in the gate-level-layout and the corresponding read and write functions
+- Fixed a bug in the crossing count calculation of gate-level layouts
+- Increased floating point precision to avoid undetected degeneracy in the physical simulation of SiDB layouts
+
+
+v0.6.10 - 2025-02-21
+--------------------
+
+Added
+#####
+- Algorithms:
+    - Added parameters to extend the PIs to the first layout row or POs to the last layout row after ``hexagonalization``
+
+Fixed
+#####
+- Fixed the Python bindings for the critical temperature domain simulation
+
+v0.6.9 - 2025-02-12
+-------------------
+
+Added
+#####
+- Algorithms:
+    - Added ``ClusterComplete``, a novel exact physical simulator for SiDB layouts with substantially improved runtimes, allowing the simulation of multi-gate SiDB layouts
+    - Added temperature-aware operational domain simulation and restructured the function to simplify the integration of additional figures of merit in the future
+
+Changed
+#######
+- Build and documentation:
+    - Added optional usage of `jemalloc <https://github.com/jemalloc/jemalloc>`_ to speed up certain parallelized applications
+
+Fixed
+#####
+- Algorithms:
+    - Fixed a bug in ``apply_gate_library`` that resulted in incorrect cell-level layout sizing
+- Build and documentation:
+    - Added a CMake file for detecting pre-installed jemalloc
+- Experiments:
+    - Fixed a non-critical bug that occurred when ALGLIB was disabled
+
+
+v0.6.8 - 2025-01-25
+-------------------
+
+Added
+#####
+- Data structures:
+    - ``virtual_pi_network`` that allows for the duplication of input signals
+    - ``mutable_rank_view`` that allows for the reordering of nodes
+    - ``static_depth_view`` that disables depth recomputation
+- Algorithms:
+    - Logic synthesis:
+        - Equivalence checking for networks with virtual PIs
+- Clocking schemes:
+    - SRS
+- Continuous integration:
+    - Added Linux on ARM runners
+
+Fixed
+#####
+- Continuous deployment:
+    - Fixed a critical issue with wheel building and deployment to PyPI that caused some operating systems to not be served
+- Experiments:
+    - Fixed outdated paths in the ``QuickCell`` experiment script
+
+
+v0.6.7 - 2025-01-20
+-------------------
+
+Added
+#####
+- Algorithms:
+    - Simulation:
+        - Implemented new algorithms utilizing grid search, random sampling, and contour tracing to determine defect clearance distances of SiDB layouts
+        - Restructured defect influence simulation for enhanced usability
+        - Integrated ``QuickCell's`` pruning strategies to efficiently identify non-operational layouts
+- Experiments:
+    - Added rectangular SiDB gate skeletons (16.896 nm x 16.896 nm) and a script for designing a corresponding library
+    - Enhanced results tables in the ``QuickCell`` experiment script with information about how many layouts remain and are pruned at each pruning step
+- Continuous integration:
+    - Added MacOS 15 and Windows 2025 to the CI
+    - Added `Renovate <https://github.com/renovatebot/renovate>`_ to keep dependencies up-to-date
+    - Added `ruff <https://docs.astral.sh/ruff/>`_ as a Python linter and `mypy <https://mypy-lang.org/>`_ for static Python type checking. Extended the pre-commit configuration with ``check-jsonschema``, ``validate-pyproject-schema-store``, ``nb-clean``, ``prettier``, ``ruff``, and ``mypy``
+- CLI:
+    - Added an optional callback to `ABC <https://github.com/berkeley-abc/abc>`_ in fiction's CLI
+
+Changed
+#######
+- Continuous integration:
+    - Updated the workflow to reduce runtime when building the wheels by excluding redundant combinations of OSs and Python versions
+
+Fixed
+#####
+- Fixed a bug in the ``show`` command of the CLI
+
+Removed
+#######
+- Continuous integration:
+    - Dropped Python 3.8 support due to its end-of-life status
+    - Dropped Dependabot
+
+
+v0.6.6 - 2024-11-26
+-------------------
+
+Added
+#####
+- Algorithms:
+    - Simulation:
+        - Added option to determine if kinks induce layout to become non-operational
+        - Kink control option for critical temperature simulation of SiDB layouts
+- Python bindings:
+    - Support for Python 3.13 (including GIL-free multi-threading)
+- I/O:
+    - SVG drawer for SiDB layouts
+- Experiments:
+    - Ship the SiQAD and Bestagon gate libraries als SQD files
+- Documentation:
+    - Added wiring reduction paper to publication list
+    - Added Willem Lambooy to the authors list
+- Continuous integration:
+    - Several improvements to the Docker workflow including publishing images to DockerHub
+
+Changed
+#######
+- Continuous integration:
+    - Exclude long-running tests from the Debug CI workflows
+
+Fixed
+#####
+- Fixed a bug in SiDB gate design when using skeletons with I/O wires facing east
+- Adapted ``post-layout optimization`` and ``wiring reduction`` to handle layouts with PIs not placed at the borders
+- Fix neutral defect handling in CDS and correct gate design termination condition
+- Enforce runtime evaluation of dynamic formatting strings to fix consteval contexts
+- Microsoft logo in CI badge by replacing the logo slug with a base64 encoding of the SVG image
+- Remove explicit XCode version setup for macOS 13 CIs
+- Adjusted PyPI deployment target for macOS
+- Several bugs resulting from the new cell_type::LOGIC in the SiDB technology
+- Several compiler and linter warnings
+- Documentation for BDL wire detection
+
+v0.6.5 - 2024-10-22
+-------------------
+
+Added
+#####
+- Experiments:
+    - Script to simulate the critical temperature of SiQAD and Bestagon gates
+- Algorithms:
+    - Physical Design:
+        - QuickCell algorithm for automatic standard cell design in silicon dangling bond logic
+        - Added an option to GOLD to specify discretionary cost objectives
+        - Added a flag to GOLD to enable multi-threading
+        - Added a timeout option to post-layout optimization
+    - Simulation:
+        - Added support for different ways of implementing input information in SiDB technology to the BDL input iterator
+        - Extended BDL input iterator to support different SiDB input representations
+- Documentation:
+    - Added a ``CITATION.cff`` file
+    - Added documentation on our latest papers from IEEE-NANO
+
+Fixed
+#####
+- Addressed some ``clang-tidy`` warnings
+
+
+v0.6.4 - 2024-08-30
+-------------------
+
+Added
+#####
+- Algorithms:
+    - Path-finding:
+        - Squared Euclidean distance function
+        - Chebyshev distance function
+- Data structures:
+    - ``gate_level_layout`` now tracks its number of crossings
+- CLI:
+    - ``ps -g`` and ``store -g`` now display the current ``gate_level_layout``'s number of crossings
+
+Fixed
+#####
+- Fixed disappearing clocking schemes when applying a gate library to a gate-level layout
+- Fixed a few oversights in the RTD documentation of SiDB simulation functionality
+- Fixed several typos and docstrings in the codebase
+- Addressed some ``clang-tidy`` warnings
+
+
+v0.6.3 - 2024-08-22
+-------------------
+
+Added
+#####
+- Algorithms:
+    - Physical Design:
+        - Graph-Oriented Layout Design (GOLD) for 2DDWave-clocked Cartesian gate-level layouts to trade-off runtime vs. result quality (based on `this paper <https://www.cda.cit.tum.de/files/eda/2024_ieee_nano_a_star_is_born.pdf>`_)
+        - Flag for planar post-layout optimization
+        - Flag for optimizing POs only in post-layout optimization
+    - Simulation:
+        - Defect-aware on-the-fly SiDB circuit design on defective H-Si surfaces (based on `this paper <https://www.cda.cit.tum.de/files/eda/2024_ieee_nano_on_the_fly_gate_design.pdf>`_)
+        - Displacement robustness domain simulation for SiDB layouts
+        - Finding valid physical parameters for a given SiDB layout charge distribution
+        - Multi-dimensional operational domain computation for SiDB layouts
+
+Changed
+#######
+- Switched from execution policy-based multithreading to manual thread management in operational domain computation for platform-independence and better performance in the Python bindings
+- Extended time-to-solution (TTS) calculation functions
+- Add a warning when leak sanitizers are used with AppleClang since they are not supported
+- Switched to new compiler and OS versions in the GitHub Actions workflows
+- Updated all libraries to the latest versions
+
+Fixed
+#####
+- Utilizing tolerance to mitigate floating-point inaccuracies in operational domain computation
+- Some bugs in post-layout optimization
+- Corner case in ``ortho`` regarding multi-output nodes
+- Enable relocation of all 2-input gates during post-layout optimization
+
+
 v0.6.2 - 2024-05-22
 -------------------
 
@@ -18,6 +335,7 @@ Fixed
 - Python bindings:
     - ``detect_bdl_pairs`` no longer require the ``_100`` or ``_111`` suffix
     - Minor inconsistencies
+
 
 v0.6.1 - 2024-05-16
 -------------------
@@ -252,7 +570,7 @@ Removed
 
 v0.4.0 - 2022-01-27
 -------------------
-*There are people who think that things that happen in fiction do not really happen. These people are wrong.* --- Neil Gaiman
+*Fiction is about stuff that's screwed up.* --- Nancy Kress
 
 Added
 #####
