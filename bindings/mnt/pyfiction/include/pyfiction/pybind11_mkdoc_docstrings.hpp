@@ -4153,6 +4153,26 @@ Parameter ``out``:
 
 static const char *__doc_fiction_critical_temperature_stats_simulation_parameters = R"doc(All parameters for physical SiDB simulations.)doc";
 
+static const char *__doc_fiction_crossing_reduction = R"doc()doc";
+
+static const char *__doc_fiction_crossing_reduction_params = R"doc(Parameters for the Simulated Annealing crossing reduction.)doc";
+
+static const char *__doc_fiction_crossing_reduction_params_final_temperature = R"doc(Final temperature.)doc";
+
+static const char *__doc_fiction_crossing_reduction_params_initial_temperature = R"doc(Initial temperature.)doc";
+
+static const char *__doc_fiction_crossing_reduction_params_number_of_cycles = R"doc(Number of iterations per temperature.)doc";
+
+static const char *__doc_fiction_crossing_reduction_params_number_of_instances = R"doc(Number of parallel runs to pick the overall best result from.)doc";
+
+static const char *__doc_fiction_crossing_reduction_stats = R"doc(Statistics for the Simulated Annealing placer.)doc";
+
+static const char *__doc_fiction_crossing_reduction_stats_crossings_after = R"doc(Number of crossings after the reduction.)doc";
+
+static const char *__doc_fiction_crossing_reduction_stats_crossings_before = R"doc(Number of crossings before the reduction.)doc";
+
+static const char *__doc_fiction_crossing_reduction_stats_duration = R"doc(Runtime measurement.)doc";
+
 static const char *__doc_fiction_csv_writer =
 R"doc(Utility class for writing delimited (e.g. CSV) data into an output
 stream. It provides a variadic member function, `write_line`, that can
@@ -6052,6 +6072,34 @@ Returns:
 
 static const char *__doc_fiction_detail_critical_temperature_impl_stats = R"doc(Statistics.)doc";
 
+static const char *__doc_fiction_detail_crossing_cost = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_cost_crossing_cost = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_cost_rank_cost = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_cost_rank_cost_down = R"doc(The number of crossings in the downward direction.)doc";
+
+static const char *__doc_fiction_detail_crossing_cost_rank_cost_up = R"doc(The number of crossings in the upward direction.)doc";
+
+static const char *__doc_fiction_detail_crossing_cost_rank_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_cost_total_cost = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_cost_update_cost = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_reduction_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_reduction_impl_crossing_reduction_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_reduction_impl_ps = R"doc(Parameters.)doc";
+
+static const char *__doc_fiction_detail_crossing_reduction_impl_pst = R"doc(Statistics.)doc";
+
+static const char *__doc_fiction_detail_crossing_reduction_impl_rank_ntk = R"doc(The network whose nodes crossings are to be minimized.)doc";
+
+static const char *__doc_fiction_detail_crossing_reduction_impl_run = R"doc()doc";
+
 static const char *__doc_fiction_detail_defect_influence_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_defect_influence_impl_current_defect_position = R"doc(The current defect position.)doc";
@@ -7797,6 +7845,8 @@ static const char *__doc_fiction_detail_generate_edge_intersection_graph_impl_ps
 
 static const char *__doc_fiction_detail_generate_edge_intersection_graph_impl_run = R"doc()doc";
 
+static const char *__doc_fiction_detail_get_node_pos = R"doc()doc";
+
 static const char *__doc_fiction_detail_get_offset =
 R"doc(Utility function to calculate the offset that has to be subtracted
 from any x-coordinate on the hexagonal layout.
@@ -9028,6 +9078,53 @@ Returns:
     (either `OPERATIONAL` or `NON_OPERATIONAL`) and the second element
     indicating the reason if it is non-operational.)doc";
 
+static const char *__doc_fiction_detail_is_straight_line_crossing =
+R"doc(Computes whether two lines share a crossing point. The lines are
+defined by the endpoints of the given logic network nodes.
+
+This function uses Cramer's Rule to solve a linear equation system.
+The code is based on: https://stackoverflow.com/questions/563198/how-
+do-you-detect-where-two-line-segments-intersect
+
+Template parameter ``Ntk``:
+    Network type.
+
+Parameter ``ntk``:
+    The network.
+
+Parameter ``src1``:
+    The source node of the first line.
+
+Parameter ``tgt1``:
+    The target node of the first line.
+
+Parameter ``src2``:
+    The source node of the second line.
+
+Parameter ``tgt2``:
+    The target node of the second line.
+
+Returns:
+    True iff the lines share a crossing point.)doc";
+
+static const char *__doc_fiction_detail_is_straight_line_crossing_2 =
+R"doc(The same as above, but for two edges instead of four nodes.
+
+Template parameter ``Ntk``:
+    The network type.
+
+Parameter ``ntk``:
+    The network.
+
+Parameter ``e1``:
+    First edge.
+
+Parameter ``e2``:
+    Second edge
+
+Returns:
+    True iff the edges share a crossing point.)doc";
+
 static const char *__doc_fiction_detail_jump_point_search_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_jump_point_search_impl_closed_list = R"doc(Closed list that acts as a set of already visited coordinates.)doc";
@@ -9257,6 +9354,12 @@ static const char *__doc_fiction_detail_new_gate_location_NONE = R"doc(Do not ch
 
 static const char *__doc_fiction_detail_new_gate_location_SRC = R"doc(Check if the source tile is empty.)doc";
 
+static const char *__doc_fiction_detail_node_pos = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_pos_x = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_pos_y = R"doc()doc";
+
 static const char *__doc_fiction_detail_non_operationality_reason = R"doc(Reason why a layout is non-operational.)doc";
 
 static const char *__doc_fiction_detail_non_operationality_reason_KINKS = R"doc(Kinks induced the layout to become non-operational.)doc";
@@ -9266,6 +9369,12 @@ static const char *__doc_fiction_detail_non_operationality_reason_LOGIC_MISMATCH
 static const char *__doc_fiction_detail_non_operationality_reason_NONE = R"doc(No reason for non-operationality could be determined.)doc";
 
 static const char *__doc_fiction_detail_non_operationality_reason_POTENTIAL_POSITIVE_CHARGES = R"doc(Positive charges may occur but the simulation base is set to `2`.)doc";
+
+static const char *__doc_fiction_detail_number_of_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_number_of_crossings_between_ranks = R"doc()doc";
+
+static const char *__doc_fiction_detail_number_of_crossings_with_adjacent_ranks = R"doc()doc";
 
 static const char *__doc_fiction_detail_operational_domain_impl = R"doc()doc";
 
