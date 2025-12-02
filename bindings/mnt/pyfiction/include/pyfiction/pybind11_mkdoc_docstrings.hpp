@@ -4153,6 +4153,10 @@ Parameter ``out``:
 
 static const char *__doc_fiction_critical_temperature_stats_simulation_parameters = R"doc(All parameters for physical SiDB simulations.)doc";
 
+static const char *__doc_fiction_crossing_gate_planarization = R"doc()doc";
+
+static const char *__doc_fiction_crossing_gate_planarization_params = R"doc()doc";
+
 static const char *__doc_fiction_csv_writer =
 R"doc(Utility class for writing delimited (e.g. CSV) data into an output
 stream. It provides a variadic member function, `write_line`, that can
@@ -6051,6 +6055,56 @@ Returns:
     Simulation results.)doc";
 
 static const char *__doc_fiction_detail_critical_temperature_impl_stats = R"doc(Statistics.)doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_ctn = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_gate_planarization_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_crossing_item = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_e1 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_e2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_hash = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_hash_operator_call = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_operator_eq = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_source = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_target = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_fanout_ntk = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_ncross_extended = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_ntk = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_print_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_ps = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_crossings_per_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_unaffected = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_total_crossings = R"doc()doc";
 
 static const char *__doc_fiction_detail_defect_influence_impl = R"doc()doc";
 
