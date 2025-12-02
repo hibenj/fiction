@@ -13,7 +13,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
-#include <limits>
 #include <map>
 #include <stdexcept>
 #include <unordered_map>
@@ -23,9 +22,16 @@
 namespace fiction
 {
 
-enum crossing_gate_planarization_params
+struct crossing_gate_planarization_params
 {
+    enum on_off : std::uint8_t
+    {
+        ON,
+        OFF
+    };
 
+    on_off mode = ON;
+    on_off verbose = OFF;
 };
 
 namespace detail
@@ -217,7 +223,10 @@ class crossing_gate_planarization_impl
 
         // crossing information
         ncross_extended();
-        print_crossings();
+        if (ps.verbose == crossing_gate_planarization_params::on_off::ON)
+        {
+            print_crossings();
+        }
 
         // mapping: edge -> crossing node created in ntk_dest
         std::unordered_map<edge, typename Ntk::node, edge_hash> edge_to_node{};
@@ -244,7 +253,6 @@ class crossing_gate_planarization_impl
             for (uint32_t j = 0; j < crossing_depth; ++j)
             {
                 last = ntk_dest.create_buf(last);
-                std::cout << "Buffer\n";
             }
 
             // update mapping
@@ -261,26 +269,44 @@ class crossing_gate_planarization_impl
             auto it1 = edge_to_node.find(e1);
             auto it2 = edge_to_node.find(e2);
 
-            typename Ntk::node parent1 = (it1 != edge_to_node.end()) ? it1->second : old2new[e1.source];
+            typename Ntk::node child1 = (it1 != edge_to_node.end()) ? it1->second : old2new[e1.source];
 
-            typename Ntk::node parent2 = (it2 != edge_to_node.end()) ? it2->second : old2new[e2.source];
+            typename Ntk::node child2 = (it2 != edge_to_node.end()) ? it2->second : old2new[e2.source];
 
-            auto sig1 = ntk_dest.make_signal(parent1);
-            auto sig2 = ntk_dest.make_signal(parent2);
+            auto sig1 = ntk_dest.make_signal(child1);
+            auto sig2 = ntk_dest.make_signal(child2);
 
-            // 3-XOR crossing construction
+            // sig3 indicates buffered ON-mode (will remain empty in OFF mode)
+            mockturtle::signal<Ntk> sig3{};
+
+            if (ps.mode == crossing_gate_planarization_params::on_off::ON)
+            {
+                // Must be first in ON mode
+                sig3 = ntk_dest.create_buf(sig1);   // buffer sig1 before XOR
+            }
+
+            // Always executed next
             auto c0 = ntk_dest.create_xor(sig1, sig2);
-            sig1    = ntk_dest.create_buf(sig1);
-            sig2    = ntk_dest.create_buf(sig2);
-            auto c1 = ntk_dest.create_xor(sig1, c0);  // e2 path
-            auto c2 = ntk_dest.create_xor(c0, sig2);  // e1 path
+
+            // Remaining logic depends on whether sig3 was created or not
+            mockturtle::signal<Ntk> c1{};
+            mockturtle::signal<Ntk> c2{};
+
+            if (sig3)  // ON mode, sig3 is a real node
+            {
+                sig2 = ntk_dest.create_buf(sig2);   // must happen after c0
+                c1   = ntk_dest.create_xor(sig3, c0);
+                c2   = ntk_dest.create_xor(c0, sig2);
+            }
+            else // OFF mode
+            {
+                c1 = ntk_dest.create_xor(sig1, c0);
+                c2 = ntk_dest.create_xor(c0, sig2);
+            }
 
             // update mapping for future chaining
             edge_to_node[e1] = c2;
             edge_to_node[e2] = c1;
-
-            std::cout << "place crossing: (" << e1.source << " -> " << e1.target << ")  x  (" << e2.source << " -> "
-                      << e2.target << ")\n";
         };
 
         // === process per rank (edges are between rank r-1 and r) ===
@@ -312,7 +338,7 @@ class crossing_gate_planarization_impl
 
                         ++i;  // skip next element since we swapped and placed
                     }
-                    else
+                    else if (ps.mode == crossing_gate_planarization_params::on_off::ON)
                     {
                         create_buffer_chain(e);
                     }
@@ -419,16 +445,19 @@ template <typename Ntk>
     auto result = p.run();
 
     // check for planarity
-    /*mincross_stats  st_min{};
-    mincross_params p_min{};
-    p_min.optimize = false;
-
-    auto ntk_min = mincross(result, p_min, &st_min);  // counts crossings
-    std::cout << "Crossings: " << st_min.num_crossings << '\n';
-    if (st_min.num_crossings != 0)
+    if (ps.mode == crossing_gate_planarization_params::on_off::ON)
     {
-        throw std::runtime_error("Planarization failed: resulting network is not planar");
-    }*/
+        mincross_stats  st_min{};
+        mincross_params p_min{};
+        p_min.optimize = false;
+
+        auto ntk_min = mincross(result, p_min, &st_min);  // counts crossings
+        std::cout << "Crossings: " << st_min.num_crossings << '\n';
+        if (st_min.num_crossings != 0)
+        {
+            throw std::runtime_error("Planarization failed: resulting network is not planar");
+        }
+    }
 
     return result;
 }
