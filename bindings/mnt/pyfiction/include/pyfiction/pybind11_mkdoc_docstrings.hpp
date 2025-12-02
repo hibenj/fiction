@@ -6102,6 +6102,8 @@ static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_r
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_crossings_per_level = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_edges = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_unaffected = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_total_crossings = R"doc()doc";
