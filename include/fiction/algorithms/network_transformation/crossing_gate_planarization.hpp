@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <limits>
 #include <map>
 #include <stdexcept>
 #include <unordered_map>
@@ -203,16 +204,47 @@ class crossing_gate_planarization_impl
 
     Ntk run()
     {
-        auto  init     = mockturtle::initialize_copy_network<Ntk>(ntk);
-        auto& ntk_dest = init.first;
-        auto& old2new  = init.second;
+        auto  init          = mockturtle::initialize_copy_network<Ntk>(ntk);
+        auto& ntk_dest      = init.first;
+        auto& old2new       = init.second;
 
         // crossing information
         ncross_extended();
         print_crossings();
 
         // mapping: edge -> crossing node created in ntk_dest
-        std::unordered_map<edge, typename Ntk::node, edge_hash> edge_to_cross_node;
+        std::unordered_map<edge, typename Ntk::node, edge_hash> edge_to_cross_node{};
+        std::unordered_map<edge, typename Ntk::node, edge_hash> edge_to_buf_node{};
+
+        auto place_crossing = [&](auto const& item)
+        {
+            auto const& e1 = item.e1;
+            auto const& e2 = item.e2;
+
+            auto it1 = edge_to_cross_node.find(e1);
+            auto it2 = edge_to_cross_node.find(e2);
+
+            typename Ntk::node parent1 = (it1 != edge_to_cross_node.end()) ? it1->second : old2new[e1.source];
+
+            typename Ntk::node parent2 = (it2 != edge_to_cross_node.end()) ? it2->second : old2new[e2.source];
+
+            auto sig1 = ntk_dest.make_signal(parent1);
+            auto sig2 = ntk_dest.make_signal(parent2);
+
+            // 3-XOR crossing construction
+            auto c0 = ntk_dest.create_xor(sig1, sig2);
+            /*sig1 = ntk_dest.create_buf(sig1);
+            sig2 = ntk_dest.create_buf(sig2);*/
+            auto c2 = ntk_dest.create_xor(c0, sig2);  // e1 path
+            auto c1 = ntk_dest.create_xor(sig1, c0);  // e2 path
+
+            // update mapping for future chaining
+            edge_to_cross_node[e1] = c2;
+            edge_to_cross_node[e2] = c1;
+
+            std::cout << "place crossing: (" << e1.source << " -> " << e1.target << ")  x  (" << e2.source << " -> "
+                      << e2.target << ")\n";
+        };
 
         // === process per rank (edges are between rank r-1 and r) ===
         for (uint32_t r = 1u; r < fanout_ntk.depth() + 1; ++r)
@@ -223,31 +255,68 @@ class crossing_gate_planarization_impl
             // sort by level
             std::sort(ordered.begin(), ordered.end(), [](auto const& a, auto const& b) { return a.level < b.level; });
 
-            // === create crossing nodes ===
-            for (auto const& item : ordered)
+            auto const& unaffected = crossing_ctn[r - 1].unaffected;
+            size_t      it         = 0;
+
+            auto extra_depth = crossing_ctn[r - 1].crossings_per_level.rbegin()->first + 1;
+
+            // === Case 1: no unaffected edges ===
+            if (unaffected.empty())
             {
-                auto const& e1 = item.e1;
-                auto const& e2 = item.e2;
+                while (it < ordered.size())
+                {
+                    place_crossing(ordered[it++]);
+                }
+            }
+            else
+            {
+                auto const& first_unaf = unaffected.front();
 
-                // lookup most recent crossing parent if exists
-                auto it1 = edge_to_cross_node.find(e1);
-                auto it2 = edge_to_cross_node.find(e2);
+                while (it < ordered.size() &&
+                       (first_unaf.source >= ordered[it].e1.source && first_unaf.target >= ordered[it].e1.target))
+                {
+                    place_crossing(ordered[it++]);
+                }
 
-                typename Ntk::node parent1 = (it1 != edge_to_cross_node.end()) ? it1->second : old2new[e1.source];
+                // === Main merge loop ===
+                for (size_t i = 0; i < unaffected.size(); ++i)
+                {
+                    auto const& curr_edge = unaffected[i];
+                    std::cout << "place unaffected edge: " << curr_edge.source << ", " << curr_edge.target << "\n";
 
-                typename Ntk::node parent2 = (it2 != edge_to_cross_node.end()) ? it2->second : old2new[e2.source];
+                    // start from the current mapped source node
+                    auto last = old2new[curr_edge.source];
 
-                auto sig1 = ntk_dest.make_signal(parent1);
-                auto sig2 = ntk_dest.make_signal(parent2);
+                    // create a chain of `extra_depth` buffers
+                    // ToDo: Modify for the number of gates for one crossing
+                    const uint32_t crossing_depth = 2;
+                    for (uint64_t j = 0; j < extra_depth * crossing_depth; ++j)
+                    {
+                        last = ntk_dest.create_buf(last);
+                        std::cout << "Buffer\n";
+                    }
 
-                // ToDO: crossing gate creation
-                auto c0 = ntk_dest.create_xor(sig1, sig2);
-                auto c2 = ntk_dest.create_xor(c0, sig2);
-                auto c1 = ntk_dest.create_xor(sig1, c0);
+                    // the last buffer drives the target
+                    edge_to_buf_node[curr_edge] = last;
 
-                // store latest crossing for both edges (overwrite previous)
-                edge_to_cross_node[e1] = c2;
-                edge_to_cross_node[e2] = c1;
+                    uint64_t next_src =
+                        (i + 1 < unaffected.size()) ? unaffected[i + 1].source : std::numeric_limits<uint64_t>::max();
+                    uint64_t next_tgt =
+                        (i + 1 < unaffected.size()) ? unaffected[i + 1].target : std::numeric_limits<uint64_t>::max();
+
+                    while (it < ordered.size())
+                    {
+                        // if the next crossing is bigger than my next unaffected edge, then break
+                        if (ordered[it].e1.source >= next_src && ordered[it].e1.target >= next_tgt)
+                        {
+                            break;
+                        }
+
+                        // otherwise, place this crossing and move to the next
+                        place_crossing(ordered[it]);
+                        ++it;
+                    }
+                }
             }
 
             // === now copy logic nodes in this rank ===
@@ -257,24 +326,40 @@ class crossing_gate_planarization_impl
                 {
                     if (ntk.is_constant(g) || ntk.is_ci(g))
                     {
-                        return;  // skip PIs and const, already created
+                        return;
                     }
 
                     std::vector<typename Ntk::signal> children{};
+
+                    const auto& unaffected_edges = crossing_ctn[r - 1].unaffected;
 
                     ntk.foreach_fanin(g,
                                       [&](auto const& f)
                                       {
                                           auto fn = ntk.get_node(f);
-
                                           edge e{fn, g};
 
-                                          // lookup in map
-                                          auto it = edge_to_cross_node.find(e);
+                                          typename Ntk::signal tgt_signal;
 
-                                          typename Ntk::signal tgt_signal = (it != edge_to_cross_node.end()) ?
-                                                                                ntk_dest.make_signal(it->second) :
-                                                                                old2new[fn];
+                                          auto it_buf = edge_to_buf_node.find(e);
+                                          if (it_buf != edge_to_buf_node.end())
+                                          {
+                                              tgt_signal = ntk_dest.make_signal(it_buf->second);
+                                          }
+                                          else
+                                          {
+                                              // affected edge: use crossing node if present, fall back to old2new
+                                              auto it_cross = edge_to_cross_node.find(e);
+
+                                              if (it_cross != edge_to_cross_node.end())
+                                              {
+                                                  tgt_signal = ntk_dest.make_signal(it_cross->second);
+                                              }
+                                              else
+                                              {
+                                                  tgt_signal = old2new[fn];
+                                              }
+                                          }
 
                                           if (ntk.is_complemented(f))
                                           {
@@ -285,52 +370,6 @@ class crossing_gate_planarization_impl
                                       });
 
                     // === create node in destination network ===
-                    if constexpr (mockturtle::has_is_and_v<Ntk> && mockturtle::has_create_and_v<Ntk>)
-                    {
-                        if (ntk.is_and(g))
-                        {
-                            old2new[g] = ntk_dest.create_and(children[0], children[1]);
-                            return;
-                        }
-                    }
-
-                    if constexpr (mockturtle::has_is_or_v<Ntk> && mockturtle::has_create_or_v<Ntk>)
-                    {
-                        if (ntk.is_or(g))
-                        {
-                            old2new[g] = ntk_dest.create_or(children[0], children[1]);
-                            return;
-                        }
-                    }
-
-                    if constexpr (mockturtle::has_is_xor_v<Ntk> && mockturtle::has_create_xor_v<Ntk>)
-                    {
-                        if (ntk.is_xor(g))
-                        {
-                            old2new[g] = ntk_dest.create_xor(children[0], children[1]);
-                            return;
-                        }
-                    }
-
-                    if constexpr (mockturtle::has_is_maj_v<Ntk> && mockturtle::has_create_maj_v<Ntk>)
-                    {
-                        if (ntk.is_maj(g))
-                        {
-                            old2new[g] = ntk_dest.create_maj(children[0], children[1], children[2]);
-                            return;
-                        }
-                    }
-
-                    if constexpr (fiction::has_is_buf_v<Ntk> && mockturtle::has_create_buf_v<Ntk>)
-                    {
-                        if (ntk.is_buf(g))
-                        {
-                            old2new[g] = ntk_dest.create_buf(children[0]);
-                            return;
-                        }
-                    }
-
-                    // fallback
                     if constexpr (mockturtle::has_node_function_v<Ntk> && mockturtle::has_create_node_v<Ntk>)
                     {
                         old2new[g] = ntk_dest.create_node(children, ntk.node_function(g));
