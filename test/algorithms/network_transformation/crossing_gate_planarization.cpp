@@ -115,7 +115,7 @@ TEST_CASE("Test Benes", "[crossing-gate-planarization]")
 
         for (uint64_t e = 0; e < elements; ++e)
         {
-            const auto [a, b] = connections[stage][e];
+            const auto [a, b] = connections[static_cast<unsigned long>(stage)][e];
 
             const auto fanin0 = current_nodes[a - 1];
             const auto fanin1 = current_nodes[b - 1];

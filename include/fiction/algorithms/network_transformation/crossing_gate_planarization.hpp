@@ -13,6 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <map>
 #include <stdexcept>
 #include <unordered_map>
@@ -30,8 +31,9 @@ struct crossing_gate_planarization_params
         OFF
     };
 
-    on_off mode = ON;
-    on_off verbose = OFF;
+    on_off buffer    = ON;
+    on_off verbose   = OFF;
+    on_off xor_gates = OFF;
 };
 
 namespace detail
@@ -247,8 +249,8 @@ class crossing_gate_planarization_impl
                 initial = old2new[edge.source];  // start from mapped original node
             }
 
-            auto           last           = initial;
-            const uint32_t crossing_depth = 2;  // TODO: adjust for number of gates per crossing
+            auto     last           = initial;
+            uint32_t crossing_depth = (ps.xor_gates == crossing_gate_planarization_params::on_off::ON) ? 2u : 8u;
 
             for (uint32_t j = 0; j < crossing_depth; ++j)
             {
@@ -259,6 +261,46 @@ class crossing_gate_planarization_impl
             edge_to_node[edge] = last;
 
             return last;
+        };
+
+        auto simple_buf_chain = [&](mockturtle::signal<Ntk> s, uint32_t n)
+        {
+            for (uint32_t i = 0; i < n; ++i) s = ntk_dest.create_buf(s);
+            return s;
+        };
+
+        auto buffered_xor_gate = [&](mockturtle::signal<Ntk> a, mockturtle::signal<Ntk> b)
+        {
+            // small buffer chain on 'a' for the first partial path
+            auto a_buf2 = simple_buf_chain(a, 2);
+
+            // core term: NOT(a AND b)
+            auto core = ntk_dest.create_and(a, b);
+            core      = ntk_dest.create_not(core);
+
+            // first partial: a_buf2 AND core
+            auto p_a = ntk_dest.create_and(a_buf2, core);
+
+            // small buffer chain on 'b' for the second partial path
+            auto b_buf2 = simple_buf_chain(b, 2);
+            auto p_b    = ntk_dest.create_and(b_buf2, core);
+
+            // final OR
+            return ntk_dest.create_or(p_a, p_b);
+        };
+
+        auto xor_decomposition_gate = [&](mockturtle::signal<Ntk> a, mockturtle::signal<Ntk> b)
+        {
+            // core = NOT(a AND b)
+            auto core = ntk_dest.create_and(a, b);
+            core      = ntk_dest.create_not(core);
+
+            // partials: a AND core, b AND core
+            auto p_a = ntk_dest.create_and(a, core);
+            auto p_b = ntk_dest.create_and(b, core);
+
+            // OR of partials
+            return ntk_dest.create_or(p_a, p_b);
         };
 
         auto place_crossing = [&](auto const& item)
@@ -276,37 +318,71 @@ class crossing_gate_planarization_impl
             auto sig1 = ntk_dest.make_signal(child1);
             auto sig2 = ntk_dest.make_signal(child2);
 
-            // sig3 indicates buffered ON-mode (will remain empty in OFF mode)
             mockturtle::signal<Ntk> sig3{};
 
-            if (ps.mode == crossing_gate_planarization_params::on_off::ON)
+            if (ps.xor_gates == crossing_gate_planarization_params::on_off::ON)
             {
-                // Must be first in ON mode
-                sig3 = ntk_dest.create_buf(sig1);   // buffer sig1 before XOR
+                if (ps.buffer == crossing_gate_planarization_params::on_off::ON)
+                {
+                    sig3 = ntk_dest.create_buf(sig1);
+                }
+
+                auto c0 = ntk_dest.create_xor(sig1, sig2);
+
+                mockturtle::signal<Ntk> c1{};
+                mockturtle::signal<Ntk> c2{};
+
+                if (sig3)
+                {
+                    sig2 = ntk_dest.create_buf(sig2);
+                    c1   = ntk_dest.create_xor(sig3, c0);
+                    c2   = ntk_dest.create_xor(c0, sig2);
+                }
+                else
+                {
+                    c1 = ntk_dest.create_xor(sig1, c0);
+                    c2 = ntk_dest.create_xor(c0, sig2);
+                }
+
+                // update mapping for future chaining
+                edge_to_node[e1] = c2;
+                edge_to_node[e2] = c1;
             }
-
-            // Always executed next
-            auto c0 = ntk_dest.create_xor(sig1, sig2);
-
-            // Remaining logic depends on whether sig3 was created or not
-            mockturtle::signal<Ntk> c1{};
-            mockturtle::signal<Ntk> c2{};
-
-            if (sig3)  // ON mode, sig3 is a real node
+            else
             {
-                sig2 = ntk_dest.create_buf(sig2);   // must happen after c0
-                c1   = ntk_dest.create_xor(sig3, c0);
-                c2   = ntk_dest.create_xor(c0, sig2);
-            }
-            else // OFF mode
-            {
-                c1 = ntk_dest.create_xor(sig1, c0);
-                c2 = ntk_dest.create_xor(c0, sig2);
-            }
+                mockturtle::signal<Ntk> c0{};
+                mockturtle::signal<Ntk> ca1{};
+                mockturtle::signal<Ntk> ca2{};
 
-            // update mapping for future chaining
-            edge_to_node[e1] = c2;
-            edge_to_node[e2] = c1;
+                if (ps.buffer == crossing_gate_planarization_params::on_off::ON)
+                {
+                    sig3 = simple_buf_chain(sig1, 4);
+                    c0   = buffered_xor_gate(sig1, sig2);
+                }
+                else
+                {
+                    c0 = xor_decomposition_gate(sig1, sig2);
+                }
+
+                mockturtle::signal<Ntk> c1{};
+                mockturtle::signal<Ntk> c2{};
+
+                if (ps.buffer == crossing_gate_planarization_params::on_off::ON)
+                {
+                    sig2 = simple_buf_chain(sig2, 4);
+                    c1   = buffered_xor_gate(sig3, c0);
+                    c2   = buffered_xor_gate(c0, sig2);
+                }
+                else
+                {
+                    c1 = xor_decomposition_gate(sig1, c0);
+                    c2 = xor_decomposition_gate(c0, sig2);
+                }
+
+                // update mapping for future chaining
+                edge_to_node[e1] = c2;
+                edge_to_node[e2] = c1;
+            }
         };
 
         // === process per rank (edges are between rank r-1 and r) ===
@@ -338,7 +414,7 @@ class crossing_gate_planarization_impl
 
                         ++i;  // skip next element since we swapped and placed
                     }
-                    else if (ps.mode == crossing_gate_planarization_params::on_off::ON)
+                    else if (ps.buffer == crossing_gate_planarization_params::on_off::ON)
                     {
                         create_buffer_chain(e);
                     }
@@ -445,14 +521,13 @@ template <typename Ntk>
     auto result = p.run();
 
     // check for planarity
-    if (ps.mode == crossing_gate_planarization_params::on_off::ON)
+    if (ps.buffer == crossing_gate_planarization_params::on_off::ON)
     {
         mincross_stats  st_min{};
         mincross_params p_min{};
         p_min.optimize = false;
 
         auto ntk_min = mincross(result, p_min, &st_min);  // counts crossings
-        std::cout << "Crossings: " << st_min.num_crossings << '\n';
         if (st_min.num_crossings != 0)
         {
             throw std::runtime_error("Planarization failed: resulting network is not planar");
