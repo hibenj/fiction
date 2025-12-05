@@ -12,10 +12,12 @@
 
 #include <mockturtle/algorithms/equivalence_checking.hpp>
 #include <mockturtle/algorithms/miter.hpp>
+#include <mockturtle/traits.hpp>
 
 #include <algorithm>
 #include <cstdint>
 #include <iostream>
+#include <utility>
 #include <vector>
 
 using namespace fiction;
