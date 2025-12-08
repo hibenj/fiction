@@ -25,15 +25,9 @@ namespace fiction
 
 struct crossing_gate_planarization_params
 {
-    enum on_off : std::uint8_t
-    {
-        ON,
-        OFF
-    };
-
-    on_off buffer    = ON;
-    on_off verbose   = OFF;
-    on_off xor_gates = OFF;
+    bool buffer    = false;
+    bool verbose   = false;
+    bool xor_gates = false;
 };
 
 namespace detail
@@ -225,7 +219,7 @@ class crossing_gate_planarization_impl
 
         // crossing information
         ncross_extended();
-        if (ps.verbose == crossing_gate_planarization_params::on_off::ON)
+        if (ps.verbose)
         {
             print_crossings();
         }
@@ -250,7 +244,7 @@ class crossing_gate_planarization_impl
             }
 
             auto     last           = initial;
-            uint32_t crossing_depth = (ps.xor_gates == crossing_gate_planarization_params::on_off::ON) ? 2u : 8u;
+            uint32_t crossing_depth = ps.xor_gates ? 2u : 8u;
 
             for (uint32_t j = 0; j < crossing_depth; ++j)
             {
@@ -320,9 +314,9 @@ class crossing_gate_planarization_impl
 
             mockturtle::signal<Ntk> sig3{};
 
-            if (ps.xor_gates == crossing_gate_planarization_params::on_off::ON)
+            if (ps.xor_gates)
             {
-                if (ps.buffer == crossing_gate_planarization_params::on_off::ON)
+                if (ps.buffer)
                 {
                     sig3 = ntk_dest.create_buf(sig1);
                 }
@@ -354,7 +348,7 @@ class crossing_gate_planarization_impl
                 mockturtle::signal<Ntk> ca1{};
                 mockturtle::signal<Ntk> ca2{};
 
-                if (ps.buffer == crossing_gate_planarization_params::on_off::ON)
+                if (ps.buffer)
                 {
                     sig3 = simple_buf_chain(sig1, 4);
                     c0   = buffered_xor_gate(sig1, sig2);
@@ -367,7 +361,7 @@ class crossing_gate_planarization_impl
                 mockturtle::signal<Ntk> c1{};
                 mockturtle::signal<Ntk> c2{};
 
-                if (ps.buffer == crossing_gate_planarization_params::on_off::ON)
+                if (ps.buffer)
                 {
                     sig2 = simple_buf_chain(sig2, 4);
                     c1   = buffered_xor_gate(sig3, c0);
@@ -397,7 +391,7 @@ class crossing_gate_planarization_impl
             uint32_t cross_it = 0;
             auto&    edges    = crossing_ctn[r - 1].edges;
 
-            while (true)
+            while (true && !ordered.empty())
             {
                 for (size_t i = 0; i < edges.size(); ++i)
                 {
@@ -414,7 +408,7 @@ class crossing_gate_planarization_impl
 
                         ++i;  // skip next element since we swapped and placed
                     }
-                    else if (ps.buffer == crossing_gate_planarization_params::on_off::ON)
+                    else if (ps.buffer)
                     {
                         create_buffer_chain(e);
                     }
@@ -521,7 +515,7 @@ template <typename Ntk>
     auto result = p.run();
 
     // check for planarity
-    if (ps.buffer == crossing_gate_planarization_params::on_off::ON)
+    if (ps.buffer)
     {
         mincross_stats  st_min{};
         mincross_params p_min{};
