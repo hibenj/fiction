@@ -4159,12 +4159,6 @@ static const char *__doc_fiction_crossing_gate_planarization_params = R"doc()doc
 
 static const char *__doc_fiction_crossing_gate_planarization_params_buffer = R"doc()doc";
 
-static const char *__doc_fiction_crossing_gate_planarization_params_on_off = R"doc()doc";
-
-static const char *__doc_fiction_crossing_gate_planarization_params_on_off_OFF = R"doc()doc";
-
-static const char *__doc_fiction_crossing_gate_planarization_params_on_off_ON = R"doc()doc";
-
 static const char *__doc_fiction_crossing_gate_planarization_params_verbose = R"doc()doc";
 
 static const char *__doc_fiction_crossing_gate_planarization_params_xor_gates = R"doc()doc";
