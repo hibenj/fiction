@@ -105,6 +105,30 @@ class virtual_pi_network : public Ntk
     }
 
     /**
+     * Constructor for `virtual_pi_network` that wraps an existing network.
+     *
+     * This creates a `virtual_pi_network` from an already constructed `Ntk`
+     * instance. The underlying network is copied, and a fresh `virtual_storage`
+     * object is allocated. This allows adding virtual primary inputs on top of
+     * a network that was not originally created as a virtual network.
+     *
+     * @tparam Ntk Network type to be wrapped.
+     * @param ntk Network instance to embed inside the `virtual_pi_network`.
+     */
+    explicit virtual_pi_network(const Ntk& ntk)
+            : Ntk(ntk), v_storage{std::make_shared<virtual_storage>()}
+    {
+        static_assert(mockturtle::has_create_pi_v<Ntk>, "Ntk does not implement the create_pi function");
+        static_assert(mockturtle::has_clone_v<Ntk>, "Ntk does not implement the clone function");
+        static_assert(mockturtle::has_size_v<Ntk>, "Ntk does not implement the size function");
+        static_assert(mockturtle::has_get_node_v<Ntk>, "Ntk does not implement the get_node function");
+        static_assert(mockturtle::has_is_pi_v<Ntk>, "Ntk does not implement the is_pi function");
+        static_assert(mockturtle::has_is_ci_v<Ntk>, "Ntk does not implement the is_ci function");
+        static_assert(mockturtle::has_num_pis_v<Ntk>, "Ntk does not implement the num_pis function");
+        static_assert(mockturtle::has_num_cis_v<Ntk>, "Ntk does not implement the num_cis function");
+    }
+
+    /**
      * Calculate the real size of the `virtual_pi_network`.
      *
      * The real size of the network is considered the size without virtual PIs.

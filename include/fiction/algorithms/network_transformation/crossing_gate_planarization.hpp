@@ -27,7 +27,7 @@ struct crossing_gate_planarization_params
 {
     bool buffer    = true;
     bool verbose   = false;
-    bool xor_gates = false;
+    bool xor_gates = true;
 };
 
 namespace detail
