@@ -25,7 +25,7 @@ namespace fiction
 
 struct crossing_gate_planarization_params
 {
-    bool buffer    = false;
+    bool buffer    = true;
     bool verbose   = false;
     bool xor_gates = false;
 };
