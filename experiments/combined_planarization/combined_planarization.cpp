@@ -99,7 +99,7 @@ int main()  // NOLINT
                          "eq (ortho_p)"};
 
     // For all fiction benchmarks
-    static constexpr const uint64_t bench_select = (fiction_experiments::t_5);
+    static constexpr const uint64_t bench_select = (fiction_experiments::mux21);
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
