@@ -27,7 +27,7 @@ struct crossing_gate_planarization_params
 {
     bool buffer    = true;
     bool verbose   = false;
-    bool xor_gates = true;
+    bool xor_gates = false;
 };
 
 namespace detail
@@ -391,7 +391,7 @@ class crossing_gate_planarization_impl
             uint32_t cross_it = 0;
             auto&    edges    = crossing_ctn[r - 1].edges;
 
-            while (true && !ordered.empty())
+            while (!ordered.empty())
             {
                 for (size_t i = 0; i < edges.size(); ++i)
                 {

@@ -382,11 +382,7 @@ template <typename Ntk>
 class planarization_impl
 {
   public:
-    [[maybe_unused]] planarization_impl(const Ntk&                                   src,
-                                                         const planarization_params& p) :
-            ntk(src),
-            ps{p}
-    {}
+    [[maybe_unused]] planarization_impl(const Ntk& src, const planarization_params& p) : ntk(src), ps{p} {}
 
     /**
      * A "slice" describes one vertical layer in the H-graph. It is created by adding all possible combinations of a
@@ -630,10 +626,18 @@ class planarization_impl
 
     [[nodiscard]] virtual_pi_network<Ntk> run()
     {
+        // handle the decision-making
         // iterate from PIs to POs
-
         // depending on the cost of a crossing decide whether to use node duplication or gate insertion
+        // GATE: the cost of the gate crossing is determined by the folowing: the gates for the actual crossings and if
+        // buffering is enabled we also need to count the buffers and we add additional faouts, so we nede to mark
+        // also fanout trees
+        // DUPLICATION: The cost for this is determined by te fanin cone. When iterating form PIs to POs the cost for
+        // nodes can be iteratively updated. The strucutre of the network has to be also tracked. Because if the
+        // inserted node is inserted between two nodes which tied together fanin cones there has to be duplicated other
+        // structures as well.
 
+        // handle the duplications/insertions
 
         virtual_pi_network virtual_ntk{ntk};
         return virtual_ntk;
@@ -664,10 +668,8 @@ class planarization_impl
 
 }  // namespace detail
 
-
 template <typename NtkSrc>
-[[nodiscard]] virtual_pi_network<NtkSrc> planarization(const NtkSrc&                         ntk_src,
-                                                                        planarization_params ps = {})
+[[nodiscard]] virtual_pi_network<NtkSrc> planarization(const NtkSrc& ntk_src, planarization_params ps = {})
 {
     static_assert(mockturtle::is_network_type_v<NtkSrc>, "NtkSrc is not a network type");
     static_assert(mockturtle::has_create_node_v<NtkSrc>, "NtkSrc does not implement the create_node function");
