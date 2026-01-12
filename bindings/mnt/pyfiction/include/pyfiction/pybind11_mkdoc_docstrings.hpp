@@ -10328,6 +10328,10 @@ static const char *__doc_fiction_detail_placement_info_node2pos = R"doc(Mapping 
 
 static const char *__doc_fiction_detail_planarization_impl = R"doc()doc";
 
+static const char *__doc_fiction_detail_planarization_impl_assign_duplicaton_costs = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_compute_gate_cost = R"doc()doc";
+
 static const char *__doc_fiction_detail_planarization_impl_compute_slice_delays =
 R"doc(A "slice" describes one vertical layer in the H-graph. It is created
 by adding all possible combinations of a `node_pair` to the H-graph of
@@ -10357,6 +10361,24 @@ subsequent delay calculations.
 Parameter ``nd``:
     Node in the H-graph.)doc";
 
+static const char *__doc_fiction_detail_planarization_impl_crossing_ctn =
+R"doc(The container saving all crossings in order to compute the cost for
+inserting gate crossings.)doc";
+
+static const char *__doc_fiction_detail_planarization_impl_crossing_item = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_crossing_item_crossing_item = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_crossing_item_e1 = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_crossing_item_e2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_crossing_item_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_fanout_ntk = R"doc(The fanout_view of the input network.)doc";
+
+static const char *__doc_fiction_detail_planarization_impl_gate_cross_cost = R"doc()doc";
+
 static const char *__doc_fiction_detail_planarization_impl_insert_if_not_first =
 R"doc(Inserts a node into a vector if it is unique.
 
@@ -10385,11 +10407,33 @@ Parameter ``position``:
     The position of the node (0 indicates a terminal node; controls
     duplicate insertion behavior).)doc";
 
+static const char *__doc_fiction_detail_planarization_impl_levels_per_crossing = R"doc()doc";
+
 static const char *__doc_fiction_detail_planarization_impl_lvl_pairs = R"doc(The currently node_pairs used in the current level.)doc";
+
+static const char *__doc_fiction_detail_planarization_impl_ncross_extended = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_ntk = R"doc(The input network.)doc";
 
 static const char *__doc_fiction_detail_planarization_impl_planarization_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_planarization_impl_ps = R"doc(The stats of the planarization class.)doc";
+
+static const char *__doc_fiction_detail_planarization_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_crossings_per_edge = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_crossings_per_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_edges = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_max_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_unaffected = R"doc()doc";
 
 static const char *__doc_fiction_detail_plane_impl =
 R"doc(Implements the general planar layout generation algorithm.
@@ -19068,6 +19112,8 @@ static const char *__doc_fiction_planarization = R"doc()doc";
 
 static const char *__doc_fiction_planarization_params = R"doc(Parameters for the node duplication algorithm.)doc";
 
+static const char *__doc_fiction_planarization_params_buffer = R"doc(Whether the otput network should be buffered.)doc";
+
 static const char *__doc_fiction_planarization_params_output_order = R"doc(Controls how output nodes are ordered before starting the algorithm.)doc";
 
 static const char *__doc_fiction_planarization_params_output_order_KEEP_PO_ORDER = R"doc(Keep the PO order from the input network.)doc";
@@ -19075,6 +19121,8 @@ static const char *__doc_fiction_planarization_params_output_order_KEEP_PO_ORDER
 static const char *__doc_fiction_planarization_params_output_order_RANDOM_PO_ORDER = R"doc(Randomize the PO order.)doc";
 
 static const char *__doc_fiction_planarization_params_po_order = R"doc(The output order used. Defaults to KEEP_PO_ORDER.)doc";
+
+static const char *__doc_fiction_planarization_params_xor_gates = R"doc(Whether xor gates are allowed in the network.)doc";
 
 static const char *__doc_fiction_plane =
 R"doc(This algorithm constructs a planar layout from the planar embedding of
