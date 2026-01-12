@@ -50,6 +50,14 @@ struct planarization_params
      * The output order used. Defaults to KEEP_PO_ORDER.
      */
     output_order po_order = output_order::KEEP_PO_ORDER;
+    /**
+     * Whether the otput network should be buffered.
+     */
+    bool buffer = true;
+    /**
+     * Whether xor gates are allowed in the network.
+     */
+    bool xor_gates = false;
 };
 
 namespace detail
@@ -382,7 +390,11 @@ template <typename Ntk>
 class planarization_impl
 {
   public:
-    [[maybe_unused]] planarization_impl(const Ntk& src, const planarization_params& p) : ntk(src), ps{p} {}
+    [[maybe_unused]] planarization_impl(const Ntk& src, const planarization_params& p) :
+            ntk(src),
+            fanout_ntk(src),
+            ps{p}
+    {}
 
     /**
      * A "slice" describes one vertical layer in the H-graph. It is created by adding all possible combinations of a
@@ -624,22 +636,272 @@ class planarization_impl
         return true;
     }
 
+    struct edge
+    {
+        mockturtle::node<Ntk> source;
+        mockturtle::node<Ntk> target;
+
+        bool operator==(edge const& other) const
+        {
+            return (source == other.source) && (target == other.target);
+        }
+    };
+
+    struct crossing_item
+    {
+        edge     e1;
+        edge     e2;
+        uint64_t level;
+
+        crossing_item(edge const& _e1, edge const& _e2, uint64_t _lvl) : e1(_e1), e2(_e2), level(_lvl) {}
+    };
+
+    struct stage_result
+    {
+        uint64_t                               max_level;
+        std::vector<crossing_item>             crossings;
+        std::vector<edge>                      unaffected;
+        std::vector<edge>                      edges;
+        std::map<uint64_t, uint64_t>           crossings_per_level;
+        std::vector<std::pair<edge, uint64_t>> crossings_per_edge;
+    };
+
+    void ncross_extended()
+    {
+        crossing_ctn.clear();
+
+        for (uint32_t lvl = 0u; lvl < fanout_ntk.depth(); ++lvl)
+        {
+            uint64_t next_width = fanout_ntk.rank_width(lvl + 1);
+
+            std::vector<std::deque<std::pair<edge, uint64_t>>> penalty(next_width + 1);
+            uint64_t                                           max_pos = 0;
+
+            stage_result      result{};
+            std::vector<edge> affected_edges;
+            std::vector<edge> stage_edges;
+
+            // helper to increment per-edge crossing count stored in result.crossings_per_edge
+            auto increment_count = [&result](const edge& ed)
+            {
+                for (auto& p : result.crossings_per_edge)
+                {
+                    if (p.first == ed)
+                    {
+                        ++p.second;
+                        return;
+                    }
+                }
+                result.crossings_per_edge.emplace_back(ed, 1);
+            };
+
+            fanout_ntk.foreach_node_in_rank(
+                lvl,
+                [this, &penalty, &max_pos, &result, &affected_edges, &stage_edges, &increment_count](auto const& n)
+                {
+                    std::vector<edge> targets;
+                    targets.reserve(fanout_ntk.fanout_size(n));
+
+                    fanout_ntk.foreach_fanout(n,
+                                              [&](auto const& fo)
+                                              {
+                                                  auto e = edge{n, fo};
+                                                  targets.emplace_back(e);
+                                                  result.edges.emplace_back(e);
+                                              });
+
+                    for (auto const& e : targets)
+                    {
+                        uint64_t pos       = fanout_ntk.rank_position(e.target);
+                        uint64_t local_lvl = 0;
+
+                        for (auto k = static_cast<uint64_t>(max_pos); k >= static_cast<uint64_t>(pos + 1); --k)
+                        {
+                            // iterate newest edges first
+                            for (auto it = penalty[k].begin(); it != penalty[k].end(); ++it)
+                            {
+                                auto const& prev_edge = it->first;
+                                auto&       prev_lvl  = it->second;
+
+                                uint64_t level = std::max(local_lvl, prev_lvl);
+                                result.max_level = std::max(result.max_level, level);
+
+                                result.crossings.emplace_back(prev_edge, e, level);
+                                result.crossings_per_level[level]++;
+
+                                // increment counts for both involved edges
+                                increment_count(prev_edge);
+                                increment_count(e);
+
+                                affected_edges.push_back(e);
+                                affected_edges.push_back(prev_edge);
+
+                                if (prev_lvl > local_lvl)
+                                {
+                                    local_lvl = prev_lvl;
+                                }
+
+                                prev_lvl++;
+                                local_lvl++;
+                            }
+                        }
+                    }
+
+                    // Insert into penalty
+                    for (auto const& e : targets)
+                    {
+                        uint64_t pos = fanout_ntk.rank_position(e.target);
+                        max_pos      = std::max(max_pos, pos);
+
+                        penalty[pos].push_front({e, 0});
+                        stage_edges.push_back(e);
+                    }
+                });
+
+            for (auto const& e : stage_edges)
+            {
+                if (std::find(affected_edges.begin(), affected_edges.end(), e) == affected_edges.end())
+                {
+                    result.unaffected.push_back(e);
+                }
+            }
+
+            // ensure all stage edges have an entry in crossings_per_edge (unaffected ones get count 0)
+            for (auto const& e : stage_edges)
+            {
+                bool found = false;
+                for (auto const& p : result.crossings_per_edge)
+                {
+                    if (p.first == e)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+                if (!found)
+                {
+                    result.crossings_per_edge.emplace_back(e, 0);
+                }
+            }
+
+            crossing_ctn.push_back(std::move(result));
+        }
+    }
+
+    void assign_duplicaton_costs()
+    {
+        ntk.foreach_node(
+            [&](const auto n)
+            {
+                if (ntk.is_pi(n))
+                {
+                    duplication_cost[n] = 1u;
+                }
+                else
+                {
+                    ntk.foreach_fanin(n,
+                                      [&](const auto fi)
+                                      {
+                                          const auto fn = ntk.get_node(fi);
+                                          duplication_cost[n] += duplication_cost[fn];
+                                      });
+                }
+            });
+    }
+
+    [[nodiscard]] uint64_t gate_cross_cost() const noexcept
+    {
+        uint64_t gate_cross_cost = 0;
+        if (ps.xor_gates)
+        {
+            if (ps.buffer)
+            {
+                gate_cross_cost = 7;
+            }
+            else
+            {
+                gate_cross_cost = 5;
+            }
+        }
+        else
+        {
+            if (ps.buffer)
+            {
+                gate_cross_cost = 61;
+            }
+            else
+            {
+                gate_cross_cost = 31;
+            }
+        }
+        return gate_cross_cost;
+    }
+
+    [[nodiscard]] uint64_t levels_per_crossing() const noexcept
+    {
+        uint64_t levels_per_crossing = 0;
+        if (ps.xor_gates)
+        {
+            levels_per_crossing = 3;
+        }
+        else
+        {
+            levels_per_crossing = 14;
+        }
+        return levels_per_crossing;
+    }
+
+    [[nodiscard]] uint64_t compute_gate_cost(const uint32_t lvl)
+    {
+        const auto cross_item = crossing_ctn[lvl - 1];
+
+        uint64_t gate_crossing_cost = 0;
+        // add cost for all crossings
+        gate_crossing_cost += cross_item.crossings.size() * gate_cross_cost();
+        // add cost for all additional buffers
+        for (const auto& edge : cross_item.crossings_per_edge)
+        {
+            auto ground_to_cover = cross_item.max_level - edge.second;
+            gate_crossing_cost += ground_to_cover * levels_per_crossing();
+        }
+
+        return gate_crossing_cost;
+    }
+
     [[nodiscard]] virtual_pi_network<Ntk> run()
     {
         // handle the decision-making
         // iterate from PIs to POs
         // depending on the cost of a crossing decide whether to use node duplication or gate insertion
-        // GATE: the cost of the gate crossing is determined by the folowing: the gates for the actual crossings and if
-        // buffering is enabled we also need to count the buffers and we add additional faouts, so we nede to mark
+        // GATE: the cost of the gate crossing is determined by the following: the gates for the actual crossings and if
+        // buffering is enabled we also need to count the buffers, and we add additional fanouts, so we nede to mark
         // also fanout trees
         // DUPLICATION: The cost for this is determined by te fanin cone. When iterating form PIs to POs the cost for
-        // nodes can be iteratively updated. The strucutre of the network has to be also tracked. Because if the
+        // nodes can be iteratively updated. The structure of the network has to be also tracked. Because if the
         // inserted node is inserted between two nodes which tied together fanin cones there has to be duplicated other
         // structures as well.
 
         // handle the duplications/insertions
 
+        // assign the cost for duplications in one sweep
+        assign_duplicaton_costs();
+
+        // analyze crossings for gate insertion
+        ncross_extended();
+
+        // in each level do the following
+        for (uint32_t lvl = 1u; lvl < ntk.depth() + 1; ++lvl)
+        {
+            // first compute the gate_cost for crossing_gate_planarization
+            const auto gate_cost = compute_gate_cost(lvl);
+            std::cout << "Level " << lvl << " gate cost: " << gate_cost << "\n";
+            // then compute orderings from node_duplication_planarization
+            // proceed with node_duplication_planarization through the lower levels while the cost is smaller than
+            // gate_cost
+        }
+
         virtual_pi_network virtual_ntk{ntk};
+
         return virtual_ntk;
     }
 
@@ -648,6 +910,10 @@ class planarization_impl
      * The input network.
      */
     Ntk ntk{};
+    /**
+     * The fanout_view of the input network.
+     */
+    mockturtle::fanout_view<Ntk> fanout_ntk{};
     /**
      * The currently node_pairs used in the current level.
      */
@@ -664,6 +930,18 @@ class planarization_impl
      * The stats of the planarization class.
      */
     planarization_params ps{};
+    /**
+     * The duplication cost for nodes.
+     */
+    std::unordered_map<mockturtle::node<Ntk>, uint32_t> duplication_cost{};
+    /**
+     * The moving cost for nodes.
+     */
+    std::unordered_map<mockturtle::node<Ntk>, uint32_t> moving_cost{};
+    /**
+     * The container saving all crossings in order to compute the cost for inserting gate crossings.
+     */
+    std::vector<stage_result> crossing_ctn{};
 };
 
 }  // namespace detail
