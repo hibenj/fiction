@@ -48,10 +48,10 @@ plane_command::plane_command(const environment::ptr& e) :
 
 void plane_command::execute()
 {
-    auto& ns = store<fiction::logic_network_t>();
-    auto& ls = store<fiction::gate_layout_t>();
+    auto& lns = store<fiction::logic_network_t>();
+    auto& gls = store<fiction::gate_layout_t>();
 
-    if (ns.empty())
+    if (lns.empty())
     {
         env->out() << "[w] no logic network in store\n";
         return;
@@ -66,23 +66,22 @@ void plane_command::execute()
 
     ps.number_of_clock_phases = num_clock_phases == 3 ? fiction::num_clks::THREE : fiction::num_clks::FOUR;
 
-    using po_enum = decltype(dup_ps.po_order);
     switch (po_order)
     {
         case 0u:
         {
-            dup_ps.po_order = po_enum::KEEP_PO_ORDER;
+            dup_ps.po_order = fiction::node_duplication_planarization_params::output_order::KEEP_PO_ORDER;
             break;
         }
         case 1u:
         {
-            dup_ps.po_order = po_enum::RANDOM_PO_ORDER;
+            dup_ps.po_order = fiction::node_duplication_planarization_params::output_order::RANDOM_PO_ORDER;
             break;
         }
         default:
         {
             env->out() << "[w] invalid --po-order, defaulting to keep\n";
-            dup_ps.po_order = po_enum::KEEP_PO_ORDER;
+            dup_ps.po_order = fiction::node_duplication_planarization_params::output_order::KEEP_PO_ORDER;
             break;
         }
     }
@@ -93,7 +92,7 @@ void plane_command::execute()
         return std::make_shared<fiction::tec_nt>(fiction::network_balancing<fiction::tec_nt>(tec_f, bal_ps));
     };
 
-    auto tec_b = std::visit(perform_fanouts_and_balance, ns.current());
+    auto tec_b = std::visit(perform_fanouts_and_balance, lns.current());
 
     const fiction::mutable_rank_view vpi_r(*tec_b);
 
@@ -101,7 +100,7 @@ void plane_command::execute()
 
     try
     {
-        ls.extend() = std::make_shared<fiction::cart_gate_clk_lyt>(
+        gls.extend() = std::make_shared<fiction::cart_gate_clk_lyt>(
             fiction::plane<fiction::cart_gate_clk_lyt>(planarized_ntk, ps, &st));
     }
     catch (const fiction::high_degree_fanin_exception& e)
