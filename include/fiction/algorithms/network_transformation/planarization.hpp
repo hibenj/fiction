@@ -1170,11 +1170,7 @@ class planarization_impl
                 auto dup_cost = duplication_total_cost(next_level);
                 auto cross_cost = compute_gate_cost(ntk_lvls[ntk_lvls.size()-1], next_level_v, lvl+1);
 
-                std::cout << "Duplications for level " << lvl << ": " << dups << std::endl;
-                std::cout << "Duplication cost: " << dup_cost << std::endl;
-                std::cout << "cross_cost: " << cross_cost << std::endl;
-
-                if (cross_cost < dup_cost*2)
+                if (cross_cost < dup_cost)
                 {
                     // recombination(next_level);
                     /*uint64_t fanout_count = 0;
@@ -1188,7 +1184,9 @@ class planarization_impl
                                              });
                     std::cout << "Fanout count of preceding level: " << fanout_count << std::endl;*/
 
-                    std::cout << "Used Crossing gate\n";
+                    std::cout << "Duplications for level " << lvl << ": " << dups << std::endl;
+                    std::cout << "Duplication cost: " << dup_cost << std::endl;
+                    std::cout << "cross_cost: " << cross_cost << std::endl;
 
                     next_level = next_level_v;
                     once = false;

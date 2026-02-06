@@ -10,6 +10,8 @@
 #include "fiction/algorithms/network_transformation/node_duplication_planarization.hpp"
 #include "fiction/algorithms/network_transformation/planarization.hpp"
 #include "fiction/algorithms/network_transformation/ranked_buffer_insertion.hpp"
+#include "fiction/algorithms/physical_design/graph_oriented_layout_design.hpp"
+#include "fiction/algorithms/physical_design/planar_layout_from_network_embedding.hpp"
 #include "fiction/algorithms/verification/equivalence_checking.hpp"  // SAT-based equivalence checking
 #include "fiction/algorithms/verification/virtual_miter.hpp"
 #include "fiction/io/network_reader.hpp"  // read networks from files
@@ -18,7 +20,6 @@
 #include "fiction/types.hpp"
 #include "fiction/utils/debug/network_writer.hpp"
 #include "fiction_experiments.hpp"
-#include "fiction/algorithms/physical_design/graph_oriented_layout_design.hpp"
 
 #include <fmt/core.h>
 #include <mockturtle/algorithms/cleanup.hpp>
@@ -90,7 +91,7 @@ Ntk read_ntk(const std::string& name)
 int main()  // NOLINT
 {
     experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t,
-                            uint64_t, double, uint64_t, uint64_t, bool>
+                            uint64_t, double, uint64_t, uint64_t, double, bool>
         planarizaion_exp{"orthogonal_planar_exp",
                          "benchmark",
                          "inputs",
@@ -103,19 +104,35 @@ int main()  // NOLINT
                          "num_crossings (after mincross)",
                          "planar nodes (dupl)",
                          "ratio (dupl)",
-                         "half planar nodes (gate dupl)",
-                         "planar nodes (gate cross)",
+                         "half planar nodes (before x-gate)",
+                         "planar nodes (after x-gate)",
+                         "size decrease (%)",
                          "eq (ortho_p)"};
 
+    experiments::experiment<std::string, std::string, uint32_t, uint32_t, uint64_t, bool, uint32_t, uint32_t, uint64_t,
+                            double, bool>
+        placement_routing_exp{"orthogonal_planar_pr",
+                              "benchmark",
+                              "pr_algorithm",
+                              "old width",
+                              "old height",
+                              "old area",
+                              "old success",
+                              "new width",
+                              "new height",
+                              "new area",
+                              "area decrease old->new (%)",
+                              "new success"};
+
     // For all fiction benchmarks
-    static constexpr const uint64_t bench_select = (fiction_experiments::fontes18);
+    static constexpr uint64_t bench_select = fiction_experiments::xor2_f;
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
-        /*if (benchmark == "ISCAS85/c432")
+        if (benchmark == "ISCAS85/c432")
         {
             continue;
-        }*/
+        }
         /*if (benchmark == "ISCAS85/c2670")
         {
             continue;
@@ -137,6 +154,11 @@ int main()  // NOLINT
             });
         }*/
 
+        /*##############################################################################################################
+         * ###################################### Balancing and FO Subsitution #########################################
+         * #############################################################################################################
+         */
+
         fiction::network_balancing_params b_ps;
         b_ps.unify_outputs = true;
 
@@ -145,7 +167,7 @@ int main()  // NOLINT
 
         std::cout << "balanced ntk size: " << balanced_ntk.size() << std::endl;
 
-        fiction::debug::write_dot_network(balanced_ntk, "balanced_ntk");
+        // fiction::debug::write_dot_network(balanced_ntk, "balanced_ntk");
 
         if (balanced_ntk.size() > 8000)
         {
@@ -170,61 +192,49 @@ int main()  // NOLINT
 
         // fiction::debug::write_dot_network(ranked_ntk, "ntk_ranked");
 
+        /*##############################################################################################################
+         * ###################################### Mincross #############################################################
+         * #############################################################################################################
+         */
+
         fiction::mincross_stats  st{};
         fiction::mincross_params p{};
-        p.fixed_pis             = false;
-        p.optimize              = false;
-
-        /*fiction::mincross(ranked_ntk, p, &st);
-        std::cout << "Crossings before median: " << st.num_crossings << "\n";
-
-        fiction::median_sweep_pos_to_pis(ranked_ntk);
-
-        fiction::mincross(ranked_ntk, p, &st);
-        std::cout << "Crossings after median: " << st.num_crossings << "\n";*/
+        p.fixed_pis = false;
+        p.optimize  = false;
 
         auto       mincross_ntk = mincross(ranked_ntk, p, &st);  // counts crossings
         const auto cross_before = st.num_crossings;
 
+        /*##############################################################################################################
+         * ###################################### Network planarization ###############################################
+         * #############################################################################################################
+         */
+
         auto duplication_planarized_ntk = node_duplication_planarization(ranked_ntk);
 
         fiction::planarization_params ps_plan{};
-        bool const x_value = true;
-        bool const b_value = true;
-        ps_plan.xor_gates = x_value;
-        ps_plan.buffer = b_value;
-        auto half_planarized_ntk = planarization(ranked_ntk, ps_plan);
+        bool const                    x_value = true;
+        bool const                    b_value = true;
+        ps_plan.xor_gates                     = x_value;
+        ps_plan.buffer                        = b_value;
+        auto half_planarized_ntk              = planarization(ranked_ntk, ps_plan);
 
-        mincross_ntk = mincross(half_planarized_ntk, p, &st);
+        mincross_ntk           = mincross(half_planarized_ntk, p, &st);
         const auto cross_after = st.num_crossings;
 
-        /*fiction::virtual_pi_network<fiction::technology_network> tec{};
-        const auto         pi1 = tec.create_pi();
-        const auto         pi2 = tec.create_pi();
-        const auto         pi3 = tec.create_pi();
-        const auto         pi4 = tec.create_virtual_pi(pi1);
-        const auto         a1  = tec.create_and(pi1, pi2);
-        const auto         o1  = tec.create_or(pi1, pi2);
-        const auto         a2  = tec.create_and(pi3, pi4);
-        const auto         o2  = tec.create_or(pi3, pi4);
-        tec.create_po(a1);
-        tec.create_po(o1);
-        tec.create_po(a2);
-        tec.create_po(o2);
-
-        auto tec_r = fiction::mutable_rank_view(tec);*/
-
-        //std::vector<mockturtle::node<fiction::technology_network>> pis{5, 2, 3, 4};
-
-        //tec_r.set_ranks(0, pis);
-
         fiction::crossing_gate_planarization_params c_ps{};
-        c_ps.xor_gates                 = x_value;
-        c_ps.buffer                    = b_value;
+        c_ps.xor_gates = x_value;
+        c_ps.buffer    = b_value;
 
         auto full_planarized_network = fiction::crossing_gate_planarization(half_planarized_ntk, c_ps);
 
-        fiction::ranked_buffer_insertion_params rps{};
+        /*##############################################################################################################
+         * ###################################### AQFP Buffering ###############################################
+         * #############################################################################################################
+         */
+
+        // ToDo: Support virtual PIs for equivalence checking
+        /*fiction::ranked_buffer_insertion_params rps{};
         rps.scheduling = fiction::ranked_buffer_insertion_params::better;
         rps.assume.balance_cios = true;
         rps.assume.splitter_capacity = 2u;
@@ -234,55 +244,188 @@ int main()  // NOLINT
         fiction::ranked_buffer_insertion rbi{full_planarized_network, rps};
         rbi.run( tec );
 
-        rbi.remove_buffer_and_splitter_chains(tec);
-        tec = mockturtle::cleanup_dangling(tec);
+        // rbi.remove_buffer_and_splitter_chains(tec);
+        rbi.remove_buffer_chains(tec);
+        tec = mockturtle::cleanup_dangling(tec);*/
 
-        fiction::technology_network tec_2{};
-        fiction::ranked_buffer_insertion rbi_2{tec, rps};
+        /*fiction::technology_network tec_2{};
+        fiction::ranked_buffer_insertion rbi_2{duplication_planarized_ntk, rps};
         rbi_2.run( tec_2 );
 
-        //rbi_2.remove_buffer_and_splitter_chains(tec_2);
-        //tec_2 = mockturtle::cleanup_dangling(tec_2);
+        rbi_2.remove_buffer_chains(tec_2);
+        tec_2 = mockturtle::cleanup_dangling(tec_2);
 
-        //fiction::debug::write_dot_network(tec, "tec");
-        //fiction::debug::write_dot_network(tec_2, "tec_2");
+        std::cout << "tec size: " << tec.size() << std::endl;
+        std::cout << "tec_2 size: " << tec_2.size() << std::endl;
+
+        std::cout << "half planarized num PIS: " << full_planarized_network.num_real_pis() << "\n";
+        std::cout << "tec num PIS: " << tec.num_pis() << "\n";*/
+
+        /*fiction::technology_network tec_2{};
+        fiction::ranked_buffer_insertion rbi_2{tec, rps};
+        rbi_2.run( tec_2 );
 
         std::cout << "tec size: " << tec.size() << std::endl;
         std::cout << "tec_2 size: " << tec_2.size() << std::endl;
 
         std::cout << "half planarized num PIS: " << half_planarized_ntk.num_real_pis() << "\n";
-        std::cout << "tec num PIS: " << tec.num_pis() << "\n";
+        std::cout << "tec num PIS: " << tec.num_pis() << "\n";*/
 
+        // rbi_2.remove_buffer_and_splitter_chains(tec_2);
+        // tec_2 = mockturtle::cleanup_dangling(tec_2);
 
+        // fiction::debug::write_dot_network(tec, "tec");
+        // fiction::debug::write_dot_network(tec_2, "tec_2");
 
         /*mockturtle::equivalence_checking_stats st_eq_1;
         auto                                   eq_1 =
-            mockturtle::equivalence_checking(*fiction::virtual_miter<fiction::technology_network>(tec, cross_gate_planarized_ntk), {}, &st_eq_1);
+            mockturtle::equivalence_checking(*fiction::virtual_miter<fiction::technology_network>(tec,
+        cross_gate_planarized_ntk), {}, &st_eq_1);
 
         std::cout << "Equivalence crossing gate planarization: " << *eq_1 << "\n";*/
 
-        // fiction::debug::write_dot_network(duplication_planarized_ntk, "ntk_dupl");
+        // fiction::debug::write_dot_network(duplication_planarized_ntk, "duplication_planarized_ntk");
 
-        // fiction::debug::write_dot_network(half_planarized_ntk, "ntk_dupl_half");
+        // fiction::debug::write_dot_network(half_planarized_ntk, "half_planarized_ntk");
 
-        //fiction::debug::write_dot_network(full_planarized_network, "ntk_cross_gate");
+        // fiction::debug::write_dot_network(full_planarized_network, "full_planarized_network");
 
         mockturtle::equivalence_checking_stats st_eq;
-        /*auto                                   eq =
-            mockturtle::equivalence_checking(*fiction::virtual_miter<fiction::technology_network>(benchmark_network, tec), {}, &st_eq);*/
+        auto                                   eq = mockturtle::equivalence_checking(
+            *fiction::virtual_miter<fiction::technology_network>(benchmark_network, full_planarized_network), {},
+            &st_eq);
 
-        std::cout <<  "Real cost: " << duplication_planarized_ntk.size() - half_planarized_ntk.size() << "\n";
+        // const bool eq = true;
+        const double size_decrease_dupl_to_gate_cross_percent =
+            (duplication_planarized_ntk.size() > 0u) ? (100.0 *
+                                                        (static_cast<double>(duplication_planarized_ntk.size()) -
+                                                         static_cast<double>(full_planarized_network.size())) /
+                                                        static_cast<double>(duplication_planarized_ntk.size())) :
+                                                       0.0;
 
-        const bool eq = true;
-        planarizaion_exp(benchmark, benchmark_network.num_pis(), benchmark_network.num_pos(),
-                         benchmark_network.size(), balanced_ntk.size(), ranked_ntk.width(),
-                         ranked_ntk.depth(), cross_before, cross_after, duplication_planarized_ntk.size(),
-                         static_cast<double>(duplication_planarized_ntk.size()) /
-                             static_cast<double>(balanced_ntk.size()),
-                         half_planarized_ntk.size(), full_planarized_network.size(), eq);
+        planarizaion_exp(
+            benchmark, benchmark_network.num_pis(), benchmark_network.num_pos(), benchmark_network.size(),
+            balanced_ntk.size(), ranked_ntk.width(), ranked_ntk.depth(), cross_before, cross_after,
+            duplication_planarized_ntk.size(),
+            static_cast<double>(duplication_planarized_ntk.size()) / static_cast<double>(balanced_ntk.size()),
+            half_planarized_ntk.size(), full_planarized_network.size(), size_decrease_dupl_to_gate_cross_percent, *eq);
 
         planarizaion_exp.save();
         planarizaion_exp.table();
+
+        /*##############################################################################################################
+         * ###################################### Placement and Routing ###############################################
+         * #############################################################################################################
+         */
+        std::cout << "Starting placement and routing...\n";
+        using gate_layout = fiction::gate_level_layout<
+            fiction::clocked_layout<fiction::tile_based_layout<fiction::cartesian_layout<fiction::offset::ucoord_t>>>>;
+
+        // Choose which placement & routing algorithm to run:
+        // - graph_oriented_layout_design: works without an explicit planar embedding (can fail -> std::optional)
+        // - plane: uses planar embedding-based design (may throw / may fail for non-planar nets)
+        bool const use_plane_pr = true;
+
+        // Common helper to turn a layout into width/height/area.
+        const auto dims_from_layout = [](const gate_layout& lyt)
+        {
+            const auto bb     = fiction::bounding_box_2d(lyt);
+            const auto width  = static_cast<uint32_t>(bb.get_x_size() + 1);
+            const auto height = static_cast<uint32_t>(bb.get_y_size() + 1);
+            const auto area   = static_cast<uint64_t>(width) * static_cast<uint64_t>(height);
+            return std::tuple<uint32_t, uint32_t, uint64_t>{width, height, area};
+        };
+
+        uint32_t width_old_pr = 0u, height_old_pr = 0u;
+        uint64_t area_old_pr    = 0ull;
+        bool     success_old_pr = false;
+
+        uint32_t width_new_pr = 0u, height_new_pr = 0u;
+        uint64_t area_new_pr    = 0ull;
+        bool     success_new_pr = true;
+
+        // Track % area decrease (positive means new area is smaller). If old run failed or old area is 0, store 0.
+        double area_decrease_old_to_new_percent = 0.0;
+
+        std::string pr_algo_name;
+
+        if (use_plane_pr)
+        {
+            pr_algo_name = "plane";
+
+            try
+            {
+                const auto layout_plane_old = fiction::plane<gate_layout>(duplication_planarized_ntk);
+                const auto layout_plane_new = fiction::plane<gate_layout>(full_planarized_network);
+
+                std::tie(width_old_pr, height_old_pr, area_old_pr) = dims_from_layout(layout_plane_old);
+                std::tie(width_new_pr, height_new_pr, area_new_pr) = dims_from_layout(layout_plane_new);
+
+                auto eq_pr = mockturtle::equivalence_checking(
+                    *fiction::virtual_miter<mockturtle::klut_network>(benchmark_network, layout_plane_old), {},
+                    &st_eq);
+
+                std::cout << "Equivalence plane PR: " << *eq_pr << "\n";
+
+                success_old_pr = true;
+                if (!eq_pr)
+                {
+                    success_new_pr = false;
+                }
+
+                area_decrease_old_to_new_percent =
+                    (area_old_pr > 0ull) ?
+                        (100.0 * (static_cast<double>(area_old_pr) - static_cast<double>(area_new_pr)) /
+                         static_cast<double>(area_old_pr)) :
+                        0.0;
+            }
+            catch (const std::exception& e)
+            {
+                // Keep running other benchmarks; log failure through success flags.
+                fmt::print("[w] plane PR failed for {}: {}\n", benchmark, e.what());
+            }
+        }
+        else
+        {
+            pr_algo_name = "graph_oriented";
+
+            fiction::graph_oriented_layout_design_stats  stats{};
+            fiction::graph_oriented_layout_design_params params{};
+            params.timeout      = 30000;
+            params.return_first = true;
+            params.planar       = true;
+
+            const auto layout_old =
+                fiction::graph_oriented_layout_design<gate_layout>(duplication_planarized_ntk, params, &stats);
+            std::cout << "Crossing number old: " << stats.num_crossings << std::endl;
+            const auto layout_new =
+                fiction::graph_oriented_layout_design<gate_layout>(full_planarized_network, params, &stats);
+            std::cout << "Crossing number new: " << stats.num_crossings << std::endl;
+
+            if (layout_old)
+            {
+                std::tie(width_old_pr, height_old_pr, area_old_pr) = dims_from_layout(*layout_old);
+                success_old_pr                                     = true;
+            }
+            if (layout_new)
+            {
+                std::tie(width_new_pr, height_new_pr, area_new_pr) = dims_from_layout(*layout_new);
+                success_new_pr                                     = true;
+            }
+
+            if (success_old_pr && success_new_pr && area_old_pr > 0ull)
+            {
+                area_decrease_old_to_new_percent =
+                    100.0 * (static_cast<double>(area_old_pr) - static_cast<double>(area_new_pr)) /
+                    static_cast<double>(area_old_pr);
+            }
+        }
+
+        placement_routing_exp(benchmark, pr_algo_name, width_old_pr, height_old_pr, area_old_pr, success_old_pr,
+                              width_new_pr, height_new_pr, area_new_pr, area_decrease_old_to_new_percent,
+                              success_new_pr);
+        placement_routing_exp.save();
+        placement_routing_exp.table();
     }
 
     return EXIT_SUCCESS;

@@ -1357,7 +1357,6 @@ std::pair<uint32_t, typename BufNtk::node> remove_buffer_chains_rec( BufNtk& ntk
     // splitter
     if ( ntk.fanout_size( n ) > 1 )
     {
-        std::cout << "Splitter met\n";
       ntk.foreach_fanin( n, [&]( auto f ){
         remove_buffer_chains_rec( ntk, ntk.get_node( f ), n, max_chain );
       } );
