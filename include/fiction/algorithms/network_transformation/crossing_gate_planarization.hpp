@@ -34,6 +34,44 @@ namespace detail
 {
 
 template <typename Ntk>
+[[nodiscard]] std::pair<Ntk, mockturtle::node_map<mockturtle::signal<Ntk>, Ntk>>
+initialize_copy_virtual_pi_network(const Ntk& src)
+{
+    static_assert(mockturtle::has_rank_position_v<Ntk>, "NtkSrc does not implement the rank_position function");
+    mockturtle::node_map<mockturtle::signal<Ntk>, Ntk> old2new(src);
+    Ntk                                                dest;
+
+    old2new[src.get_constant(false)] = dest.get_constant(false);
+    if (src.get_node(src.get_constant(true)) != src.get_node(src.get_constant(false)))
+    {
+        old2new[src.get_constant(true)] = dest.get_constant(true);
+    }
+
+    // discard virtual PIs and the PI order in the extended rank view when creating the PIs for the copy network
+    if constexpr (has_is_real_pi_v<Ntk>)
+    {
+        src.foreach_pi_unranked(
+            [&](auto const& n)
+            {
+                if (src.is_real_pi(n))
+                {
+                    old2new[n] = dest.create_pi();
+                }
+                else
+                {
+                    old2new[n] = dest.create_virtual_pi(src.get_real_pi(n));
+                }
+            });
+    }
+    else
+    {
+        src.foreach_pi_unranked([&](auto const& n) { old2new[n] = dest.create_pi(); });
+    }
+
+    return {dest, old2new};
+}
+
+template <typename Ntk>
 class crossing_gate_planarization_impl
 {
   public:
@@ -124,13 +162,17 @@ class crossing_gate_planarization_impl
     // CROSSING DETECTION (ncross_extended)
     // ============================================================
 
-    void ncross_extended()
+    bool ncross_extended()
     {
         total_crossings = 0;
         crossing_ctn.clear();
 
         for (uint32_t r = 0u; r < fanout_ntk.depth(); ++r)
         {
+            uint32_t cross_limit = 1000u;
+            // per-rank crossing limit check
+            uint32_t rank_crossings = 0u;
+
             uint64_t next_width = fanout_ntk.rank_width(r + 1);
 
             std::vector<std::deque<std::pair<edge, uint64_t>>> penalty(next_width + 1);
@@ -142,7 +184,8 @@ class crossing_gate_planarization_impl
 
             fanout_ntk.foreach_node_in_rank(
                 r,
-                [this, &penalty, &max_pos, &result, &affected_edges, &stage_edges](auto const& n)
+                [this, &penalty, &max_pos, &result, &affected_edges, &stage_edges, &rank_crossings,
+                 &cross_limit](auto const& n)
                 {
                     std::vector<edge> targets;
                     targets.reserve(fanout_ntk.fanout_size(n));
@@ -162,7 +205,6 @@ class crossing_gate_planarization_impl
 
                         for (auto k = static_cast<uint64_t>(max_pos); k >= static_cast<uint64_t>(pos + 1); --k)
                         {
-                            // iterate newest edges first
                             for (auto it = penalty[k].begin(); it != penalty[k].end(); ++it)
                             {
                                 auto const& prev_edge = it->first;
@@ -183,8 +225,27 @@ class crossing_gate_planarization_impl
 
                                 prev_lvl++;
                                 total_crossings++;
+
+                                // per-rank accounting + threshold
+                                ++rank_crossings;
+                                if (rank_crossings > cross_limit)
+                                {
+                                    return;
+                                }
+
                                 local_lvl++;
                             }
+
+                            // optional micro-optimization: if we've exceeded already, stop inner loops
+                            if (rank_crossings > cross_limit)
+                            {
+                                break;
+                            }
+                        }
+
+                        if (rank_crossings > cross_limit)
+                        {
+                            break;
                         }
                     }
 
@@ -199,6 +260,15 @@ class crossing_gate_planarization_impl
                     }
                 });
 
+            if (rank_crossings > cross_limit)
+            {
+                // error message
+                std::cerr << rank_crossings << " crossings detected in rank " << r
+                          << ". Aborting crossing gate planarization.\n";
+
+                return false;
+            }
+
             for (auto const& e : stage_edges)
             {
                 if (std::find(affected_edges.begin(), affected_edges.end(), e) == affected_edges.end())
@@ -209,16 +279,21 @@ class crossing_gate_planarization_impl
 
             crossing_ctn.push_back(std::move(result));
         }
+
+        return true;
     }
 
     Ntk run()
     {
-        auto  init     = mockturtle::initialize_copy_network<Ntk>(ntk);
+        auto  init     = initialize_copy_virtual_pi_network<Ntk>(ntk);
         auto& ntk_dest = init.first;
         auto& old2new  = init.second;
 
         // crossing information
-        ncross_extended();
+        if (!ncross_extended())
+        {
+            return ntk;  // abort planarization for large number of crossings
+        }
         if (ps.verbose)
         {
             print_crossings();
@@ -244,7 +319,7 @@ class crossing_gate_planarization_impl
             }
 
             auto     last           = initial;
-            uint32_t crossing_depth = ps.xor_gates ? 2u : 8u;
+            uint32_t crossing_depth = ps.xor_gates ? 3u : 12u;
 
             for (uint32_t j = 0; j < crossing_depth; ++j)
             {
@@ -265,18 +340,20 @@ class crossing_gate_planarization_impl
 
         auto buffered_xor_gate = [&](mockturtle::signal<Ntk> a, mockturtle::signal<Ntk> b)
         {
+            auto fo1 = ntk_dest.create_buf(a);
+            auto fo2 = ntk_dest.create_buf(b);
             // small buffer chain on 'a' for the first partial path
-            auto a_buf2 = simple_buf_chain(a, 2);
+            auto a_buf2 = simple_buf_chain(fo1, 2);
 
             // core term: NOT(a AND b)
-            auto core = ntk_dest.create_and(a, b);
+            auto core = ntk_dest.create_and(fo1, fo2);
             core      = ntk_dest.create_not(core);
 
             // first partial: a_buf2 AND core
             auto p_a = ntk_dest.create_and(a_buf2, core);
 
             // small buffer chain on 'b' for the second partial path
-            auto b_buf2 = simple_buf_chain(b, 2);
+            auto b_buf2 = simple_buf_chain(fo2, 2);
             auto p_b    = ntk_dest.create_and(b_buf2, core);
 
             // final OR
@@ -311,6 +388,9 @@ class crossing_gate_planarization_impl
 
             auto sig1 = ntk_dest.make_signal(child1);
             auto sig2 = ntk_dest.make_signal(child2);
+
+            sig1 = ntk_dest.create_buf(sig1);
+            sig2 = ntk_dest.create_buf(sig2);
 
             mockturtle::signal<Ntk> sig3{};
 
@@ -350,7 +430,7 @@ class crossing_gate_planarization_impl
 
                 if (ps.buffer)
                 {
-                    sig3 = simple_buf_chain(sig1, 4);
+                    sig3 = simple_buf_chain(sig1, 6);
                     c0   = buffered_xor_gate(sig1, sig2);
                 }
                 else
@@ -363,7 +443,8 @@ class crossing_gate_planarization_impl
 
                 if (ps.buffer)
                 {
-                    sig2 = simple_buf_chain(sig2, 4);
+                    c0 = ntk_dest.create_buf(c0);
+                    sig2 = simple_buf_chain(sig2, 6);
                     c1   = buffered_xor_gate(sig3, c0);
                     c2   = buffered_xor_gate(c0, sig2);
                 }
@@ -482,6 +563,9 @@ class crossing_gate_planarization_impl
         fiction::restore_names(ntk, ntk_dest, old2new);
 
         ntk_dest.update_ranks();
+
+        const auto pi_ranks = ntk.get_ranks(0);
+        ntk_dest.set_ranks(0, pi_ranks);
 
         return ntk_dest;
     }

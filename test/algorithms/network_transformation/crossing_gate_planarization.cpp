@@ -22,7 +22,7 @@
 
 using namespace fiction;
 
-TEST_CASE("Hello World", "[crossing-gate-planarization]")
+TEST_CASE("Network 1", "[crossing-gate-planarization]")
 {
     technology_network tec{};
     const auto         pi1 = tec.create_pi();
@@ -38,7 +38,35 @@ TEST_CASE("Hello World", "[crossing-gate-planarization]")
     debug::write_dot_network(tec);
 
     auto       tec_r = mutable_rank_view(tec);
-    const auto tec_p = crossing_gate_planarization(tec_r);
+    crossing_gate_planarization_params ps;
+    ps.xor_gates = true;
+    const auto tec_p = crossing_gate_planarization(tec_r, ps);
+
+    debug::write_dot_network(tec_p, "planarized");
+}
+
+TEST_CASE("Network 2", "[crossing-gate-planarization]")
+{
+    technology_network tec{};
+    const auto         pi1 = tec.create_pi();
+    const auto         pi2 = tec.create_pi();
+    const auto         pi3 = tec.create_pi();
+    const auto         pi4 = tec.create_pi();
+    const auto         a1  = tec.create_and(pi1, pi2);
+    const auto         o1  = tec.create_or(pi1, pi2);
+    const auto         a2  = tec.create_and(pi3, pi4);
+    const auto         o2  = tec.create_or(pi3, pi4);
+    tec.create_po(a1);
+    tec.create_po(o1);
+    tec.create_po(a2);
+    tec.create_po(o2);
+
+    debug::write_dot_network(tec);
+
+    auto       tec_r = mutable_rank_view(tec);
+    crossing_gate_planarization_params ps;
+    ps.xor_gates = true;
+    const auto tec_p = crossing_gate_planarization(tec_r, ps);
 
     debug::write_dot_network(tec_p, "planarized");
 }

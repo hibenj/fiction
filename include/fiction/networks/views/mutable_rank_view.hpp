@@ -420,6 +420,30 @@ class mutable_rank_view<Ntk, false> : public fiction::static_depth_view<Ntk>
     }
 
     /**
+     * Applies a given function to each node in reverse rank order.
+     *
+     * This function is similar to `foreach_node`, but visits ranks from the last rank to the first rank and visits nodes
+     * within each rank in reverse order.
+     *
+     * Note that reverse rank order is not necessarily identical to reverse topological order if nodes inside a rank are not
+     * stored in a strict topological order.
+     *
+     * @tparam Fn Functor type.
+     * @param fn The function to apply.
+     */
+    template <typename Fn>
+    void foreach_node_reverse(Fn&& fn) const
+    {
+        for (uint32_t l = static_cast<uint32_t>(ranks.size()); l-- > 0;)
+        {
+            assert(l < ranks.size() && "level must be less than the number of ranks");
+
+            auto const& rank = ranks[l];
+            mockturtle::detail::foreach_element(rank.crbegin(), rank.crend(), std::forward<Fn>(fn));
+        }
+    }
+
+    /**
      * Applies a given function to each gate in the rank level in order.
      *
      * @tparam Fn Functor type.

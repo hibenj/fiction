@@ -181,6 +181,187 @@ class technology_network : public mockturtle::klut_network
     }
 #pragma endregion
 
+#pragma region Restructuring
+
+  public:
+    /**
+     * Replaces occurrences of `old_node` in the fanin list of node `n` by `new_signal`.
+     * Updates fanout ref-counts and fires on_modified events.
+     *
+     * @note This is a linear-time operation in the fanin size of `n` and does not preserve any hashing
+     *       (technology_network has hashing disabled anyway).
+     */
+    void replace_in_node(const node& n, const node& old_node, signal new_signal)
+    {
+        if (n == 0 || is_ci(n) || is_constant(n))
+        {
+            return;
+        }
+
+        auto& nd = _storage->nodes[n];
+
+        // snapshot old children for the event callback
+        std::vector<signal> old_children{};
+        old_children.reserve(nd.children.size());
+        for (const auto& c : nd.children)
+        {
+            old_children.emplace_back(c.index);
+        }
+
+        bool changed = false;
+
+        for (auto& child : nd.children)
+        {
+            if (child.index == old_node)
+            {
+                // decrement fanout of old child
+                if (_storage->nodes[old_node].data[0].h1 > 0)
+                {
+                    _storage->nodes[old_node].data[0].h1--;
+                }
+
+                // replace
+                child.index = new_signal;
+
+                // increment fanout of new child
+                _storage->nodes[new_signal].data[0].h1++;
+
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            for (auto const& fn : _events->on_modified)
+            {
+                (*fn)(n, old_children);
+            }
+        }
+    }
+
+    /**
+     * Replaces occurrences of `old_node` in all primary outputs by `new_signal`.
+     * Updates fanout ref-counts accordingly.
+     */
+    void replace_in_outputs(const node& old_node, const signal& new_signal)
+    {
+        for (auto& output : _storage->outputs)
+        {
+            if (output.index == old_node)
+            {
+                // decrement fanout of old node (PO reference)
+                if (_storage->nodes[old_node].data[0].h1 > 0)
+                {
+                    _storage->nodes[old_node].data[0].h1--;
+                }
+
+                // rewrite output
+                output.index = new_signal;
+
+                // increment fanout of new node (PO reference)
+                _storage->nodes[new_signal].data[0].h1++;
+            }
+        }
+    }
+
+    /**
+     * Takes node `n` out of the network by disconnecting all of its outgoing edges.
+     *
+     * This does not physically erase the node from storage (mockturtle-style).
+     * All occurrences of `n` in fanin lists and primary outputs are rewritten to
+     * constant 0, and fanout ref-counts are updated accordingly.
+     *
+     * Preconditions:
+     * - `n` must not be a constant.
+     * - `n` must not be a CI/PI (callers should avoid removing PIs).
+     */
+    void take_out_node(const node& n)
+    {
+        if (is_constant(n) || is_ci(n))
+        {
+            return;
+        }
+
+        // (1) Decrement fanout of its fanins (remove n's references to them)
+        foreach_fanin(n,
+                      [this](const auto& f)
+                      {
+                          const auto fn = get_node(f);
+                          if (_storage->nodes[fn].data[0].h1 > 0)
+                          {
+                              _storage->nodes[fn].data[0].h1--;
+                          }
+                      });
+
+        // (2) Disconnect all parents that reference n by rewiring to constant 0
+        const auto const0 = get_constant(false);
+
+        for (auto i = 0u; i < _storage->nodes.size(); ++i)
+        {
+            if (i == n)
+            {
+                continue;
+            }
+
+            auto& parent = _storage->nodes[i];
+
+            bool touched = false;
+            std::vector<signal> old_children{};
+
+            for (auto& child : parent.children)
+            {
+                if (child.index == n)
+                {
+                    if (!touched)
+                    {
+                        old_children.resize(parent.children.size());
+                        std::transform(parent.children.begin(), parent.children.end(), old_children.begin(),
+                                       [](auto c) { return c.index; });
+                        touched = true;
+                    }
+
+                    // remove parent->n edge
+                    if (_storage->nodes[n].data[0].h1 > 0)
+                    {
+                        _storage->nodes[n].data[0].h1--;
+                    }
+
+                    // add parent->const0 edge
+                    child.index = const0;
+                    _storage->nodes[const0].data[0].h1++;
+                }
+            }
+
+            if (touched)
+            {
+                for (auto const& fn : _events->on_modified)
+                {
+                    (*fn)(i, old_children);
+                }
+            }
+        }
+
+        // (3) Disconnect POs that reference n
+        for (auto& output : _storage->outputs)
+        {
+            if (output.index == n)
+            {
+                if (_storage->nodes[n].data[0].h1 > 0)
+                {
+                    _storage->nodes[n].data[0].h1--;
+                }
+
+                output.index = const0;
+                _storage->nodes[const0].data[0].h1++;
+            }
+        }
+
+        // (4) Make sure n has no fanout references left
+        _storage->nodes[n].data[0].h1 = 0;
+    }
+
+#pragma endregion
+
 #pragma region Create arbitrary functions
 
     /**

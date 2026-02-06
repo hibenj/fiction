@@ -7,6 +7,7 @@
 
 #include "fiction/algorithms/graph/mincross.hpp"
 #include "fiction/algorithms/network_transformation/network_balancing.hpp"
+#include "fiction/algorithms/network_transformation/node_duplication_planarization.hpp"
 #include "fiction/networks/virtual_pi_network.hpp"
 
 #include <mockturtle/traits.hpp>
@@ -63,164 +64,27 @@ struct planarization_params
 namespace detail
 {
 
-/**
- * Represents one node in the H-graph used for crossing minimization.
- *
- * For a node in level l of the input network, all possible orderings of its fanins from layer l−1 are enumerated.
- * Each such ordering is represented by an H-graph node. The first and last fanins of the ordering are stored, since
- * these determine the delay in the H-graph. The remaining fanins are placed in middle. Their mutual order is irrelevant
- * for this algorithm.
- *
- * @tparam Ntk Network type from which node types are drawn.
- */
-template <typename Ntk>
-struct hgraph_node
-{
-    /**
-     * First and last fanin.
-     */
-    std::pair<mockturtle::node<Ntk>, mockturtle::node<Ntk>> outer_fanins;
-    /**
-     * All remaining fanins.
-     */
-    std::vector<mockturtle::node<Ntk>> middle_fanins;
-    /**
-     * Specifies the delay value for the hgraph_node.
-     */
-    uint64_t delay;
-    /**
-     * Index of the predecessor H-graph node.
-     */
-    std::size_t fanin_it{};
-    /**
-     * Constructs an H-graph node with given first and last fanins and delay.
-     *
-     * @param first The first (leftmost) fanin in the ordering.
-     * @param last  The last (rightmost) fanin in the ordering.
-     * @param delay_value The delay value for the node.
-     */
-    hgraph_node(const mockturtle::node<Ntk>& first, const mockturtle::node<Ntk>& last, const uint64_t delay_value) :
-            outer_fanins(first, last),
-            delay(delay_value)
-    {}
-};
-
-/**
- * Variant of the `mockturtle::initialize_copy_network`. This function helps with creating new networks from old
- * networks. In the mockturtle/original version `old2new` is used to map nodes from the old network to nodes in the new
- * network in a one-to-one relation. This variant allows old nodes to map to multiple nodes in order to represent
- * relations to dulicated nodes.
-
- * A map (old2new) is created where old nodes from source network are mapped to new nodes in destination network.
- * A destination network is created as a virtual_pi_network<NtkSrc>.
- *
- * @tparam Ntk Type of the network.
- * @param src The source network.
- *
- * @return A pair of the destination network and a node map from the source to the destination network.
- */
-template <typename Ntk>
-std::pair<virtual_pi_network<Ntk>, mockturtle::node_map<std::vector<mockturtle::signal<virtual_pi_network<Ntk>>>, Ntk>>
-initialize_copy_network_duplicates(Ntk const& src)
-{
-    static_assert(mockturtle::is_network_type_v<Ntk>, "Ntk is not a network type");
-    static_assert(mockturtle::has_get_constant_v<Ntk>, "Ntk does not implement the get_constant method");
-    static_assert(mockturtle::has_get_constant_v<virtual_pi_network<Ntk>>,
-                  "virtual_pi_network<Ntk> does not implement get_constant");
-    static_assert(mockturtle::has_get_node_v<Ntk>, "Ntk does not implement the get_node method");
-    static_assert(mockturtle::has_foreach_pi_v<Ntk>, "Ntk does not implement the foreach_pi method");
-    static_assert(mockturtle::has_create_pi_v<virtual_pi_network<Ntk>>,
-                  "virtual_pi_network<Ntk> does not implement create_pi");
-
-    mockturtle::node_map<std::vector<mockturtle::signal<virtual_pi_network<Ntk>>>, Ntk> old2new(src);
-    virtual_pi_network<Ntk>                                                             dest;
-
-    old2new[src.get_constant(false)].push_back(dest.get_constant(false));
-    if (src.get_node(src.get_constant(true)) != src.get_node(src.get_constant(false)))
-    {
-        old2new[src.get_constant(true)].push_back(dest.get_constant(true));
-    }
-    src.foreach_pi([&](auto const& n) { old2new[n].push_back(dest.create_pi()); });
-    return {dest, old2new};
-}
-
-/**
- * The function gather_fanin_signals collects the fanin data for node n from the original ntk.
- * For each node n there are the possible fanin candidates old2new_v[fn], which are the original node and all
- * the nodes which are duplicates of this node.
- *
- * lvl[node_index] gives the current iterator at where the edge can be connected. To get the right signal,
- * all nodes at old2new[n] need to be viewed. Match lvl[node_index] against all entries in old2new[n],
- * then try lvl[node_index+1] then try lvl[node_index+2].
- *
- * @param n Variable to process.
- * @param lvl Level to process.
- * @param edge_it Iterator for edge.
- * @return Vector of fanins in the virtual_pi_network connected to the processed node.
- */
 template <typename Ntk, typename NtkDest>
 std::vector<mockturtle::signal<NtkDest>>
-gather_fanin_signals(const Ntk& ntk, NtkDest& ntk_dest_v, const mockturtle::node<Ntk> n,
-                     const mockturtle::node_map<std::vector<mockturtle::signal<NtkDest>>, Ntk>& old2new_v,
-                     const std::vector<mockturtle::node<NtkDest>>& lvl, std::size_t& node_index)
+gather_original_fanin_signals(const Ntk& ntk, NtkDest& ntk_dest_v, const mockturtle::node<Ntk> n,
+                              const mockturtle::node_map<std::vector<mockturtle::signal<NtkDest>>, Ntk>& old2new_v,
+                              const std::vector<mockturtle::node<NtkDest>>&                              lvl)
 {
-    // Initialize variables
     std::vector<mockturtle::signal<NtkDest>> children{};
-    children.reserve(ntk.fanin_size(n));
-    std::size_t local_node_index = 0;
 
-    ntk.foreach_fanin(
-        n,
-        [&n, &ntk, &ntk_dest_v, &lvl, &old2new_v, &children, &node_index, &local_node_index](const auto& f,
-                                                                                             const auto  i)
-        {
-            // Get the vector of duplicated nodes of the original fan-in node fn.
-            const auto  fn           = ntk.get_node(f);
-            const auto& tgt_signal_v = old2new_v[fn];
+    ntk.foreach_fanin(n,
+                      [&ntk, &ntk_dest_v, &old2new_v, &children](const auto& f)
+                      {
+                          const auto fn = ntk.get_node(f);
+                          assert(old2new_v[fn].size() == 1);
+                          const auto tgt_signal = old2new_v[fn][0];
 
-            assert(node_index < lvl.size() && "The fanin iterator is out of scope");
+                          children.emplace_back(ntk.is_complemented(f) ? ntk_dest_v.create_not(tgt_signal) :
+                                                                         tgt_signal);
+                      });
 
-            // The range indicates the number of candidate fan-ins.
-            const std::size_t max_candidates = ntk.fanin_size(n) + 1;
-
-            // Iterate through the candidate fan-ins. If a candidate fan-in matches the original fan-in or is a
-            // duplicate of it, add it to the children of the node n.
-            const std::size_t end_index = std::min(node_index + max_candidates, lvl.size());
-            for (auto j = node_index; j < end_index; ++j)
-            {
-                // get the node from the newly generated network.
-                const auto node_at_index = lvl[j];
-                const auto candidate_sig = ntk_dest_v.make_signal(node_at_index);
-
-                // Check if the candidate matches the original fan-in or a duplicate.
-                // Also, verify if the candidate has already reached its fan-out limit.
-                if ((std::find(tgt_signal_v.cbegin(), tgt_signal_v.cend(), candidate_sig) != tgt_signal_v.cend()) &&
-                    (ntk_dest_v.fanout_size(node_at_index) < ntk.fanout_size(fn)))
-                {
-                    // Set the local node_index.
-                    if (i == 0)
-                    {
-                        local_node_index = j;
-                    }
-                    else
-                    {
-                        local_node_index = std::max(local_node_index, j);
-                    }
-
-                    // Add the matched candidate fan-in to the children.
-                    children.emplace_back(ntk.is_complemented(f) ? ntk_dest_v.create_not(candidate_sig) :
-                                                                   candidate_sig);
-                    break;
-                }
-            }
-        });
-
-    // Set the node_index.
-    node_index = local_node_index;
-
-    // Return the children of the node.
     return children;
-}
+};
 
 /**
  * Constructs a planar `virtual_pi_network` based on duplicated nodes derived from the source network.
@@ -245,9 +109,9 @@ gather_fanin_signals(const Ntk& ntk, NtkDest& ntk_dest_v, const mockturtle::node
  * relations.
  */
 template <typename Ntk>
-virtual_pi_network<Ntk> create_virtual_pi_ntk_from_duplicated_nodes(
+virtual_pi_network<Ntk> create_virtual_pi_ntk_from_duplicated_nodes_with_keep_original_levels(
     const Ntk& ntk, const std::vector<std::vector<mockturtle::node<Ntk>>>& ntk_lvls,
-    std::vector<std::vector<mockturtle::node<virtual_pi_network<Ntk>>>>& ntk_lvls_new)
+    std::vector<std::vector<mockturtle::node<virtual_pi_network<Ntk>>>>& ntk_lvls_new, uint32_t cross_lvl)
 {
     static_assert(mockturtle::has_create_node_v<virtual_pi_network<Ntk>>, "virtual_pi_network<Ntk> lacks create_node");
     static_assert(mockturtle::has_get_node_v<virtual_pi_network<Ntk>>, "virtual_pi_network<Ntk> lacks get_node");
@@ -299,12 +163,16 @@ virtual_pi_network<Ntk> create_virtual_pi_ntk_from_duplicated_nodes(
             {
                 assert(i + 1 < ntk_lvls_new.size() && "Next level does not exist");
 
-                const auto children =
-                    gather_fanin_signals(ntk, ntk_dest_v, nd, old2new_v, ntk_lvls_new[i + 1], node_index);
+                auto children = gather_fanin_signals(ntk, ntk_dest_v, nd, old2new_v, ntk_lvls_new[i + 1], node_index);
+
+                if (children.size() != ntk.fanin_size(nd))
+                {
+                    children = gather_original_fanin_signals(ntk, ntk_dest_v, nd, old2new_v, ntk_lvls_new[i + 1]);
+                }
 
                 // Ensure child count matches function arity (including 0-fanin constants)
-                assert(children.size() == ntk.fanin_size(nd) &&
-                       "Mismatch between gathered children and node fanin count");
+                /*assert(children.size() == ntk.fanin_size(nd) &&
+                       "Mismatch between gathered children and node fanin count");*/
 
                 const auto new_sig = ntk_dest_v.create_node(children, ntk.node_function(nd));
                 lvl_new.push_back(ntk_dest_v.get_node(new_sig));
@@ -329,61 +197,6 @@ virtual_pi_network<Ntk> create_virtual_pi_ntk_from_duplicated_nodes(
         });
 
     return ntk_dest_v;
-}
-
-/**
- * Calculates pairs of nodes from a given vector of nodes.
- *
- * This function takes a vector of nodes and returns a vector of node pairs. Each node pair consists of two nodes from
- * the input vector and an optional vector of middle nodes. The delay of each node pair is initialized to infinity.
- *
- * @tparam Ntk The network type.
- * @param nodes The vector of nodes.
- * @return The vector of node pairs.
- */
-template <typename Ntk>
-[[nodiscard]] std::vector<hgraph_node<Ntk>> calculate_pairs(const std::vector<mockturtle::node<Ntk>>& nodes) noexcept
-{
-    std::vector<hgraph_node<Ntk>> pairwise_combinations{};
-    pairwise_combinations.reserve(nodes.size() * (nodes.size() - 1));
-
-    if (nodes.size() == 1)
-    {
-        const hgraph_node<Ntk> pair = {nodes[0], nodes[0],
-                                       std::numeric_limits<uint64_t>::max()};  // Initialize delay to inf
-        pairwise_combinations.push_back(pair);
-        return pairwise_combinations;
-    }
-
-    for (auto it1 = nodes.cbegin(); it1 != nodes.cend(); ++it1)
-    {
-        for (auto it2 = it1 + 1; it2 != nodes.cend(); ++it2)
-        {
-            std::vector<mockturtle::node<Ntk>> middle_fanins{};
-            middle_fanins.reserve(nodes.size() - 2);
-
-            // fill middle_fanins with non-pair members
-            for (auto it = nodes.cbegin(); it != nodes.cend(); ++it)
-            {
-                if (it != it1 && it != it2)
-                {
-                    middle_fanins.push_back(*it);
-                }
-            }
-
-            hgraph_node<Ntk> pair1 = {*it1, *it2, std::numeric_limits<uint64_t>::max()};  // Initialize delay to inf
-            hgraph_node<Ntk> pair2 = {*it2, *it1, std::numeric_limits<uint64_t>::max()};  // Initialize delay to inf
-
-            // Add middle_fanins to pairs
-            pair1.middle_fanins = middle_fanins;
-            pair2.middle_fanins = middle_fanins;
-
-            pairwise_combinations.push_back(pair1);
-            pairwise_combinations.push_back(pair2);
-        }
-    }
-
-    return pairwise_combinations;
 }
 
 template <typename Ntk>
@@ -545,6 +358,10 @@ class planarization_impl
             }
             else
             {
+                if (ntk.fanout_size(node) == 1)
+                {
+                    vec.insert(vec.begin(), node);
+                }
                 saturated_fanout_flag = 1;
             }
         }
@@ -656,7 +473,7 @@ class planarization_impl
         crossing_item(edge const& _e1, edge const& _e2, uint64_t _lvl) : e1(_e1), e2(_e2), level(_lvl) {}
     };
 
-    struct stage_result
+    struct stage_result_old
     {
         uint64_t                               max_level;
         std::vector<crossing_item>             crossings;
@@ -666,7 +483,14 @@ class planarization_impl
         std::vector<std::pair<edge, uint64_t>> crossings_per_edge;
     };
 
-    void ncross_extended()
+    struct stage_result
+    {
+        uint64_t                               max_level;
+        uint32_t                               n_crossings;
+        std::vector<std::pair<edge, uint64_t>> crossings_per_edge;
+    };
+
+    /*void ncross_extended()
     {
         crossing_ctn.clear();
 
@@ -723,7 +547,7 @@ class planarization_impl
                                 auto const& prev_edge = it->first;
                                 auto&       prev_lvl  = it->second;
 
-                                uint64_t level = std::max(local_lvl, prev_lvl);
+                                uint64_t level   = std::max(local_lvl, prev_lvl);
                                 result.max_level = std::max(result.max_level, level);
 
                                 result.crossings.emplace_back(prev_edge, e, level);
@@ -786,6 +610,116 @@ class planarization_impl
 
             crossing_ctn.push_back(std::move(result));
         }
+    }*/
+
+    stage_result ncross_fanins(const std::vector<mockturtle::node<Ntk>>& level_v, const std::vector<mockturtle::node<Ntk>>& next_level_v, uint32_t lvl)
+    {
+        stage_result result{};
+
+        // We index by *source* position in previous rank (r-1)
+        uint64_t                                           prev_width = fanout_ntk.rank_width(lvl - 1);
+        std::vector<std::deque<std::pair<edge, uint64_t>>> penalty(prev_width + 1);
+        uint64_t                                           max_pos = 0;
+
+        std::vector<edge> stage_edges;
+
+        // helper to increment per-edge crossing count stored in result.crossings_per_edge
+        auto increment_count = [&result](edge const& ed)
+        {
+            for (auto& p : result.crossings_per_edge)
+            {
+                if (p.first == ed)
+                {
+                    ++p.second;
+                    result.max_level = std::max(result.max_level, static_cast<uint64_t>(p.second));
+                    return;
+                }
+            }
+            result.crossings_per_edge.emplace_back(ed, 1);
+            result.max_level = std::max(result.max_level, static_cast<uint64_t>(1));
+        };
+
+        for (const auto& n : level_v)
+        {
+            // Collect incoming edges (fi -> n) with their source positions
+            std::vector<std::pair<uint64_t, edge>> incoming;
+            incoming.reserve(fanout_ntk.fanin_size(n));  // if available; otherwise remove
+
+            fanout_ntk.foreach_fanin(n,
+                                     [&](auto const& fi)
+                                     {
+                                         auto it_pos = std::find(next_level_v.begin(), next_level_v.end(), fi);
+                                         assert(it_pos != next_level_v.end());
+                                         auto pos = static_cast<uint64_t>(std::distance(next_level_v.begin(), it_pos));
+                                         edge e{fi, n};
+
+                                         incoming.emplace_back(pos, e);
+                                     });
+
+            // Detect crossings against previously inserted edges:
+            // For each new edge with source position 'pos', all previously seen edges
+            // with source position > pos will cross it (because targets are scanned L->R).
+            for (auto const& [pos, e] : incoming)
+            {
+                // uint64_t local_lvl = 0;
+
+                // iterate from current max_pos down to pos+1
+                for (uint64_t k = max_pos; k >= pos + 1; --k)
+                {
+                    // newest edges first (matches your other routine)
+                    for (auto it = penalty[k].begin(); it != penalty[k].end(); ++it)
+                    {
+                        auto const& prev_edge = it->first;
+                        // auto&       prev_lvl  = it->second;
+
+                        /*uint64_t level   = std::max(local_lvl, prev_lvl);
+                        result.max_level = std::max(result.max_level, level);*/
+
+                        result.n_crossings++;
+
+                        // increment counts for both involved edges
+                        increment_count(prev_edge);
+                        increment_count(e);
+
+                        /*if (prev_lvl > local_lvl)
+                        {
+                            local_lvl = prev_lvl;
+                        }
+
+                        ++prev_lvl;
+                        ++local_lvl;*/
+                    }
+                }
+            }
+
+            // Insert these edges into penalty buckets by their source position
+            for (auto const& [pos, e] : incoming)
+            {
+                max_pos = std::max(max_pos, pos);
+                penalty[pos].push_front({e, 0});
+                stage_edges.push_back(e);
+            }
+        }
+
+        // ensure all stage edges have an entry in crossings_per_edge (unaffected ones get count 0)
+        for (auto const& e : stage_edges)
+        {
+            bool found = false;
+            for (auto const& p : result.crossings_per_edge)
+            {
+                if (p.first == e)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                result.crossings_per_edge.emplace_back(e, 0);
+            }
+        }
+
+        return result;
     }
 
     void assign_duplicaton_costs()
@@ -793,20 +727,39 @@ class planarization_impl
         ntk.foreach_node(
             [&](const auto n)
             {
-                if (ntk.is_pi(n))
-                {
-                    duplication_cost[n] = 1u;
-                }
-                else
-                {
-                    ntk.foreach_fanin(n,
-                                      [&](const auto fi)
-                                      {
-                                          const auto fn = ntk.get_node(fi);
-                                          duplication_cost[n] += duplication_cost[fn];
-                                      });
-                }
+                // duplication_cost[n] = ntk.is_fanout(n) ? 0u : 1u;
+                duplication_cost[n] = 1u;
+                ntk.foreach_fanin(n,
+                                  [&](const auto fi)
+                                  {
+                                      const auto fn = ntk.get_node(fi);
+                                      duplication_cost[n] += duplication_cost[fn];
+                                  });
             });
+    }
+
+    uint32_t tfi_size_unique(mockturtle::node<Ntk> root)
+    {
+        std::deque<mockturtle::node<Ntk>>         stack;
+        std::unordered_set<mockturtle::node<Ntk>> visited;
+
+        stack.push_back(root);
+
+        while (!stack.empty())
+        {
+            auto n = stack.back();
+            stack.pop_back();
+
+            if (!visited.insert(n).second)
+            {
+                continue;
+            }
+
+            ntk.foreach_fanin(n, [&](auto const& f) { stack.push_back(ntk.get_node(f)); });
+        }
+
+        // If you want TFI excluding the root itself:
+        return visited.size();
     }
 
     [[nodiscard]] uint64_t gate_cross_cost() const noexcept
@@ -827,11 +780,11 @@ class planarization_impl
         {
             if (ps.buffer)
             {
-                gate_cross_cost = 61;
+                gate_cross_cost = 48;
             }
             else
             {
-                gate_cross_cost = 31;
+                gate_cross_cost = 17;
             }
         }
         return gate_cross_cost;
@@ -846,61 +799,456 @@ class planarization_impl
         }
         else
         {
-            levels_per_crossing = 14;
+            levels_per_crossing = 12;
         }
         return levels_per_crossing;
     }
 
-    [[nodiscard]] uint64_t compute_gate_cost(const uint32_t lvl)
+    [[nodiscard]] uint64_t compute_gate_cost(const std::vector<mockturtle::node<Ntk>>& level_v, const std::vector<mockturtle::node<Ntk>>& next_level_v, uint32_t lvl)
     {
-        const auto cross_item = crossing_ctn[lvl - 1];
+        const auto cross_item = ncross_fanins(level_v, next_level_v, lvl);
+
+        if (cross_item.n_crossings > 1000u)
+        {
+            return std::numeric_limits<uint64_t>::max();
+        }
 
         uint64_t gate_crossing_cost = 0;
         // add cost for all crossings
-        gate_crossing_cost += cross_item.crossings.size() * gate_cross_cost();
+        gate_crossing_cost += cross_item.n_crossings * gate_cross_cost();
         // add cost for all additional buffers
-        for (const auto& edge : cross_item.crossings_per_edge)
+        if (ps.buffer && cross_item.n_crossings > 0)
         {
-            auto ground_to_cover = cross_item.max_level - edge.second;
-            gate_crossing_cost += ground_to_cover * levels_per_crossing();
+            for (const auto& edge : cross_item.crossings_per_edge)
+            {
+                auto ground_to_cover = cross_item.max_level - edge.second;
+                gate_crossing_cost += ground_to_cover * levels_per_crossing();
+            }
         }
 
         return gate_crossing_cost;
     }
 
-    [[nodiscard]] virtual_pi_network<Ntk> run()
+    template <typename T>
+    uint32_t count_total_duplications(std::vector<T> const& v)
     {
-        // handle the decision-making
-        // iterate from PIs to POs
-        // depending on the cost of a crossing decide whether to use node duplication or gate insertion
-        // GATE: the cost of the gate crossing is determined by the following: the gates for the actual crossings and if
-        // buffering is enabled we also need to count the buffers, and we add additional fanouts, so we nede to mark
-        // also fanout trees
-        // DUPLICATION: The cost for this is determined by te fanin cone. When iterating form PIs to POs the cost for
-        // nodes can be iteratively updated. The structure of the network has to be also tracked. Because if the
-        // inserted node is inserted between two nodes which tied together fanin cones there has to be duplicated other
-        // structures as well.
-
-        // handle the duplications/insertions
-
-        // assign the cost for duplications in one sweep
-        assign_duplicaton_costs();
-
-        // analyze crossings for gate insertion
-        ncross_extended();
-
-        // in each level do the following
-        for (uint32_t lvl = 1u; lvl < ntk.depth() + 1; ++lvl)
+        std::unordered_map<T, uint32_t> freq;
+        for (auto const& x : v)
         {
-            // first compute the gate_cost for crossing_gate_planarization
-            const auto gate_cost = compute_gate_cost(lvl);
-            std::cout << "Level " << lvl << " gate cost: " << gate_cost << "\n";
-            // then compute orderings from node_duplication_planarization
-            // proceed with node_duplication_planarization through the lower levels while the cost is smaller than
-            // gate_cost
+            ++freq[x];
         }
 
-        virtual_pi_network virtual_ntk{ntk};
+        uint32_t dups = 0;
+        for (auto const& [val, count] : freq)
+        {
+            if (count > 1)
+            {
+                dups += (count - 1);
+            }
+        }
+        return dups;
+    }
+
+    template <typename T>
+    uint32_t duplication_total_cost(std::vector<T> const& v)
+    {
+        std::unordered_map<T, uint32_t> freq;
+        for (auto const& x : v)
+        {
+            ++freq[x];
+        }
+
+        uint32_t total_cost = 0;
+
+        for (auto const& [node, count] : freq)
+        {
+            if (count > 1)
+            {
+                const uint32_t extra = count - 1;
+                total_cost += extra * static_cast<uint32_t>(tfi_size_unique(node));
+            }
+        }
+
+        return total_cost;
+    }
+
+    template <typename T>
+    uint32_t duplication_tfi_cost(std::vector<T> const& level_v)
+    {
+        std::unordered_map<T, uint32_t> freq;
+        // collect duplicated nodes std::unordered_map<mockturtle::node<Ntk>, uint32_t> freq;
+        for (auto const& n : level_v)
+        {
+            ++freq[n];
+        }
+
+        std::vector<mockturtle::node<Ntk>> dup_nodes;
+        for (auto const& [n, c] : freq)
+        {
+            if (c > 1)
+            {
+                dup_nodes.push_back(n);
+            }
+        }
+
+        if (dup_nodes.empty())
+        {
+            return 0;
+        }
+
+        ntk.incr_trav_id();
+        auto const tid = ntk.trav_id();
+
+        std::unordered_set<mockturtle::node<Ntk>> frontier;
+
+        for (auto const& root : dup_nodes)
+        {
+            std::deque<std::pair<mockturtle::node<Ntk>, uint32_t>> stack;
+            stack.emplace_back(root, 0u);
+
+            while (!stack.empty())
+            {
+                auto const [n, depth] = stack.back();
+                stack.pop_back();
+
+                if (ntk.visited(n) == tid)
+                {
+                    continue;
+                }
+                ntk.set_visited(n, tid);
+
+                if (ntk.is_pi(n) || depth >= 10u)
+                {
+                    frontier.insert(n);
+                    continue;
+                }
+
+                ntk.foreach_fanin(n, [&](auto const& f) { stack.emplace_back(ntk.get_node(f), depth + 1u); });
+            }
+        }
+
+        uint32_t total_cost = 0;
+        for (auto const& n : frontier)
+        {
+            total_cost += static_cast<uint32_t>(tfi_size_unique(n));
+        }
+
+        return total_cost;
+    }
+
+    template <typename T>
+    uint32_t recombination(std::vector<T> const& level_v)
+    {
+        std::unordered_map<T, uint32_t> freq;
+        for (auto const& n : level_v)
+        {
+            ++freq[n];
+        }
+
+        std::vector<mockturtle::node<Ntk>> dup_nodes;
+        dup_nodes.reserve(freq.size());
+        for (auto const& [n, c] : freq)
+        {
+            if (c > 1)
+            {
+                dup_nodes.push_back(static_cast<mockturtle::node<Ntk>>(n));
+                std::cout << "Duplicated node: " << n << "tfi cost : " << tfi_size_unique(n) << std::endl;
+            }
+        }
+
+        if (dup_nodes.empty())
+        {
+            return 0;
+        }
+
+        std::unordered_map<mockturtle::node<Ntk>, uint32_t> fanout_count;
+        std::unordered_map<mockturtle::node<Ntk>, uint32_t> fanout_depth;
+
+        // For each duplicated root: bounded TFI (depth 10), skipping reconvergence within that root only.
+        for (auto const& root : dup_nodes)
+        {
+            ntk.incr_trav_id();
+            auto const tid = ntk.trav_id();
+
+            std::deque<std::pair<mockturtle::node<Ntk>, uint32_t>> stack;
+            stack.emplace_back(root, 0u);
+
+            while (!stack.empty())
+            {
+                auto const [n, depth] = stack.back();
+                stack.pop_back();
+
+                if (ntk.visited(n) == tid)
+                {
+                    continue; // reconvergent path within this root cone
+                }
+                ntk.set_visited(n, tid);
+
+                if (ntk.is_fanout(n))
+                {
+                    // this increments at most once per root due to trav_id
+                    auto const new_count = ++fanout_count[n];
+
+                    // since the network is balanced, any later encounter would have same depth anyway
+                    if (new_count == 1u)
+                    {
+                        fanout_depth.emplace(n, depth);
+                    }
+                }
+
+                if (ntk.is_pi(n) || depth >= 10u)
+                {
+                    continue;
+                }
+
+                ntk.foreach_fanin(n, [&](auto const& f) {
+                    stack.emplace_back(ntk.get_node(f), depth + 1u);
+                });
+            }
+        }
+
+        // printing
+        for (auto const& [n, count] : fanout_count)
+        {
+            auto const d = fanout_depth.at(n);
+            std::cout << "Fanout node " << n << " reached from " << count << " duplicated roots"
+                      << " , depth: " << d << "\n";
+        }
+
+        std::cout << "Width of vector: " << level_v.size() << std::endl;
+
+        uint32_t total_cost = 0;
+
+        return total_cost;
+    }
+
+    template <typename T>
+    void remove_duplications_keep_order_inline(std::vector<T>& v)
+    {
+        std::unordered_set<T> seen;
+        std::vector<T>        out;
+        out.reserve(v.size());
+
+        for (auto const& x : v)
+        {
+            if (seen.insert(x).second)  // true if inserted (not seen before)
+            {
+                out.push_back(x);
+            }
+        }
+
+        v = std::move(out);
+    }
+
+    template <typename T>
+    std::vector<T> remove_duplications_keep_order(const std::vector<T>& in)
+    {
+        std::unordered_set<T> seen;
+        std::vector<T>        out;
+        out.reserve(in.size());
+
+        for (auto const& x : in)
+        {
+            if (seen.insert(x).second)
+            {
+                out.push_back(x);
+            }
+        }
+
+        return out;
+    }
+
+    uint64_t count_level_crossings(uint32_t r0, uint32_t r1)
+    {
+        mockturtle::fanout_view<Ntk> fanout_ntk{ntk};
+        if (r0 >= fanout_ntk.depth() || r1 > fanout_ntk.depth() || r1 != r0 + 1)
+        {
+            return 0;
+        }
+
+        uint64_t              total = 0;
+        std::vector<uint64_t> penalty(fanout_ntk.rank_width(r1) + 1, 0);
+        uint64_t              max_pos = 0;
+
+        fanout_ntk.foreach_node_in_rank(r0,
+                                        [&](auto const& n)
+                                        {
+                                            std::vector<uint64_t> targets;
+                                            targets.reserve(ntk.fanout_size(n));
+
+                                            fanout_ntk.foreach_fanout(
+                                                n,
+                                                [&](auto const& fo)
+                                                {
+                                                    if (fanout_ntk.level(fo) == r1)  // ensure edge goes to r1
+                                                    {
+                                                        targets.push_back(fanout_ntk.rank_position(fo));
+                                                    }
+                                                });
+
+                                            for (const auto pos : targets)
+                                            {
+                                                for (auto k = pos + 1; k <= max_pos; ++k)
+                                                {
+                                                    total += penalty[k];
+                                                }
+                                            }
+
+                                            for (const auto pos : targets)
+                                            {
+                                                max_pos = std::max(max_pos, pos);
+                                                penalty[pos]++;
+                                            }
+                                        });
+
+        return total;
+    }
+
+    [[nodiscard]] virtual_pi_network<Ntk> run()
+    {
+        assign_duplicaton_costs();
+        // Initialize the POs with foreach_node to retain the rank_view order
+        std::vector<mockturtle::node<Ntk>> pos{};
+        pos.reserve(ntk.num_pos());
+        ntk.foreach_node(
+            [this, &pos](const auto n)
+            {
+                if (ntk.is_po(n))
+                {
+                    const auto po = ntk.get_node(n);
+                    if (std::find(pos.begin(), pos.end(), po) == pos.end())
+                    {
+                        pos.push_back(po);
+                    }
+                }
+            });
+
+        // Randomize the PO order
+        if (ps.po_order == planarization_params::output_order::RANDOM_PO_ORDER)
+        {
+            // Generate a random engine
+            static std::mt19937_64 generator(std::random_device{}());
+            // Shuffle the pos vector
+            std::shuffle(pos.begin(), pos.end(), generator);
+        }
+
+        // save the nodes of the next level
+        std::vector<mockturtle::node<Ntk>> next_level{};
+        next_level.reserve(pos.size());
+
+        // Process the first level
+        for (const auto& po : pos)
+        {
+            fis.clear();
+            compute_slice_delays(po);
+            next_level.push_back(po);
+        }
+
+        ntk_lvls.push_back(next_level);
+        next_level.clear();
+
+        next_level = compute_node_order();
+
+        // check if the final/PI level is reached
+        bool f_final_level = check_final_level(next_level);
+
+        uint32_t cross_lvl = 0;
+        // std::cout << "Num crossings" << count_level_crossings(5, 6) << std::endl;
+
+        bool once = true;
+        // Process all other levels
+        while (!next_level.empty() && !f_final_level)
+        {
+            // Count duplications in the level
+            auto dups     = count_total_duplications(next_level);
+
+            if (dups > 0)
+            {
+                // Here the first and last level are not considered
+                const auto lvl = ntk.depth() - ntk_lvls.size();
+                auto next_level_v = remove_duplications_keep_order(next_level);
+                auto dup_cost = duplication_total_cost(next_level);
+                auto cross_cost = compute_gate_cost(ntk_lvls[ntk_lvls.size()-1], next_level_v, lvl+1);
+
+                std::cout << "Duplications for level " << lvl << ": " << dups << std::endl;
+                std::cout << "Duplication cost: " << dup_cost << std::endl;
+                std::cout << "cross_cost: " << cross_cost << std::endl;
+
+                if (cross_cost < dup_cost*2)
+                {
+                    // recombination(next_level);
+                    /*uint64_t fanout_count = 0;
+                    ntk.foreach_node_in_rank(lvl-1,
+                                             [&](auto const& n)
+                                             {
+                                                 if (ntk.is_fanout(n))
+                                                 {
+                                                     fanout_count++;
+                                                 }
+                                             });
+                    std::cout << "Fanout count of preceding level: " << fanout_count << std::endl;*/
+
+                    std::cout << "Used Crossing gate\n";
+
+                    next_level = next_level_v;
+                    once = false;
+                }
+                cross_lvl = ntk.depth() - ntk_lvls.size();
+            }
+            // Push the level to the node array
+            ntk_lvls.push_back(next_level);
+            lvl_pairs.clear();
+
+            // Store the nodes of the next level
+            for (const auto& cur_node : next_level)
+            {
+                fis.clear();
+
+                // There is one slice in the H-Graph for each node in the level
+                compute_slice_delays(cur_node);
+            }
+            // Clear before starting computations on the next level
+            next_level.clear();
+            // Compute the next level
+            next_level = compute_node_order();
+            // Check if we are at the final level
+            f_final_level = check_final_level(next_level);
+        }
+        // Push the final level (PIs)
+        if (f_final_level)
+        {
+            ntk_lvls.push_back(next_level);
+        }
+
+        std::vector<std::vector<mockturtle::node<virtual_pi_network<Ntk>>>> ntk_lvls_new{};
+
+        /*for (uint32_t i = 0; i < ntk_lvls.size(); ++i)
+        {
+            auto dups = count_total_duplications(ntk_lvls[i]);
+
+            std::cout << "Duplications for level " << ntk_lvls.size() - i - 1 << ": " << dups << std::endl;
+
+            /*if (dups > 0)
+            {
+                // remove_duplications_keep_order( ntk_lvls[i] );
+                break;
+            }#1#
+        }*/
+
+        // create virtual pi network
+        auto virtual_ntk = create_virtual_pi_ntk_from_duplicated_nodes_with_keep_original_levels(
+            ntk, ntk_lvls, ntk_lvls_new, cross_lvl);
+
+        // the ntk_levels were created in reverse order
+        std::reverse(ntk_lvls_new.begin(), ntk_lvls_new.end());
+
+        // assign the ranks in the virtual network based on ntk_lvls_new
+        virtual_ntk.update_ranks();
+        virtual_ntk.set_all_ranks(ntk_lvls_new);
+
+        // restore possibly set signal names
+        restore_network_name(ntk, virtual_ntk);
+        restore_output_names(ntk, virtual_ntk);
 
         return virtual_ntk;
     }
