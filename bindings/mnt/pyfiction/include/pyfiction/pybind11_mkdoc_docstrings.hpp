@@ -5350,23 +5350,6 @@ Parameter ``nodes``:
 Returns:
     The vector of node pairs.)doc";
 
-static const char *__doc_fiction_detail_calculate_pairs_2 =
-R"doc(Calculates pairs of nodes from a given vector of nodes.
-
-This function takes a vector of nodes and returns a vector of node
-pairs. Each node pair consists of two nodes from the input vector and
-an optional vector of middle nodes. The delay of each node pair is
-initialized to infinity.
-
-Template parameter ``Ntk``:
-    The network type.
-
-Parameter ``nodes``:
-    The vector of nodes.
-
-Returns:
-    The vector of node pairs.)doc";
-
 static const char *__doc_fiction_detail_calculate_predecessor_gap =
 R"doc(Computes the gap between the fan-in node and its preceding node, i.e.,
 the node with a rank position one less than the current node. This
@@ -6171,7 +6154,7 @@ Returns:
     The constructed planar `virtual_pi_network` containing duplicated
     nodes with restored fanin and fanout relations.)doc";
 
-static const char *__doc_fiction_detail_create_virtual_pi_ntk_from_duplicated_nodes_2 =
+static const char *__doc_fiction_detail_create_virtual_pi_ntk_from_duplicated_nodes_with_keep_original_levels =
 R"doc(Constructs a planar `virtual_pi_network` based on duplicated nodes
 derived from the source network.
 
@@ -9031,40 +9014,11 @@ irrelevant for this algorithm.
 Template parameter ``Ntk``:
     Network type from which node types are drawn.)doc";
 
-static const char *__doc_fiction_detail_hgraph_node_2 =
-R"doc(Represents one node in the H-graph used for crossing minimization.
-
-For a node in level l of the input network, all possible orderings of
-its fanins from layer l−1 are enumerated. Each such ordering is
-represented by an H-graph node. The first and last fanins of the
-ordering are stored, since these determine the delay in the H-graph.
-The remaining fanins are placed in middle. Their mutual order is
-irrelevant for this algorithm.
-
-Template parameter ``Ntk``:
-    Network type from which node types are drawn.)doc";
-
 static const char *__doc_fiction_detail_hgraph_node_delay = R"doc(Specifies the delay value for the hgraph_node.)doc";
-
-static const char *__doc_fiction_detail_hgraph_node_delay_2 = R"doc(Specifies the delay value for the hgraph_node.)doc";
 
 static const char *__doc_fiction_detail_hgraph_node_fanin_it = R"doc(Index of the predecessor H-graph node.)doc";
 
-static const char *__doc_fiction_detail_hgraph_node_fanin_it_2 = R"doc(Index of the predecessor H-graph node.)doc";
-
 static const char *__doc_fiction_detail_hgraph_node_hgraph_node =
-R"doc(Constructs an H-graph node with given first and last fanins and delay.
-
-Parameter ``first``:
-    The first (leftmost) fanin in the ordering.
-
-Parameter ``last``:
-    The last (rightmost) fanin in the ordering.
-
-Parameter ``delay_value``:
-    The delay value for the node.)doc";
-
-static const char *__doc_fiction_detail_hgraph_node_hgraph_node_2 =
 R"doc(Constructs an H-graph node with given first and last fanins and delay.
 
 Parameter ``first``:
@@ -10364,6 +10318,10 @@ subsequent delay calculations.
 Parameter ``nd``:
     Node in the H-graph.)doc";
 
+static const char *__doc_fiction_detail_planarization_impl_count_level_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_count_total_duplications = R"doc()doc";
+
 static const char *__doc_fiction_detail_planarization_impl_crossing_ctn =
 R"doc(The container saving all crossings in order to compute the cost for
 inserting gate crossings.)doc";
@@ -10377,6 +10335,10 @@ static const char *__doc_fiction_detail_planarization_impl_crossing_item_e1 = R"
 static const char *__doc_fiction_detail_planarization_impl_crossing_item_e2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_planarization_impl_crossing_item_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_duplication_tfi_cost = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_duplication_total_cost = R"doc()doc";
 
 static const char *__doc_fiction_detail_planarization_impl_fanout_ntk = R"doc(The fanout_view of the input network.)doc";
 
@@ -10414,7 +10376,7 @@ static const char *__doc_fiction_detail_planarization_impl_levels_per_crossing =
 
 static const char *__doc_fiction_detail_planarization_impl_lvl_pairs = R"doc(The currently node_pairs used in the current level.)doc";
 
-static const char *__doc_fiction_detail_planarization_impl_ncross_extended = R"doc()doc";
+static const char *__doc_fiction_detail_planarization_impl_ncross_fanins = R"doc()doc";
 
 static const char *__doc_fiction_detail_planarization_impl_ntk = R"doc(The input network.)doc";
 
@@ -10422,21 +10384,37 @@ static const char *__doc_fiction_detail_planarization_impl_planarization_impl = 
 
 static const char *__doc_fiction_detail_planarization_impl_ps = R"doc(The stats of the planarization class.)doc";
 
+static const char *__doc_fiction_detail_planarization_impl_recombination = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_remove_duplications_keep_order = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_remove_duplications_keep_order_inline = R"doc()doc";
+
 static const char *__doc_fiction_detail_planarization_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_planarization_impl_stage_result = R"doc()doc";
 
-static const char *__doc_fiction_detail_planarization_impl_stage_result_crossings = R"doc()doc";
-
 static const char *__doc_fiction_detail_planarization_impl_stage_result_crossings_per_edge = R"doc()doc";
-
-static const char *__doc_fiction_detail_planarization_impl_stage_result_crossings_per_level = R"doc()doc";
-
-static const char *__doc_fiction_detail_planarization_impl_stage_result_edges = R"doc()doc";
 
 static const char *__doc_fiction_detail_planarization_impl_stage_result_max_level = R"doc()doc";
 
-static const char *__doc_fiction_detail_planarization_impl_stage_result_unaffected = R"doc()doc";
+static const char *__doc_fiction_detail_planarization_impl_stage_result_n_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_old = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_old_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_old_crossings_per_edge = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_old_crossings_per_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_old_edges = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_old_max_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_stage_result_old_unaffected = R"doc()doc";
+
+static const char *__doc_fiction_detail_planarization_impl_tfi_size_unique = R"doc()doc";
 
 static const char *__doc_fiction_detail_plane_impl =
 R"doc(Implements the general planar layout generation algorithm.
@@ -17338,6 +17316,20 @@ Template parameter ``Dist``:
 
 static const char *__doc_fiction_manhattan_distance_functor_manhattan_distance_functor = R"doc()doc";
 
+static const char *__doc_fiction_median_sweep_pos_to_pis =
+R"doc(Perform a single median-based sweep from outputs toward inputs.
+
+The procedure mirrors Graphviz's downward pass: for each rank r (from
+top to bottom), it reorders the nodes in rank r using the medians of
+their neighbors in rank r + 1. Only one sweep is performed; no
+transposition or iterative refinement is done.
+
+Template parameter ``Ntk``:
+    Balanced logic network type with rank accessors.
+
+Parameter ``ntk``:
+    Network to reorder in place.)doc";
+
 static const char *__doc_fiction_mincross =
 R"doc(Reimplementation of Graphviz's `mincross` algorithm for edge crossing
 minimization. This function reorders nodes in a leveled logic network
@@ -20176,6 +20168,354 @@ R"doc(Standard constructor with forward reference.
 Parameter ``range``:
     Begin and end iterator pair.)doc";
 
+static const char *__doc_fiction_ranked_buffer_insertion =
+R"doc(! Insert buffers and splitters for the AQFP technology.
+
+In the AQFP technology, (1) logic gates can only have one fanout. If
+more than one fanout is needed, a splitter has to be inserted in
+between, which also takes one clocking phase (counted towards the
+network depth). (2) All fanins of a logic gate have to arrive at the
+same time (be at the same level). If one fanin path is shorter,
+buffers have to be inserted to balance it. Buffers and splitters are
+essentially the same component in this technology.
+
+With a given level assignment to all gates in the network, the minimum
+number of buffers needed is determined. This class implements
+algorithms to count such "irredundant buffers" and to insert them to
+obtain a buffered network. Moreover, as buffer optimization is
+essentially a problem of obtaining a good level assignment, this class
+also implements algorithms to obtain an initial, legal assignment
+using scheduling algorithms and to further adjust and optimize it.
+
+This class provides two easy-to-use top-level functions which wrap all
+the above steps together: `run` and `dry_run`. In addition, the
+following interfaces are kept for more fine-grained usage: - Query the
+current level assignment (`level`, `depth`) - Count irredundant
+buffers based on the current level assignment (`count_buffers`,
+`num_buffers`) - Optimize buffer count by scheduling (`schedule`,
+`ASAP`, `ALAP`) and by adjusting the level assignment with chunked
+movement (`optimize`) - Dump the resulting network into a network type
+which provides representation for buffers (`dump_buffered_network`)
+
+\verbatim embed:rst
+
+Example
+
+.. code-block:: c++
+
+mig_network mig = ...
+
+buffer_insertion_params ps; ps.scheduling =
+buffer_insertion_params::ALAP; ps.optimization_effort =
+buffer_insertion_params::one_pass;
+
+buffer_insertion buffering( mig, ps ); buffered_mig_network
+buffered_mig; auto const num_buffers = buffering.run( buffered_mig );
+
+std::cout << num_buffers << std::endl; assert( verify_aqfp_buffer(
+buffered_mig, ps.assume ) ); write_verilog( buffered_mig, "buffered.v"
+); \endverbatim
+
+**Required network functions:** - `foreach_node` - `foreach_gate` -
+`foreach_pi` - `foreach_po` - `foreach_fanin` - `is_pi` -
+`is_constant` - `get_node` - `fanout_size` - `size` - `set_visited` -
+`set_value`)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_ALAP =
+R"doc(! ALAP scheduling.
+
+ALAP should follow right after ASAP (i.e., initialization) without
+other optimization in between.)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_ALAP_depth = R"doc(! ALAP depth-optimal sheduling */)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_ASAP = R"doc(! ASAP scheduling */)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_ASAP_depth =
+R"doc(! ASAP optimal-depth scheduling
+
+ASAP_depth should follow right after ALAP_depth (i.e.,
+initialization).
+
+Parameter ``try_regular``:
+    tries to insert balanced trees when sufficient slack.)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_analyze_chunk_down = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_analyze_chunk_up = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_are_close = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_chunk = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_chunk_benefits = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_chunk_id = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_chunk_input_interfaces = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_chunk_members = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_chunk_output_interfaces = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_chunk_po_interfaces = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_chunk_slack = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_cleanup_interfaces = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_compute_levels_ALAP = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_compute_levels_ALAP_depth = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_compute_levels_ASAP = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_compute_mobility_ASAP = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_count_buffers =
+R"doc(! Count the number of buffers needed at the fanout of each gate
+according to the current level assignment.
+
+This function must be called after level (re-)assignment and before
+querying `num_buffers`.)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_count_buffers_2 = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_count_edges = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_create_buffer_chain = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_depth =
+R"doc(! Network depth considering AQFP buffers/splitters.
+
+Should be equal to `max( po_level(i) - 1 )`.
+
+This is the number of phases from the previous-stage register to the
+next-stage register, including the depth of the previous-stage
+register (i.e., from one register input to the next register input).)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_depth_2 = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_dry_run =
+R"doc(! Count the number of buffers without dumping the result into a
+buffered network.
+
+This function saves some runtime for dumping the resulting network and
+allows users to experiment on the algorithms with new network types
+whose corresponding buffered_network are not implemented yet.
+
+`pLevels` and `pPOLevels` can be used to create another
+`buffer_insertion` instance of the same state (current schedule),
+which also define a unique buffered network. (Set `ps.scheduling =
+provided` and `ps.optimization_effort = none`)
+
+Returns:
+    The number of buffers in the resulting network)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_dump_buffered_network =
+R"doc(! Dump buffered network
+
+After level assignment, (optimization), and buffer counting, this
+method can be called to dump the resulting buffered network.)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_fanout_information = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_fanout_information_extrefs = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_fanout_information_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_fanout_information_num_edges = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_fanout_information_relative_depth = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_find_and_move_chunks = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_get_buffer_at_relative_depth = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_insert_extref = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_insert_fanout = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_io_interface = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_io_interface_c = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_io_interface_o = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_is_acceptable_ci_lvl = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_is_fixed = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_is_ignored = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_is_scheduled_ASAP = R"doc(! The chosen schedule is ASAP */)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_is_scheduled_ASAP_2 = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_level = R"doc(! Level of node `n` considering buffer/splitter insertion. */)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_levels = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_levels_2 = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_lowest_spot = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_ntk = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_num_buffers =
+R"doc(! The total number of buffers in the network under the current level
+assignment.)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_num_buffers_2 =
+R"doc(! The number of buffers between `n` and all of its fanouts under the
+current level assignment.)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_num_buffers_3 = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_num_splitter_levels = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_num_splitters = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_optimize =
+R"doc(! Optimize with chunked movement using the specified optimization
+policy. */)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_outdated = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params = R"doc(! Parameters for (AQFP) buffer insertion.)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_assume = R"doc(! Technology assumptions. */)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_max_chunk_size = R"doc(! The maximum size of a chunk. */)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_optimization_effort = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling_policy =
+R"doc(! The scheduling strategy to get the initial depth assignment. -
+`provided` = An initial level assignment is given in the constructor,
+thus no scheduling is performed. It is the user's responsibility to
+ensure that the provided assignment is legal. - `ASAP` = Classical As-
+Soon-As-Possible scheduling - `ASAP_depth` = As-Soon-As-Possible
+scheduling with depth optimality - `ALAP` = ASAP (to obtain depth)
+followed by As-Late-As-Possible scheduling - `ALAP_depth` = As-Late-
+As-Possible scheduling with depth optimality - `better` = ASAP
+followed by ALAP, then count buffers for both assignments and choose
+the better one - `better_depth` = ALAP_depth followed by ASAP_depth,
+then count buffers for both assignments and choose the better one)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling_policy_ALAP = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling_policy_ALAP_depth = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling_policy_ASAP = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling_policy_ASAP_depth = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling_policy_better = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling_policy_better_depth = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling_policy_provided = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_65_3 =
+R"doc(! The level of optimization effort. - `none` = No optimization -
+`one_pass` = Try to form a chunk starting from each gate, once for all
+gates - `until_sat` = Iterate over all gates until no more beneficial
+chunk movement can be found - `optimal` = Use an SMT solver to find
+the global optimal)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_65_3_none = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_65_3_one_pass = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_65_3_optimal = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_65_3_until_sat = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_pi_levels = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_po_interface = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_po_interface_c = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_po_interface_o = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_po_level =
+R"doc(! Level of the `idx`-th PO (imaginary dummy PO node, not counted in
+depth). */)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_po_levels = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_po_levels_2 = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_ps = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_pseudo_move = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_ranked_buffer_insertion = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_ranked_buffer_insertion_2 = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_recruit = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_recruit_fanins = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_recruit_fanouts = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_remove_buffer_and_splitter_chains = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_remove_buffer_chains = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_remove_buffer_chains_rec = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_run =
+R"doc(! Insert buffers and obtain a buffered network.
+
+Parameter ``bufntk``:
+    An empty network of an appropriate buffered network type to to
+    store the buffer-insertion result
+
+Returns:
+    The number of buffers in the resulting network)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_run_2 =
+R"doc(! Insert buffers and obtain a buffered network.
+
+It is suggested to write the `pi_levels` information into a dumped
+file for easier recovery of the scheduled phase assignment.
+
+Parameter ``bufntk``:
+    An empty network of an appropriate buffered network type to to
+    store the buffer-insertion result
+
+Parameter ``pi_lvls``:
+    A vector which will store the PI level assignment (it is
+    recommended to store this information together with the buffered
+    network)
+
+Returns:
+    The number of buffers in the resulting network)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_schedule =
+R"doc(! Obtain the initial level assignment using the specified scheduling
+policy */)doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_set_scheduling_policy = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_single_gate_movement = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_start_id = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_timeframes = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_update_fanout_info = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_update_fanout_info_2 = R"doc()doc";
+
 static const char *__doc_fiction_read_fgl_layout =
 R"doc(Reads a gate-level layout from an FGL file provided as an input
 stream.
@@ -22902,9 +23242,33 @@ static const char *__doc_fiction_technology_network_is_xor3 = R"doc()doc";
 
 static const char *__doc_fiction_technology_network_is_xor_and = R"doc()doc";
 
+static const char *__doc_fiction_technology_network_replace_in_node =
+R"doc(Replaces occurrences of `old_node` in the fanin list of node `n` by
+`new_signal`. Updates fanout ref-counts and fires on_modified events.
+
+@note This is a linear-time operation in the fanin size of `n` and
+does not preserve any hashing (technology_network has hashing disabled
+anyway).)doc";
+
+static const char *__doc_fiction_technology_network_replace_in_outputs =
+R"doc(Replaces occurrences of `old_node` in all primary outputs by
+`new_signal`. Updates fanout ref-counts accordingly.)doc";
+
 static const char *__doc_fiction_technology_network_substitute_po_signals =
 R"doc(Adds additional buffer nodes for each primary output that does not
 already point to a buffer.)doc";
+
+static const char *__doc_fiction_technology_network_take_out_node =
+R"doc(Takes node `n` out of the network by disconnecting all of its outgoing
+edges.
+
+This does not physically erase the node from storage (mockturtle-
+style). All occurrences of `n` in fanin lists and primary outputs are
+rewritten to constant 0, and fanout ref-counts are updated
+accordingly.
+
+Preconditions: - `n` must not be a constant. - `n` must not be a CI/PI
+(callers should avoid removing PIs).)doc";
 
 static const char *__doc_fiction_technology_network_technology_network = R"doc()doc";
 
