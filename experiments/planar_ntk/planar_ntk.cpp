@@ -110,7 +110,7 @@ int main()  // NOLINT
                          "eq (ortho_p)"};
 
     experiments::experiment<std::string, std::string, uint32_t, uint32_t, uint64_t, bool, uint32_t, uint32_t, uint64_t,
-                            double, bool>
+                            double, std::string>
         placement_routing_exp{"orthogonal_planar_pr",
                               "benchmark",
                               "pr_algorithm",
@@ -125,7 +125,7 @@ int main()  // NOLINT
                               "new success"};
 
     // For all fiction benchmarks
-    static constexpr uint64_t bench_select = fiction_experiments::xor2_f;
+    static constexpr uint64_t bench_select = fiction_experiments::parity;
 
     for (const auto& benchmark : fiction_experiments::all_benchmarks(bench_select))
     {
@@ -342,12 +342,14 @@ int main()  // NOLINT
 
         uint32_t width_new_pr = 0u, height_new_pr = 0u;
         uint64_t area_new_pr    = 0ull;
-        bool     success_new_pr = true;
+        bool     success_new_pr = false;
 
         // Track % area decrease (positive means new area is smaller). If old run failed or old area is 0, store 0.
         double area_decrease_old_to_new_percent = 0.0;
 
         std::string pr_algo_name;
+
+        std::string eq_result{};
 
         if (use_plane_pr)
         {
@@ -361,17 +363,29 @@ int main()  // NOLINT
                 std::tie(width_old_pr, height_old_pr, area_old_pr) = dims_from_layout(layout_plane_old);
                 std::tie(width_new_pr, height_new_pr, area_new_pr) = dims_from_layout(layout_plane_new);
 
-                auto eq_pr = mockturtle::equivalence_checking(
-                    *fiction::virtual_miter<mockturtle::klut_network>(benchmark_network, layout_plane_old), {},
-                    &st_eq);
+                const auto eq_pr = fiction::equivalence_checking(duplication_planarized_ntk, layout_plane_old);
 
-                std::cout << "Equivalence plane PR: " << *eq_pr << "\n";
+                eq_result = eq_pr == fiction::eq_type::STRONG ? "STRONG" :
+                            eq_pr == fiction::eq_type::WEAK   ? "WEAK" :
+                                                                "NO";
+
+                const auto miter = mockturtle::miter<mockturtle::klut_network>(full_planarized_network, layout_plane_new);
+                bool       eq = false;
+                if (miter)
+                {
+                    mockturtle::equivalence_checking_stats st;
+
+                    const auto ce = mockturtle::equivalence_checking(*miter, {}, &st);
+                    if (ce.has_value())
+                    {
+                        eq            = *ce;
+                    }
+                }
+
+                std::cout << "eq val: " << eq << "\n";
 
                 success_old_pr = true;
-                if (!eq_pr)
-                {
-                    success_new_pr = false;
-                }
+                success_new_pr = true;
 
                 area_decrease_old_to_new_percent =
                     (area_old_pr > 0ull) ?
@@ -422,8 +436,7 @@ int main()  // NOLINT
         }
 
         placement_routing_exp(benchmark, pr_algo_name, width_old_pr, height_old_pr, area_old_pr, success_old_pr,
-                              width_new_pr, height_new_pr, area_new_pr, area_decrease_old_to_new_percent,
-                              success_new_pr);
+                              width_new_pr, height_new_pr, area_new_pr, area_decrease_old_to_new_percent, eq_result);
         placement_routing_exp.save();
         placement_routing_exp.table();
     }
