@@ -265,6 +265,15 @@ class static_depth_view<Ntk, NodeCostFn, false> : public Ntk
     }
 
     /**
+     * @return Whether the level of a node is stored in the `static_depth_view`. This can be false if the node was added
+     * after the last call to `update_levels` and `on_add` was not called for this node or the node is dangling.
+     */
+    bool has_level(node const& n) const
+    {
+        return levels.contains(n);
+    }
+
+    /**
      * @return If a node is on the critical path.
      */
     bool is_on_critical_path(node const& n) const

@@ -1163,9 +1163,14 @@ public:
       buffers[_ntk.get_constant( true )].emplace_back( 1, bufntk.get_constant( true ) );
     }
 
+    _ntk.foreach_pi(
+        [&](auto const& n)
+        {
+            node_to_signal[n] = bufntk.create_pi();
+        });
+
     /* PIs */
     _ntk.foreach_pi( [&]( auto const& n ) {
-      node_to_signal[n] = bufntk.create_pi();
       create_buffer_chain( bufntk, buffers, n, node_to_signal[n] );
     } );
 

@@ -632,7 +632,8 @@ class mutable_rank_view<Ntk, false> : public fiction::static_depth_view<Ntk>
         fiction::static_depth_view<Ntk>::foreach_node(
             [this](auto const& n)
             {
-                if (!this->is_constant(n))
+                // skip constant and nodes where no level coule be computed (dangling nodes), so if no this->level(n) exists
+                if (!this->is_constant(n) && this->has_level(n))
                 {
                     insert_in_rank(n);
                 }
