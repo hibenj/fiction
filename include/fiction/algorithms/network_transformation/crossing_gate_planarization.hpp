@@ -319,7 +319,7 @@ class crossing_gate_planarization_impl
             }
 
             auto     last           = initial;
-            uint32_t crossing_depth = ps.xor_gates ? 3u : 12u;
+            uint32_t crossing_depth = ps.xor_gates ? 4u : 14u;
 
             for (uint32_t j = 0; j < crossing_depth; ++j)
             {
@@ -343,17 +343,18 @@ class crossing_gate_planarization_impl
             auto fo1 = ntk_dest.create_buf(a);
             auto fo2 = ntk_dest.create_buf(b);
             // small buffer chain on 'a' for the first partial path
-            auto a_buf2 = simple_buf_chain(fo1, 2);
+            auto a_buf2 = simple_buf_chain(fo1, 3);
 
             // core term: NOT(a AND b)
             auto core = ntk_dest.create_and(fo1, fo2);
             core      = ntk_dest.create_not(core);
+            core      = ntk_dest.create_buf(core);
 
             // first partial: a_buf2 AND core
             auto p_a = ntk_dest.create_and(a_buf2, core);
 
             // small buffer chain on 'b' for the second partial path
-            auto b_buf2 = simple_buf_chain(fo2, 2);
+            auto b_buf2 = simple_buf_chain(fo2, 3);
             auto p_b    = ntk_dest.create_and(b_buf2, core);
 
             // final OR
@@ -365,6 +366,7 @@ class crossing_gate_planarization_impl
             // core = NOT(a AND b)
             auto core = ntk_dest.create_and(a, b);
             core      = ntk_dest.create_not(core);
+            core     = ntk_dest.create_buf(core);
 
             // partials: a AND core, b AND core
             auto p_a = ntk_dest.create_and(a, core);
@@ -398,17 +400,18 @@ class crossing_gate_planarization_impl
             {
                 if (ps.buffer)
                 {
-                    sig3 = ntk_dest.create_buf(sig1);
+                    sig3 = simple_buf_chain(sig1, 2);
                 }
 
                 auto c0 = ntk_dest.create_xor(sig1, sig2);
+                c0 = ntk_dest.create_buf(c0);
 
                 mockturtle::signal<Ntk> c1{};
                 mockturtle::signal<Ntk> c2{};
 
                 if (sig3)
                 {
-                    sig2 = ntk_dest.create_buf(sig2);
+                    sig2 = simple_buf_chain(sig2, 2);
                     c1   = ntk_dest.create_xor(sig3, c0);
                     c2   = ntk_dest.create_xor(c0, sig2);
                 }
@@ -428,14 +431,36 @@ class crossing_gate_planarization_impl
                 mockturtle::signal<Ntk> ca1{};
                 mockturtle::signal<Ntk> ca2{};
 
+                mockturtle::signal<Ntk> fo0{};
+                mockturtle::signal<Ntk> fo1{};
+                mockturtle::signal<Ntk> fo2{};
+                mockturtle::signal<Ntk> fo3{};
+
                 if (ps.buffer)
                 {
-                    sig3 = simple_buf_chain(sig1, 6);
+                    sig3 = simple_buf_chain(sig1, 7);
                     c0   = buffered_xor_gate(sig1, sig2);
                 }
                 else
                 {
-                    c0 = xor_decomposition_gate(sig1, sig2);
+                    fo0 = ntk_dest.create_buf(sig1);
+                    // core = NOT(a AND b)
+                    auto core = ntk_dest.create_and(sig1, sig2);
+                    sig2 = ntk_dest.create_buf(sig2);
+                    fo1 = ntk_dest.create_buf(fo0);
+                    core      = ntk_dest.create_not(core);
+                    core     = ntk_dest.create_buf(core);
+                    fo2 = ntk_dest.create_buf(sig2);
+
+                    // partials: a AND core, b AND core
+                    auto p_a = ntk_dest.create_and(fo0, core);
+                    auto p_b = ntk_dest.create_and(sig2, core);
+
+                    // OR of partials
+                    c0 = ntk_dest.create_or(p_a, p_b);
+                    c0 = ntk_dest.create_buf(c0);
+                    fo3 = ntk_dest.create_buf(c0);
+                    c0 = ntk_dest.create_buf(c0);
                 }
 
                 mockturtle::signal<Ntk> c1{};
@@ -444,14 +469,14 @@ class crossing_gate_planarization_impl
                 if (ps.buffer)
                 {
                     c0 = ntk_dest.create_buf(c0);
-                    sig2 = simple_buf_chain(sig2, 6);
+                    sig2 = simple_buf_chain(sig2, 7);
                     c1   = buffered_xor_gate(sig3, c0);
                     c2   = buffered_xor_gate(c0, sig2);
                 }
                 else
                 {
-                    c1 = xor_decomposition_gate(sig1, c0);
-                    c2 = xor_decomposition_gate(c0, sig2);
+                    c1 = xor_decomposition_gate(fo1, fo3);
+                    c2 = xor_decomposition_gate(c0, fo2);
                 }
 
                 // update mapping for future chaining
