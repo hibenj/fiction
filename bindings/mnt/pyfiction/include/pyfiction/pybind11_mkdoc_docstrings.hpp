@@ -10340,6 +10340,30 @@ static const char *__doc_fiction_detail_placement_info_current_po = R"doc(The in
 
 static const char *__doc_fiction_detail_placement_info_node2pos = R"doc(Mapping of nodes to their positions in the layout.)doc";
 
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl_available_fanouts = R"doc(Queue map of available fanouts.)doc";
+
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl_fanout_node_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl_fanout_ntk = R"doc(Fanout view of the network.)doc";
+
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl_fanout_tree_depth = R"doc()doc";
+
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl_generate_breadth_tree = R"doc()doc";
+
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl_generate_fanout_tree = R"doc()doc";
+
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl_get_fanout = R"doc()doc";
+
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl_ntk = R"doc(Input network.)doc";
+
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl_planar_fanout_substitution_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl_ps = R"doc(Parameters controlling how fanout substitution is performed.)doc";
+
+static const char *__doc_fiction_detail_planar_fanout_substitution_impl_run = R"doc()doc";
+
 static const char *__doc_fiction_detail_planarization_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_planarization_impl_assign_duplicaton_costs = R"doc()doc";
@@ -19203,6 +19227,53 @@ Parameter ``node2pos``:
 
 Returns:
     Signal to the newly placed gate in `lyt`.)doc";
+
+static const char *__doc_fiction_planar_fanout_substitution =
+R"doc(Substitutes high-output degrees in a logic network with fanout nodes
+that compute the identity function. For this purpose, `create_buf` is
+utilized. Therefore, `NtkDest` should support identity nodes. If it
+does not, no new nodes will in fact be created. In either case, the
+returned network will be logically equivalent to the input one.
+
+The process is rather naive with two possible strategies to pick from:
+breath-first and depth-first. The former creates partially balanced
+fanout trees while the latter leads to fanout chains. Further
+parameterization includes thresholds for the maximum number of output
+each node and fanout is allowed to have.
+
+The returned network is newly created from scratch because its type
+`NtkDest` may differ from `NtkSrc`.
+
+@note The physical design algorithms natively provided in fiction do
+not require their input networks to be fanout-substituted. If that is
+necessary, they will do it themselves. Providing already substituted
+networks does however allow for the control over maximum output
+degrees.
+
+Template parameter ``Ntk``:
+    Type of the input logic network.
+
+Parameter ``ntk_src``:
+    The input logic network.
+
+Parameter ``ps``:
+    Parameters.
+
+Returns:
+    A fanout-substituted logic network of type `NtkDest` that is
+    logically equivalent to `ntk_src`.)doc";
+
+static const char *__doc_fiction_planar_fanout_substitution_params = R"doc(Parameters for the fanout substitution algorithm.)doc";
+
+static const char *__doc_fiction_planar_fanout_substitution_params_degree = R"doc(Maximum output degree of each fan-out node.)doc";
+
+static const char *__doc_fiction_planar_fanout_substitution_params_seed =
+R"doc(Seed used for random substitution, generated randomly if not
+specified.)doc";
+
+static const char *__doc_fiction_planar_fanout_substitution_params_threshold =
+R"doc(Maximum number of outputs any gate is allowed to have before
+substitution applies.)doc";
 
 static const char *__doc_fiction_planar_layout_from_network_embedding_params = R"doc(Parameters for the planar layout from network embedding algorithm.)doc";
 
