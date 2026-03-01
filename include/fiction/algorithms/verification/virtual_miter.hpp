@@ -92,6 +92,8 @@ template <typename NtkDest, typename NtkSrc1, typename NtkSrc2>
     // handle (delete and remap) virtual primary inputs
     const NtkSrc1 ntk1 = detail::handle_virtual_pis(ntk1_in);
     const NtkSrc2 ntk2 = detail::handle_virtual_pis(ntk2_in);
+    fiction::debug::write_dot_network(ntk1, "ntk1");
+    fiction::debug::write_dot_network(ntk2, "ntk2");
 
     // both networks must have same number of inputs and outputs
     if ((ntk1.num_pis() != ntk2.num_pis()) || (ntk1.num_pos() != ntk2.num_pos()))
