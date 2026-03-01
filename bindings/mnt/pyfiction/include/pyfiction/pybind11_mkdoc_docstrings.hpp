@@ -9607,6 +9607,63 @@ static const char *__doc_fiction_detail_new_gate_location_NONE = R"doc(Do not ch
 
 static const char *__doc_fiction_detail_new_gate_location_SRC = R"doc(Check if the source tile is empty.)doc";
 
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_add_combination = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_compute_slice_delays =
+R"doc(A "slice" describes one vertical layer in the H-graph. It is created
+by adding all possible combinations of a `node_pair` to the H-graph of
+the level. These combinations are formed by selecting pairs of nodes
+from the fan-ins of the input node: - If the input node has only one
+fan-in, it is treated as a single combination. - If the input node has
+two fan-ins, there are two possible combinations.
+
+Each `node_pair` consists of a first and second element. The objective
+is to find an ordering of node pairs that maximizes the instances
+where the first element of a node_pair matches the second element of
+the preceding node_pair. This ordering is given as a linked list.
+
+This function computes the optimal ordering by calculating delays as
+follows: - All combinations of node pairs are iteratively added to a
+linked list. - For each combination, the first element of the current
+node_pair is compared with the last element of the preceding
+node_pairs. - If a connection exists between two node_pairs, the delay
+increases by 1; otherwise, it increases by 2. The default delay for
+the first node is 1. - If a node_pair lacks a connection, and its
+updated delay (increased by 2) is less than the existing delay, the
+node_pair's delay is updated accordingly.
+
+Processed node_pairs are stored in the `lvl_pairs` member for
+subsequent delay calculations.
+
+Parameter ``nd``:
+    Node in the H-graph.)doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_insert_if_not_first =
+R"doc(Inserts a node into a vector if it is unique.
+
+This function inserts a node into a vector only if the vector is empty
+or the node is not equal to the first element of the vector.
+
+Parameter ``node``:
+    The node to be inserted.
+
+Parameter ``vec``:
+    The vector to insert the node into.)doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_lvl_pairs = R"doc(The currently node_pairs used in the current level.)doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_node_duplication_planarization_f_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_ntk_lvls = R"doc(The network stored as levels.)doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_num_dupl_nodes =
+R"doc(Holds the number of duplicated nodes. Functions as iterator for saving
+new nodes.)doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_ps = R"doc(The stats of the node_duplication class.)doc";
+
 static const char *__doc_fiction_detail_node_duplication_planarization_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_node_duplication_planarization_impl_compute_slice_delays =
@@ -16460,6 +16517,39 @@ static const char *__doc_fiction_hexagonalization_stats_x_size = R"doc(Layout wi
 
 static const char *__doc_fiction_hexagonalization_stats_y_size = R"doc(Layout height.)doc";
 
+static const char *__doc_fiction_hgraph_node_f =
+R"doc(Represents one node in the H-graph used for crossing minimization.
+
+For a node in level l of the input network, all possible orderings of
+its fanins from layer l−1 are enumerated. Each such ordering is
+represented by an H-graph node. The first and last fanins of the
+ordering are stored, since these determine the delay in the H-graph.
+The remaining fanins are placed in middle. Their mutual order is
+irrelevant for this algorithm.
+
+Template parameter ``Ntk``:
+    Network type from which node types are drawn.)doc";
+
+static const char *__doc_fiction_hgraph_node_f_delay = R"doc(Specifies the delay value for the hgraph_node_f.)doc";
+
+static const char *__doc_fiction_hgraph_node_f_fanin_it = R"doc(Index of the predecessor H-graph node.)doc";
+
+static const char *__doc_fiction_hgraph_node_f_hgraph_node_f =
+R"doc(Constructs an H-graph node with given first and last fanins and delay.
+
+Parameter ``n``:
+    $Parameter ``first``:
+
+The first (leftmost) fanin in the ordering.
+
+Parameter ``last``:
+    The last (rightmost) fanin in the ordering.
+
+Parameter ``delay_value``:
+    The delay value for the node.)doc";
+
+static const char *__doc_fiction_hgraph_node_f_root = R"doc(The root node.)doc";
+
 static const char *__doc_fiction_high_degree_fanin_exception =
 R"doc(Exception class that can be thrown if some network exceeds a legal
 number of fanins.)doc";
@@ -17734,6 +17824,46 @@ Parameter ``ps``:
 
 Returns:
     A planarized virtual_pi_network.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f =
+R"doc(Implements a planarization mechanism for networks from the paper
+\"Fabricatable Interconnect and Molecular QCA Circuits\" by Amitabh
+Chaudhary, Danny Ziyi Chen, Xiaobo Sharon Hu, Michael T. Niemier,
+Ramprasad Ravichandran and Kevin Whitton in IEEE Transactions on
+Computer-Aided Design of Integrated Circuits and Systems, Volume 26,
+2007.
+
+The planarization achieved by this function solves the Node
+Duplication Crossing Minimization (NDCE) problem by finding the
+shortest x-y path in the H-graph for every level in the network. An
+H-graph describes edge relations between two levels in a network, with
+one level assumed as fixed, starting at the Primary Outputs (POs). By
+finding the shortest path from the source (x) to the sink (y) in this
+H-graph, an optimal solution for the NDCE problem for each level is
+found. The function traverses from the Primary Outputs (POs) towards
+the Primary Inputs (PIs).
+
+Template parameter ``Ntk``:
+    Source network type.
+
+Parameter ``ntk``:
+    Source network to be utilized for the planarization.
+
+Parameter ``ps``:
+    Node duplication parameters used in the computation.
+
+Returns:
+    A planarized virtual_pi_network.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params = R"doc(Parameters for the node duplication algorithm.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_output_order = R"doc(Controls how output nodes are ordered before starting the algorithm.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_output_order_KEEP_PO_ORDER = R"doc(Keep the PO order from the input network.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_output_order_RANDOM_PO_ORDER = R"doc(Randomize the PO order.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_po_order = R"doc(The output order used. Defaults to KEEP_PO_ORDER.)doc";
 
 static const char *__doc_fiction_node_duplication_planarization_params = R"doc(Parameters for the node duplication algorithm.)doc";
 
