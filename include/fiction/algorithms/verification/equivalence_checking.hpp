@@ -96,6 +96,7 @@ class equivalence_checking_impl
         {
             if (has_drvs(spec, &pst.spec_drv_stats))
             {
+                std::cout << "[e] specification has DRVs" << std::endl;
                 return eq_type::NO;
             }
         }
@@ -103,6 +104,7 @@ class equivalence_checking_impl
         {
             if (has_drvs(impl, &pst.impl_drv_stats))
             {
+                std::cout << "[e] specification has DRVs" << std::endl;
                 return eq_type::NO;
             }
         }
@@ -146,6 +148,7 @@ class equivalence_checking_impl
 
                 if (!(*eq))
                 {
+                    std::cout << "[e] no equivalence" << std::endl;
                     pst.counter_example = st.counter_example;
                 }
             }

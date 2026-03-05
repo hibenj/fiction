@@ -181,11 +181,10 @@ class gate_level_drvs_impl
             *ps.out << "[i]" << border_io_check() << '\n';
         }
 
-        *ps.out << fmt::format(
-                       "\n[i] DRVs: {}, Warnings: {}",
-                       (pst.drvs != 0u ? fmt::format(fmt::fg(fmt::color::red), std::to_string(pst.drvs)) : ZERO_ISSUES),
-                       (pst.warnings != 0u ? fmt::format(fmt::fg(fmt::color::yellow), std::to_string(pst.warnings)) :
-                                             ZERO_ISSUES))
+        *ps.out << fmt::format("\n[i] DRVs: {}, Warnings: {}",
+                               (pst.drvs != 0u ? fmt::format(fmt::fg(fmt::color::red), "{}", pst.drvs) : ZERO_ISSUES),
+                               (pst.warnings != 0u ? fmt::format(fmt::fg(fmt::color::yellow), "{}", pst.warnings) :
+                                                     ZERO_ISSUES))
                 << std::endl;
 
         pst.report["DRVs"]     = pst.drvs;

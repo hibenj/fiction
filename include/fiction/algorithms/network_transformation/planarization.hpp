@@ -769,22 +769,22 @@ class planarization_impl
         {
             if (ps.buffer)
             {
-                gate_cross_cost = 7;
+                gate_cross_cost = 10;
             }
             else
             {
-                gate_cross_cost = 5;
+                gate_cross_cost = 6;
             }
         }
         else
         {
             if (ps.buffer)
             {
-                gate_cross_cost = 48;
+                gate_cross_cost = 59;
             }
             else
             {
-                gate_cross_cost = 17;
+                gate_cross_cost = 27;
             }
         }
         return gate_cross_cost;
@@ -795,11 +795,11 @@ class planarization_impl
         uint64_t levels_per_crossing = 0;
         if (ps.xor_gates)
         {
-            levels_per_crossing = 3;
+            levels_per_crossing = 4;
         }
         else
         {
-            levels_per_crossing = 12;
+            levels_per_crossing = 14;
         }
         return levels_per_crossing;
     }
@@ -1184,9 +1184,9 @@ class planarization_impl
                                              });
                     std::cout << "Fanout count of preceding level: " << fanout_count << std::endl;*/
 
-                    std::cout << "Duplications for level " << lvl << ": " << dups << std::endl;
+                    /*std::cout << "Duplications for level " << lvl << ": " << dups << std::endl;
                     std::cout << "Duplication cost: " << dup_cost << std::endl;
-                    std::cout << "cross_cost: " << cross_cost << std::endl;
+                    std::cout << "cross_cost: " << cross_cost << std::endl;*/
 
                     next_level = next_level_v;
                     once = false;

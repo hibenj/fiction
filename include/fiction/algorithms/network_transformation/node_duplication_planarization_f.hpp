@@ -3,7 +3,7 @@
 //
 
 #ifndef FICTION_NODE_DUPLCATION_PLANARIZATION_F_HPP
-#define FICTION_NODE_DUPLCATION_PLANARIZATION_F_HPP
+#define FICTION_NODE_DUPLICATION_PLANARIZATION_F_HPP
 
 #include "fiction/algorithms/graph/mincross.hpp"
 #include "fiction/algorithms/network_transformation/network_balancing.hpp"
@@ -19,10 +19,12 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <limits>
 #include <random>
 #include <stdexcept>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -49,9 +51,45 @@ struct node_duplication_planarization_f_params
         RANDOM_PO_ORDER
     };
     /**
+     * Controls the heuristic used to reorder the next level before cost evaluation.
+     */
+    enum class crossing_minimization : uint8_t
+    {
+        /**
+         * Single-pass barycenter ordering.
+         */
+        BASELINE,
+        /**
+         * Barycenter ordering followed by a bounded adjacent-swap improvement pass.
+         */
+        ADJACENT_SWAP
+    };
+    /**
      * The output order used. Defaults to KEEP_PO_ORDER.
      */
     output_order po_order = output_order::KEEP_PO_ORDER;
+    /**
+     * The crossing minimization heuristic. Defaults to ADJACENT_SWAP.
+     */
+    crossing_minimization cross_min = crossing_minimization::ADJACENT_SWAP;
+    /**
+     * Whether the otput network should be buffered.
+     */
+    bool buffer = true;
+    /**
+     * Whether xor gates are allowed in the network.
+     */
+    bool xor_gates = false;
+    /**
+     * Whether xor gates are allowed in the network.
+     */
+    bool cross_gates = false;
+
+    uint32_t duplication_level_bias = 0u;
+
+    uint32_t duplication_level_weight = 0u;
+
+    uint32_t duplication_current_level_weight = 0u;
 };
 
 /**
@@ -426,25 +464,26 @@ class node_duplication_planarization_f_impl
     virtual_pi_network<Ntk> create_virtual_ntk()
     {
         // initialize a network copy and map
-        virtual_pi_network<Ntk> duplicated_network{};
+        virtual_pi_network<Ntk>                                            duplicated_network{};
         std::unordered_map<mockturtle::node<Ntk>, mockturtle::signal<Ntk>> old2new{};
 
         // create_pis correctly for equivalence
         // this makes sure old2new[2] = 2, ol2new[3] = 3, ...
-        ntk.foreach_pi_unranked([this, &old2new, &duplicated_network](const auto& pi)
-        {
-            if constexpr(has_is_real_pi_v<Ntk>)
+        ntk.foreach_pi_unranked(
+            [this, &old2new, &duplicated_network](const auto& pi)
             {
-                if (ntk.is_real_pi(pi))
+                if constexpr (has_is_real_pi_v<Ntk>)
+                {
+                    if (ntk.is_real_pi(pi))
+                    {
+                        old2new[pi] = duplicated_network.create_pi();
+                    }
+                }
+                else
                 {
                     old2new[pi] = duplicated_network.create_pi();
                 }
-            }
-            else
-            {
-                old2new[pi] = duplicated_network.create_pi();
-            }
-        });
+            });
 
         std::vector<mockturtle::node<Ntk>> pi_ranks(ntk_lvls[0].size());
 
@@ -452,22 +491,22 @@ class node_duplication_planarization_f_impl
         std::vector<bool> pi_created(ntk.num_pis() + 2u, false);
         for (auto i = 0u; i < ntk_lvls[0].size(); ++i)
         {
-            const auto& pi = ntk_lvls[0][i];
-            const auto pi_mapped =dupl2old[pi];
+            const auto& pi        = ntk_lvls[0][i];
+            const auto  pi_mapped = dupl2old[pi];
             assert(old2new_fis[pi].size() == 0);
             if (!pi_created[dupl2old[pi]])
             {
                 pi_created[dupl2old[pi]] = true;
-                old2new[pi] = duplicated_network.make_signal(dupl2old[pi]);
-                pi_ranks[i] = old2new[pi];
+                old2new[pi]              = duplicated_network.make_signal(dupl2old[pi]);
+                pi_ranks[i]              = old2new[pi];
                 // duplicated_network.on_add(new_sig);
             }
             else
             {
                 const auto pi_create = dupl2old[pi];
-                const auto new_sig = duplicated_network.create_virtual_pi(dupl2old[pi]);
-                old2new[pi] = new_sig;
-                pi_ranks[i] = old2new[pi];
+                const auto new_sig   = duplicated_network.create_virtual_pi(dupl2old[pi]);
+                old2new[pi]          = new_sig;
+                pi_ranks[i]          = old2new[pi];
                 // duplicated_network.on_add(new_sig);
             }
         }
@@ -479,15 +518,33 @@ class node_duplication_planarization_f_impl
             for (const auto& nd : lvl)
             {
                 auto children = old2new_fis[nd];
-                // if i = 1, the children are PIs and need to be mapped using pi2new
-                for (auto& child : children)
+                if (!cross_lvls.empty() && i - 1 == cross_lvls.back())
+                {
+                    for (auto& child : children)
+                    {
+                        const auto& c = dupl2old[child];
+                        child         = old2new[c];
+                    }
+                }
+                else
+                {
+                    for (auto& child : children)
+                    {
+                        child = old2new[child];
+                    }
+                }
+                /*for (auto& child : children)
                 {
                     child = old2new[child];
-                }
+                }*/
                 // only fill old2new for the last level to track POs
                 const auto new_sig = duplicated_network.create_node(children, ntk.node_function(dupl2old[nd]));
-                old2new[nd] = new_sig;
+                old2new[nd]        = new_sig;
                 // duplicated_network.on_add(new_sig);
+            }
+            if (!cross_lvls.empty() && i - 1 == cross_lvls.back())
+            {
+                cross_lvls.pop_back();
             }
         }
 
@@ -496,7 +553,7 @@ class node_duplication_planarization_f_impl
             [this, &duplicated_network, &old2new](const auto& po)
             {
                 const auto tgt_signal = old2new[ntk.get_node(po)];
-                const auto tgt_po     = ntk.is_complemented(po) ? duplicated_network.create_not(tgt_signal) : tgt_signal;
+                const auto tgt_po = ntk.is_complemented(po) ? duplicated_network.create_not(tgt_signal) : tgt_signal;
 
                 duplicated_network.create_po(tgt_po);
             });
@@ -505,9 +562,619 @@ class node_duplication_planarization_f_impl
 
         duplicated_network.set_ranks(0, pi_ranks);
 
-        // fiction::debug::write_dot_network(duplicated_network, "duplicated_network");
-
         return duplicated_network;
+    }
+
+    uint32_t tfi_size_unique(mockturtle::node<Ntk> root)
+    {
+        std::deque<mockturtle::node<Ntk>>         stack;
+        std::unordered_set<mockturtle::node<Ntk>> visited;
+
+        stack.push_back(root);
+
+        while (!stack.empty())
+        {
+            auto n = stack.back();
+            stack.pop_back();
+
+            if (!visited.insert(n).second)
+            {
+                continue;
+            }
+
+            ntk.foreach_fanin(n, [&](auto const& f) { stack.push_back(ntk.get_node(f)); });
+        }
+
+        // If you want TFI excluding the root itself:
+        return visited.size();
+    }
+
+    [[nodiscard]] uint64_t weighted_tfi_cost(mockturtle::node<Ntk> root, uint32_t current_level) const
+    {
+        struct duplication_params
+        {
+            double base = 1.0;      // constant per node
+            double amp  = 1.01;      // scales exponential part
+
+            double r_level = 1.02;  // per-level growth (>1)
+            double r_cur   = 1.02;  // global per-current-level growth (>1)
+
+            bool include_root = true;
+        };
+
+        duplication_params psd{};
+
+        std::vector<mockturtle::node<Ntk>>        stack;
+        std::unordered_set<mockturtle::node<Ntk>> visited;
+        stack.push_back(root);
+
+        // Global multiplier depends only on current_level (absolute)
+        const double g = std::pow(psd.r_cur, static_cast<double>(current_level));
+
+        double total = 0.0;
+
+        while (!stack.empty())
+        {
+            const auto n = stack.back();
+            stack.pop_back();
+
+            if (!visited.insert(n).second)
+            {
+                continue;
+            }
+
+            if (psd.include_root || n != root)
+            {
+                const uint32_t lvl = ntk.has_level(n) ? ntk.level(n) : 0u;
+
+                // Absolute level weight
+                double wn = 0;
+                if (ntk.fanin_size(n) == 1 && ntk.fanout_size(n) == 1)
+                {
+                    wn = 0.5;
+                }
+                else
+                {
+                    wn = psd.base + (psd.amp * std::pow(psd.r_level, static_cast<double>(lvl)));
+                }
+                total += wn * g;
+            }
+
+            ntk.foreach_fanin(n, [&](auto const& f) { stack.push_back(ntk.get_node(f)); });
+        }
+
+        if (total <= 0.0)
+        {
+            return 0u;
+        }
+        if (total >= static_cast<double>(std::numeric_limits<uint64_t>::max()))
+        {
+            return std::numeric_limits<uint64_t>::max();
+        }
+
+        return static_cast<uint64_t>(std::llround(total));
+    }
+
+    template <typename T>
+    uint32_t duplication_total_cost(std::vector<T> const& v)
+    {
+        std::unordered_map<T, uint32_t> freq;
+        for (auto const& x : v)
+        {
+            ++freq[dupl2old[x]];
+        }
+
+        uint32_t total_cost = 0;
+
+        for (auto const& [node, count] : freq)
+        {
+            if (count > 1)
+            {
+                const uint32_t extra = count - 1;
+                total_cost += extra * tfi_size_unique(node);
+            }
+        }
+
+        return total_cost;
+    }
+
+    template<typename T>
+    uint32_t duplication_total_cost_fi(std::vector<T> const& v, uint32_t lvl)
+    {
+        std::unordered_set<T> seen;
+        bool                  has_last = false;
+        T                     last_fanin{};
+        uint32_t              total_cost = 0;
+
+        for (auto const& x : v)
+        {
+            const auto n = dupl2old[x];
+
+            const auto f = fanins(ntk, n).fanin_nodes[0];
+
+            if (!has_last || f != last_fanin)
+            {
+                if (seen.find(f) != seen.end())
+                {
+                    total_cost += weighted_tfi_cost(f, lvl);
+                }
+                else
+                {
+                    seen.insert(f);
+                }
+            }
+
+            last_fanin = f;
+            has_last   = true;
+        }
+
+        return total_cost;
+    }
+
+    template <typename T>
+    uint32_t duplication_total_cost2(std::vector<T> const& v, uint32_t lvl)
+    {
+        std::unordered_map<T, uint32_t> freq;
+        for (auto const& x : v)
+        {
+            ++freq[dupl2old[x]];
+        }
+
+        uint32_t total_cost = 0;
+
+        for (auto const& [node, count] : freq)
+        {
+            if (count > 1)
+            {
+                const uint32_t extra = count - 1;
+                total_cost += extra * weighted_tfi_cost(node, lvl);
+            }
+        }
+
+        return total_cost;
+    }
+
+    template <typename T>
+    std::vector<T> remove_duplications_keep_order(const std::vector<T>& in)
+    {
+        std::unordered_set<T> seen;
+        std::vector<T>        out;
+        out.reserve(in.size());
+
+        for (auto const& x : in)
+        {
+            if (seen.insert(x).second)
+            {
+                out.push_back(x);
+            }
+        }
+
+        return out;
+    }
+
+    [[nodiscard]] uint64_t gate_cross_cost() const noexcept
+    {
+        uint64_t gate_cross_cost = 0;
+        if (ps.xor_gates)
+        {
+            if (ps.buffer)
+            {
+                gate_cross_cost = 10;
+            }
+            else
+            {
+                gate_cross_cost = 6;
+            }
+        }
+        else
+        {
+            if (ps.buffer)
+            {
+                gate_cross_cost = 59;
+            }
+            else
+            {
+                gate_cross_cost = 27;
+            }
+        }
+        return gate_cross_cost;
+    }
+
+    [[nodiscard]] uint64_t levels_per_crossing() const noexcept
+    {
+        uint64_t levels_per_crossing = 0;
+        if (ps.xor_gates)
+        {
+            levels_per_crossing = 4;
+        }
+        else
+        {
+            levels_per_crossing = 14;
+        }
+        return levels_per_crossing;
+    }
+
+    /**
+     * @brief Counts edge crossings using fanin direction and next-level vector positions.
+     *
+     * @param prev_level_v The current level (targets) ordered left-to-right.
+     * @param next_level_v The next level (sources) ordered left-to-right.
+     * @return The number of crossings between the two levels.
+     */
+    [[nodiscard]] uint64_t count_crossings_light(const std::vector<mockturtle::node<Ntk>>& prev_level_v,
+                                                 const std::vector<mockturtle::node<Ntk>>& next_level_v) const
+    {
+        if (prev_level_v.empty() || next_level_v.empty())
+        {
+            return 0u;
+        }
+
+        std::size_t max_node = 0u;
+        for (const auto n : next_level_v)
+        {
+            max_node = std::max(max_node, static_cast<std::size_t>(n));
+        }
+
+        std::vector<int64_t> pos(max_node + 1u, -1);
+        for (std::size_t i = 0u; i < next_level_v.size(); ++i)
+        {
+            pos[static_cast<std::size_t>(next_level_v[i])] = static_cast<int64_t>(i);
+        }
+
+        const auto to_old = [this](mockturtle::node<Ntk> n)
+        {
+            const auto it = dupl2old.find(n);
+            return it == dupl2old.cend() ? n : it->second;
+        };
+
+        std::vector<uint64_t> penalty_array(next_level_v.size() + 1u, 0u);
+        uint64_t              max_pos   = 0u;
+        uint64_t              crossings = 0u;
+
+        for (auto n : prev_level_v)
+        {
+            n = to_old(n);
+
+            std::vector<uint64_t> targets{};
+            targets.reserve(ntk.fanin_size(n));
+
+            ntk.foreach_fanin(n,
+                              [&](auto const& fi)
+                              {
+                                  const auto idx = static_cast<std::size_t>(fi);
+                                  if (idx >= pos.size())
+                                  {
+                                      assert(false);
+                                      return;
+                                  }
+                                  const auto p = pos[idx];
+                                  if (p < 0)
+                                  {
+                                      assert(false);
+                                      return;
+                                  }
+                                  targets.push_back(static_cast<uint64_t>(p));
+                              });
+
+            for (const auto p : targets)
+            {
+                for (auto k = p + 1u; k <= max_pos; ++k)
+                {
+                    crossings += penalty_array[k];
+                }
+            }
+
+            for (const auto p : targets)
+            {
+                max_pos = std::max(max_pos, p);
+                ++penalty_array[p];
+            }
+        }
+
+        return crossings;
+    }
+
+    void sort_next_level_by_barycenter(const std::vector<mockturtle::node<Ntk>>& prev_level_v,
+                                       std::vector<mockturtle::node<Ntk>>&       next_level_v) const
+    {
+        if (next_level_v.size() < 2u)
+        {
+            return;
+        }
+
+        std::size_t max_node = 0u;
+        for (const auto n : next_level_v)
+        {
+            max_node = std::max(max_node, static_cast<std::size_t>(n));
+        }
+
+        std::vector<int64_t> pos(max_node + 1u, -1);
+        for (std::size_t i = 0u; i < next_level_v.size(); ++i)
+        {
+            pos[static_cast<std::size_t>(next_level_v[i])] = static_cast<int64_t>(i);
+        }
+
+        std::vector<double>   sum(next_level_v.size(), 0.0);
+        std::vector<uint32_t> count(next_level_v.size(), 0u);
+
+        const auto to_old = [this](mockturtle::node<Ntk> n)
+        {
+            const auto it = dupl2old.find(n);
+            return it == dupl2old.cend() ? n : it->second;
+        };
+
+        for (std::size_t t = 0u; t < prev_level_v.size(); ++t)
+        {
+            auto n = to_old(prev_level_v[t]);
+            ntk.foreach_fanin(n,
+                              [&](auto const& fi)
+                              {
+                                  const auto idx = static_cast<std::size_t>(fi);
+                                  if (idx >= pos.size())
+                                  {
+                                      assert(false);
+                                      return;
+                                  }
+                                  const auto p = pos[idx];
+                                  if (p < 0)
+                                  {
+                                      assert(false);
+                                      return;
+                                  }
+                                  sum[static_cast<std::size_t>(p)] += static_cast<double>(t);
+                                  ++count[static_cast<std::size_t>(p)];
+                              });
+        }
+
+        struct order_item
+        {
+            mockturtle::node<Ntk> node;
+            double                key;
+            std::size_t           orig_idx;
+        };
+
+        std::vector<order_item> items{};
+        items.reserve(next_level_v.size());
+
+        for (std::size_t i = 0u; i < next_level_v.size(); ++i)
+        {
+            const auto key = count[i] > 0u ? (sum[i] / static_cast<double>(count[i])) : static_cast<double>(i);
+            items.push_back({next_level_v[i], key, i});
+        }
+
+        std::stable_sort(items.begin(), items.end(),
+                         [](const order_item& a, const order_item& b)
+                         {
+                             if (a.key != b.key)
+                             {
+                                 return a.key < b.key;
+                             }
+                             return a.orig_idx < b.orig_idx;
+                         });
+
+        for (std::size_t i = 0u; i < items.size(); ++i)
+        {
+            next_level_v[i] = items[i].node;
+        }
+    }
+
+    void improve_by_adjacent_swaps(const std::vector<mockturtle::node<Ntk>>& prev_level_v,
+                                   std::vector<mockturtle::node<Ntk>>& next_level_v, const std::size_t max_swaps) const
+    {
+        if (next_level_v.size() < 2u || max_swaps == 0u)
+        {
+            return;
+        }
+
+        auto        current = count_crossings_light(prev_level_v, next_level_v);
+        std::size_t swaps   = 0u;
+
+        for (std::size_t i = 0u; i + 1u < next_level_v.size() && swaps < max_swaps; ++i)
+        {
+            std::swap(next_level_v[i], next_level_v[i + 1u]);
+            const auto candidate = count_crossings_light(prev_level_v, next_level_v);
+
+            if (candidate < current)
+            {
+                current = candidate;
+                ++swaps;
+            }
+            else
+            {
+                std::swap(next_level_v[i], next_level_v[i + 1u]);
+            }
+        }
+    }
+
+    void minimize_crossings(const std::vector<mockturtle::node<Ntk>>& prev_level_v,
+                            std::vector<mockturtle::node<Ntk>>&       next_level_v) const
+    {
+        sort_next_level_by_barycenter(prev_level_v, next_level_v);
+
+        if (ps.cross_min == node_duplication_planarization_f_params::crossing_minimization::ADJACENT_SWAP)
+        {
+            constexpr std::size_t kMaxSwaps = 32u;
+            const auto max_swaps = std::min(kMaxSwaps, next_level_v.size() > 0u ? next_level_v.size() - 1u : 0u);
+            improve_by_adjacent_swaps(prev_level_v, next_level_v, max_swaps);
+        }
+    }
+
+    struct edge
+    {
+        mockturtle::node<Ntk> source;
+        mockturtle::node<Ntk> target;
+
+        bool operator==(edge const& other) const
+        {
+            return (source == other.source) && (target == other.target);
+        }
+    };
+
+    struct stage_result
+    {
+        uint64_t                               max_level;
+        uint32_t                               n_crossings;
+        std::vector<std::pair<edge, uint64_t>> crossings_per_edge;
+    };
+
+    stage_result ncross_fanins(const std::vector<mockturtle::node<Ntk>>& prev_level_v,
+                               const std::vector<mockturtle::node<Ntk>>& next_level_v, uint32_t lvl)
+    {
+        stage_result result{};
+
+        // We index by *source* position in previous rank (r-1)
+        uint64_t                                           prev_width = ntk.rank_width(lvl - 1);
+        std::vector<std::deque<std::pair<edge, uint64_t>>> penalty(prev_width + 1);
+        uint64_t                                           max_pos = 0;
+
+        std::vector<edge> stage_edges;
+
+        // helper to increment per-edge crossing count stored in result.crossings_per_edge
+        auto increment_count = [&result](edge const& ed)
+        {
+            for (auto& p : result.crossings_per_edge)
+            {
+                if (p.first == ed)
+                {
+                    ++p.second;
+                    result.max_level = std::max(result.max_level, static_cast<uint64_t>(p.second));
+                    return;
+                }
+            }
+            result.crossings_per_edge.emplace_back(ed, 1);
+            result.max_level = std::max(result.max_level, static_cast<uint64_t>(1));
+        };
+
+        for (auto n : prev_level_v)
+        {
+            // map duplicated nodes to their original nodes
+            n = dupl2old[n];
+            // Collect incoming edges (fi -> n) with their source positions
+            std::vector<std::pair<uint64_t, edge>> incoming;
+            incoming.reserve(ntk.fanin_size(n));  // if available; otherwise remove
+
+            ntk.foreach_fanin(n,
+                              [&](auto const& fi)
+                              {
+                                  auto it_pos = std::find(next_level_v.begin(), next_level_v.end(), fi);
+                                  assert(it_pos != next_level_v.end());
+                                  auto pos = static_cast<uint64_t>(std::distance(next_level_v.begin(), it_pos));
+                                  edge e{fi, n};
+
+                                  incoming.emplace_back(pos, e);
+                              });
+
+            // Detect crossings against previously inserted edges:
+            // For each new edge with source position 'pos', all previously seen edges
+            // with source position > pos will cross it (because targets are scanned L->R).
+            for (auto const& [pos, e] : incoming)
+            {
+                // uint64_t local_lvl = 0;
+
+                // iterate from current max_pos down to pos+1
+                for (uint64_t k = max_pos; k >= pos + 1; --k)
+                {
+                    // newest edges first (matches your other routine)
+                    for (auto it = penalty[k].begin(); it != penalty[k].end(); ++it)
+                    {
+                        auto const& prev_edge = it->first;
+                        // auto&       prev_lvl  = it->second;
+
+                        /*uint64_t level   = std::max(local_lvl, prev_lvl);
+                        result.max_level = std::max(result.max_level, level);*/
+
+                        result.n_crossings++;
+
+                        // increment counts for both involved edges
+                        increment_count(prev_edge);
+                        increment_count(e);
+
+                        /*if (prev_lvl > local_lvl)
+                        {
+                            local_lvl = prev_lvl;
+                        }
+
+                        ++prev_lvl;
+                        ++local_lvl;*/
+                    }
+                }
+            }
+
+            // Insert these edges into penalty buckets by their source position
+            for (auto const& [pos, e] : incoming)
+            {
+                max_pos = std::max(max_pos, pos);
+                penalty[pos].push_front({e, 0});
+                stage_edges.push_back(e);
+            }
+        }
+
+        // ensure all stage edges have an entry in crossings_per_edge (unaffected ones get count 0)
+        for (auto const& e : stage_edges)
+        {
+            bool found = false;
+            for (auto const& p : result.crossings_per_edge)
+            {
+                if (p.first == e)
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+            {
+                result.crossings_per_edge.emplace_back(e, 0);
+            }
+        }
+
+        return result;
+    }
+
+    [[nodiscard]] uint64_t compute_gate_cost(const std::vector<mockturtle::node<Ntk>>& prev_level_v,
+                                             std::vector<mockturtle::node<Ntk>>& next_level_v, uint32_t lvl)
+    {
+        minimize_crossings(prev_level_v, next_level_v);
+        const auto cross_item = ncross_fanins(prev_level_v, next_level_v, lvl);
+
+        if (cross_item.n_crossings > 1000u)
+        {
+            return std::numeric_limits<uint64_t>::max();
+        }
+
+        uint64_t gate_crossing_cost = 0;
+        // add cost for all crossings
+        gate_crossing_cost += cross_item.n_crossings * gate_cross_cost();
+        // add cost for all additional buffers
+        if (ps.buffer && cross_item.n_crossings > 0)
+        {
+            for (const auto& edge : cross_item.crossings_per_edge)
+            {
+                auto ground_to_cover = cross_item.max_level - edge.second;
+                gate_crossing_cost += ground_to_cover * levels_per_crossing();
+            }
+        }
+
+        return gate_crossing_cost;
+    }
+
+    template <typename T>
+    uint32_t count_total_duplications(std::vector<T> const& v)
+    {
+        std::unordered_map<T, uint32_t> freq;
+        for (auto const& x : v)
+        {
+            ++freq[x];
+        }
+
+        uint32_t dups = 0;
+        for (auto const& [val, count] : freq)
+        {
+            if (count > 1)
+            {
+                dups += (count - 1);
+            }
+        }
+        return dups;
     }
 
     [[nodiscard]] virtual_pi_network<Ntk> run()
@@ -561,9 +1228,40 @@ class node_duplication_planarization_f_impl
         // check if the final/PI level is reached
         bool f_final_level = check_final_level(next_level);
 
+        bool     once = true;
+        uint64_t dups = 0;
         // Process all other levels
         while (!next_level.empty() && !f_final_level)
         {
+            if (ps.cross_gates)
+            {
+                if (dups > 0)
+                {
+                    // Here the first and last level are not considered
+                    const auto lvl              = ntk.depth() - ntk_lvls.size();
+                    auto       dup_cost         = duplication_total_cost(next_level);
+                    auto       cross_next_level = ntk.get_ranks(lvl);
+                    auto       cross_cost       = compute_gate_cost(ntk_lvls[0], cross_next_level, lvl + 1);
+
+                    auto dup_cost_weighted = duplication_total_cost2(next_level, lvl);
+                    std::cout << "Duplication cost: " << dup_cost << std::endl;
+                    std::cout << "Duplication cost weighted: " << dup_cost_weighted << std::endl;
+                    std::cout << "Relation: " << static_cast<double>(dup_cost_weighted) / static_cast<double>(dup_cost) << std::endl;
+                    auto dupl_cost_fi = duplication_total_cost_fi(next_level, lvl);
+                    std::cout << "Duplication cost fanin: " << dupl_cost_fi << std::endl;
+                    std::cout << "Relation: " << static_cast<double>(dupl_cost_fi) / static_cast<double>(dup_cost) << std::endl;
+
+                    if (cross_cost < dup_cost_weighted)
+                    {
+                        next_level = cross_next_level;
+                        cross_lvls.push_back(lvl);
+                        once = false;
+                        std::cout << "Duplications for level " << lvl << ": " << dups << std::endl;
+                        std::cout << "Duplication cost: " << dup_cost << std::endl;
+                        std::cout << "cross_cost: " << cross_cost << std::endl;
+                    }
+                }
+            }
             // Push the level to the node array
             ntk_lvls.insert(ntk_lvls.begin(), next_level);
             lvl_pairs.clear();
@@ -578,8 +1276,10 @@ class node_duplication_planarization_f_impl
             }
             // Clear before starting computations on the next level
             next_level.clear();
+            dups = num_dupl_nodes;
             // Compute the next level
             next_level = compute_node_order();
+            dups       = num_dupl_nodes - dups;
             // Check if we are at the final level
             f_final_level = check_final_level(next_level);
         }
@@ -631,6 +1331,10 @@ class node_duplication_planarization_f_impl
      * Holds the number of duplicated nodes. Functions as iterator for saving new nodes.
      */
     uint32_t num_dupl_nodes = 0u;
+    /**
+     * Holds the lvls for which a crossing gate should be inserted.
+     */
+    std::vector<uint32_t> cross_lvls;
 };
 
 }  // namespace detail
@@ -669,15 +1373,18 @@ template <typename Ntk>
 
     auto result = p.run();
 
-    // check for planarity
-    mincross_stats  st_min{};
-    mincross_params p_min{};
-    p_min.optimize = false;
-
-    mincross(result, p_min, &st_min);  // counts crossings
-    if (st_min.num_crossings != 0)
+    if (!ps.cross_gates)
     {
-        throw std::runtime_error("Planarization failed: resulting network is not planar");
+        // check for planarity
+        mincross_stats  st_min{};
+        mincross_params p_min{};
+        p_min.optimize = false;
+
+        mincross(result, p_min, &st_min);  // counts crossings
+        if (st_min.num_crossings != 0)
+        {
+            throw std::runtime_error("Planarization failed: resulting network is not planar");
+        }
     }
 
     return result;
