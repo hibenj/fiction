@@ -6003,6 +6003,8 @@ Parameter ``b``:
 Returns:
     `true` iff `a < b` based on the aforementioned rule.)doc";
 
+static const char *__doc_fiction_detail_compute_barycenters_level = R"doc()doc";
+
 static const char *__doc_fiction_detail_compute_num_inputs_left_to_middle_pi =
 R"doc(This function iterates over all primary inputs in the given Cartesian
 layout and counts those whose tile is at the western border. Such
@@ -9611,6 +9613,8 @@ static const char *__doc_fiction_detail_node_duplication_planarization_f_impl = 
 
 static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_add_combination = R"doc()doc";
 
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_compute_gate_cost = R"doc()doc";
+
 static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_compute_slice_delays =
 R"doc(A "slice" describes one vertical layer in the H-graph. It is created
 by adding all possible combinations of a `node_pair` to the H-graph of
@@ -9640,6 +9644,10 @@ subsequent delay calculations.
 Parameter ``nd``:
     Node in the H-graph.)doc";
 
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_count_total_duplications = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_cross_lvls = R"doc(Holds the lvls for which a crossing gate should be inserted.)doc";
+
 static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_insert_if_not_first =
 R"doc(Inserts a node into a vector if it is unique.
 
@@ -9654,7 +9662,11 @@ Parameter ``vec``:
 
 static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_lvl_pairs = R"doc(The currently node_pairs used in the current level.)doc";
 
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_ncross_fanins = R"doc()doc";
+
 static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_node_duplication_planarization_f_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_ntk = R"doc(The input network.)doc";
 
 static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_ntk_lvls = R"doc(The network stored as levels.)doc";
 
@@ -9663,6 +9675,16 @@ R"doc(Holds the number of duplicated nodes. Functions as iterator for saving
 new nodes.)doc";
 
 static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_ps = R"doc(The stats of the node_duplication class.)doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_stage_result = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_stage_result_crossings_per_edge = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_stage_result_max_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_node_duplication_planarization_f_impl_stage_result_n_crossings = R"doc()doc";
 
 static const char *__doc_fiction_detail_node_duplication_planarization_impl = R"doc()doc";
 
@@ -11061,6 +11083,18 @@ Parameter ``cell``:
     layout against.)doc";
 
 static const char *__doc_fiction_detail_recursively_paint_edges = R"doc()doc";
+
+static const char *__doc_fiction_detail_remove_buffer_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_remove_buffer_impl_insert_buffers_planar = R"doc()doc";
+
+static const char *__doc_fiction_detail_remove_buffer_impl_ntk = R"doc()doc";
+
+static const char *__doc_fiction_detail_remove_buffer_impl_ps = R"doc(Parameters controlling how fanout substitution is performed.)doc";
+
+static const char *__doc_fiction_detail_remove_buffer_impl_remove_buffer_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_remove_buffer_impl_run = R"doc()doc";
 
 static const char *__doc_fiction_detail_rng_state =
 R"doc(A lightweight container that groups together the two objects required
@@ -17881,6 +17915,28 @@ Returns:
 
 static const char *__doc_fiction_node_duplication_planarization_f_params = R"doc(Parameters for the node duplication algorithm.)doc";
 
+static const char *__doc_fiction_node_duplication_planarization_f_params_buffer = R"doc(Whether the otput network should be buffered.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_cross_gates = R"doc(Whether xor gates are allowed in the network.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_cross_min = R"doc(The crossing minimization heuristic. Defaults to ADJACENT_SWAP.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_crossing_minimization =
+R"doc(Controls the heuristic used to reorder the next level before cost
+evaluation.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_crossing_minimization_ADJACENT_SWAP =
+R"doc(Barycenter ordering followed by a bounded adjacent-swap improvement
+pass.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_crossing_minimization_BASELINE = R"doc(Single-pass barycenter ordering.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_duplication_current_level_weight = R"doc()doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_duplication_level_bias = R"doc()doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_duplication_level_weight = R"doc()doc";
+
 static const char *__doc_fiction_node_duplication_planarization_f_params_output_order = R"doc(Controls how output nodes are ordered before starting the algorithm.)doc";
 
 static const char *__doc_fiction_node_duplication_planarization_f_params_output_order_KEEP_PO_ORDER = R"doc(Keep the PO order from the input network.)doc";
@@ -17888,6 +17944,8 @@ static const char *__doc_fiction_node_duplication_planarization_f_params_output_
 static const char *__doc_fiction_node_duplication_planarization_f_params_output_order_RANDOM_PO_ORDER = R"doc(Randomize the PO order.)doc";
 
 static const char *__doc_fiction_node_duplication_planarization_f_params_po_order = R"doc(The output order used. Defaults to KEEP_PO_ORDER.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_params_xor_gates = R"doc(Whether xor gates are allowed in the network.)doc";
 
 static const char *__doc_fiction_node_duplication_planarization_params = R"doc(Parameters for the node duplication algorithm.)doc";
 
@@ -20594,6 +20652,8 @@ static const char *__doc_fiction_ranked_buffer_insertion_params_max_chunk_size =
 
 static const char *__doc_fiction_ranked_buffer_insertion_params_optimization_effort = R"doc()doc";
 
+static const char *__doc_fiction_ranked_buffer_insertion_params_planar = R"doc()doc";
+
 static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling = R"doc()doc";
 
 static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling_policy =
@@ -20623,20 +20683,20 @@ static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling_polic
 
 static const char *__doc_fiction_ranked_buffer_insertion_params_scheduling_policy_provided = R"doc()doc";
 
-static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_65_3 =
+static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_66_5 =
 R"doc(! The level of optimization effort. - `none` = No optimization -
 `one_pass` = Try to form a chunk starting from each gate, once for all
 gates - `until_sat` = Iterate over all gates until no more beneficial
 chunk movement can be found - `optimal` = Use an SMT solver to find
 the global optimal)doc";
 
-static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_65_3_none = R"doc()doc";
+static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_66_5_none = R"doc()doc";
 
-static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_65_3_one_pass = R"doc()doc";
+static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_66_5_one_pass = R"doc()doc";
 
-static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_65_3_optimal = R"doc()doc";
+static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_66_5_optimal = R"doc()doc";
 
-static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_65_3_until_sat = R"doc()doc";
+static const char *__doc_fiction_ranked_buffer_insertion_params_unnamed_enum_at_home_runner_work_fiction_fiction_include_fiction_algorithms_network_transformation_ranked_buffer_insertion_hpp_66_5_until_sat = R"doc()doc";
 
 static const char *__doc_fiction_ranked_buffer_insertion_pi_levels = R"doc()doc";
 
@@ -20711,6 +20771,8 @@ static const char *__doc_fiction_ranked_buffer_insertion_set_scheduling_policy =
 static const char *__doc_fiction_ranked_buffer_insertion_single_gate_movement = R"doc()doc";
 
 static const char *__doc_fiction_ranked_buffer_insertion_start_id = R"doc()doc";
+
+static const char *__doc_fiction_ranked_buffer_insertion_tie_break_by_fanout_walk = R"doc()doc";
 
 static const char *__doc_fiction_ranked_buffer_insertion_timeframes = R"doc()doc";
 
@@ -20977,6 +21039,32 @@ Parameter ``relative_c``:
 
 Returns:
     Absolute cell position in a layout.)doc";
+
+static const char *__doc_fiction_remove_buffer =
+R"doc(Deletes buffer in a network.
+
+Template parameter ``Ntk``:
+    Type of the input logic network.
+
+Parameter ``ntk_src``:
+    The input logic network.
+
+Parameter ``ps``:
+    Parameters.
+
+Returns:
+    A fanout-substituted logic network of type `NtkDest` that is
+    logically equivalent to `ntk_src`.)doc";
+
+static const char *__doc_fiction_remove_buffer_params = R"doc(Parameters for the remove buffer algorithm.)doc";
+
+static const char *__doc_fiction_remove_buffer_params_allowed_buff_fanout = R"doc()doc";
+
+static const char *__doc_fiction_remove_buffer_params_insert_again = R"doc()doc";
+
+static const char *__doc_fiction_remove_buffer_params_planar = R"doc()doc";
+
+static const char *__doc_fiction_remove_buffer_params_unify_outputs = R"doc()doc";
 
 static const char *__doc_fiction_res_clocking =
 R"doc(Returns the RES clocking as defined in \"An efficient clocking scheme
