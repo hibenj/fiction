@@ -13,6 +13,7 @@
 
 #include <mockturtle/traits.hpp>
 #include <mockturtle/utils/node_map.hpp>
+#include <mockturtle/utils/stopwatch.hpp>
 
 #include <algorithm>
 #include <cassert>
@@ -90,6 +91,17 @@ struct node_duplication_planarization_f_params
     uint32_t duplication_level_weight = 0u;
 
     uint32_t duplication_current_level_weight = 0u;
+};
+
+/**
+ * This struct stores statistics about the node duplication planarization process.
+ */
+struct node_duplication_planarization_f_stats
+{
+    /**
+     * Runtime of the duplication core only (excludes planarity checks).
+     */
+    mockturtle::stopwatch<>::duration time_total{0};
 };
 
 /**
@@ -261,6 +273,15 @@ class node_duplication_planarization_f_impl
                                                        { return ntk.rank_position(a) < ntk.rank_position(b); });
 
                                   fis.insert(it, nd);
+                              }
+                              else
+                              {
+                                  std::cout << "Warning: Node " << dupl2old[n]
+                                            << " has a constant fanin. This might lead to unexpected results in the "
+                                               "node duplication process. Please check the input network."
+                                            << ntk.get_node(fi) << std::endl;
+                                  std::cout << "ntk is constant itself: " << ntk.is_constant(dupl2old[n]) << std::endl;
+                                  std::cout << "ntk is po itself: " << ntk.is_po(dupl2old[n]) << std::endl;
                               }
                           });
 
@@ -1138,6 +1159,9 @@ class node_duplication_planarization_f_impl
 
         if (cross_item.n_crossings > 1000u)
         {
+            // print a warning message
+            /*std::cerr << "Warning: Number of crossings (" << cross_item.n_crossings
+                      << ") exceeds threshold for level " << lvl << ". Skipping crossing cost calculation.\n";*/
             return std::numeric_limits<uint64_t>::max();
         }
 
@@ -1188,7 +1212,7 @@ class node_duplication_planarization_f_impl
         ntk.foreach_node(
             [this, &pos](const auto n)
             {
-                if (ntk.is_po(n))
+                if (ntk.is_po(n) && !ntk.is_constant(n))
                 {
                     const auto po = ntk.get_node(n);
                     if (std::find(pos.begin(), pos.end(), po) == pos.end())
@@ -1244,21 +1268,21 @@ class node_duplication_planarization_f_impl
                     auto       cross_cost       = compute_gate_cost(ntk_lvls[0], cross_next_level, lvl + 1);
 
                     auto dup_cost_weighted = duplication_total_cost2(next_level, lvl);
-                    std::cout << "Duplication cost: " << dup_cost << std::endl;
+                    /*std::cout << "Duplication cost: " << dup_cost << std::endl;
                     std::cout << "Duplication cost weighted: " << dup_cost_weighted << std::endl;
-                    std::cout << "Relation: " << static_cast<double>(dup_cost_weighted) / static_cast<double>(dup_cost) << std::endl;
+                    std::cout << "Relation: " << static_cast<double>(dup_cost_weighted) / static_cast<double>(dup_cost) << std::endl;*/
                     auto dupl_cost_fi = duplication_total_cost_fi(next_level, lvl);
-                    std::cout << "Duplication cost fanin: " << dupl_cost_fi << std::endl;
-                    std::cout << "Relation: " << static_cast<double>(dupl_cost_fi) / static_cast<double>(dup_cost) << std::endl;
+                    /*std::cout << "Duplication cost fanin: " << dupl_cost_fi << std::endl;
+                    std::cout << "Relation: " << static_cast<double>(dupl_cost_fi) / static_cast<double>(dup_cost) << std::endl;*/
 
                     if (cross_cost < dup_cost_weighted)
                     {
                         next_level = cross_next_level;
                         cross_lvls.push_back(lvl);
                         once = false;
-                        std::cout << "Duplications for level " << lvl << ": " << dups << std::endl;
+                        /*std::cout << "Duplications for level " << lvl << ": " << dups << std::endl;
                         std::cout << "Duplication cost: " << dup_cost << std::endl;
-                        std::cout << "cross_cost: " << cross_cost << std::endl;
+                        std::cout << "cross_cost: " << cross_cost << std::endl;*/
                     }
                 }
             }
@@ -1353,12 +1377,14 @@ class node_duplication_planarization_f_impl
  * @tparam Ntk Source network type.
  * @param ntk Source network to be utilized for the planarization.
  * @param ps Node duplication parameters used in the computation.
+ * @param pst Optional statistics pointer.
  *
  * @return A planarized virtual_pi_network.
  */
 template <typename Ntk>
 [[nodiscard]] virtual_pi_network<Ntk> node_duplication_planarization_f(const Ntk&                              ntk,
-                                                                       node_duplication_planarization_f_params ps = {})
+                                                                       node_duplication_planarization_f_params ps = {},
+                                                                       node_duplication_planarization_f_stats* pst = nullptr)
 {
     static_assert(mockturtle::is_network_type_v<Ntk>, "NtkSrc is not a network type");
     static_assert(mockturtle::has_create_node_v<Ntk>, "NtkSrc does not implement the create_node function");
@@ -1369,13 +1395,19 @@ template <typename Ntk>
         throw std::invalid_argument("Networks have to be balanced for this duplication");
     }
 
+    node_duplication_planarization_f_stats stats{};
+
     detail::node_duplication_planarization_f_impl p{ntk, ps};
 
-    auto result = p.run();
+    virtual_pi_network<Ntk> result{};
+    {
+        const mockturtle::stopwatch stop{stats.time_total};
+        result = p.run();
+    }
 
     if (!ps.cross_gates)
     {
-        // check for planarity
+        // Keep planarity verification outside the timed duplication core.
         mincross_stats  st_min{};
         mincross_params p_min{};
         p_min.optimize = false;
@@ -1385,6 +1417,11 @@ template <typename Ntk>
         {
             throw std::runtime_error("Planarization failed: resulting network is not planar");
         }
+    }
+
+    if (pst != nullptr)
+    {
+        *pst = stats;
     }
 
     return result;

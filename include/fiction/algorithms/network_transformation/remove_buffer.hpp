@@ -149,7 +149,6 @@ class remove_buffer_impl
                 }
                 else if (ntk.is_pi(n) && ntk.fanout_size(n) == 1u && fanout_ntk_del.is_po(n))
                 {
-                    std:: cout << "idk\n";
                     ordered_fanout_nodes.emplace(old2new_old[n], std::vector<mockturtle::node<Ntk>>{old2new_old[n]});
                 }
             });
@@ -166,22 +165,6 @@ class remove_buffer_impl
         // gather PO levels
         const auto po_levels    = get_po_levels(deleted_buffer_ntk);
         const auto max_po_level = *std::max_element(po_levels.cbegin(), po_levels.cend());
-
-        /*fanout_ntk_del.foreach_pi(
-            [&](const auto& pi)
-            {
-                const auto& fos = fanouts(fanout_ntk_del, pi);
-                const auto sz = fanout_ntk_del.fanout_size(pi);
-                const auto is_po = fanout_ntk_del.is_po(pi);
-                if (fos.size() != 1u)
-                {
-                    std::cout << "Pi 1: " << pi << "\n";
-                }
-                if (sz != 1u)
-                {
-                    std::cout << "Pi 2: " << pi << "\n";
-                }
-            });*/
 
         // create first edges
         fanout_ntk_del.foreach_pi(

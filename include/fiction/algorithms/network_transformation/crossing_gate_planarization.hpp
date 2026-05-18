@@ -8,6 +8,7 @@
 #include "fiction/algorithms/network_transformation/network_balancing.hpp"
 
 #include <mockturtle/traits.hpp>
+#include <mockturtle/utils/stopwatch.hpp>
 
 #include <cassert>
 #include <cstddef>
@@ -28,6 +29,14 @@ struct crossing_gate_planarization_params
     bool buffer    = true;
     bool verbose   = false;
     bool xor_gates = false;
+};
+
+struct crossing_gate_planarization_stats
+{
+    /**
+     * Runtime of the planarization core only (excludes planarity checks).
+     */
+    mockturtle::stopwatch<>::duration time_total{0};
 };
 
 namespace detail
@@ -606,7 +615,8 @@ class crossing_gate_planarization_impl
 }  // namespace detail
 
 template <typename Ntk>
-[[nodiscard]] Ntk crossing_gate_planarization(const Ntk& ntk, crossing_gate_planarization_params ps = {})
+[[nodiscard]] Ntk crossing_gate_planarization(const Ntk& ntk, crossing_gate_planarization_params ps = {},
+                                              crossing_gate_planarization_stats* pst = nullptr)
 {
     static_assert(mockturtle::is_network_type_v<Ntk>, "NtkSrc is not a network type");
     static_assert(mockturtle::has_create_node_v<Ntk>, "NtkSrc does not implement the create_node function");
@@ -619,9 +629,14 @@ template <typename Ntk>
         throw std::invalid_argument("Networks have to be balanced for this duplication");
     }
 
+    crossing_gate_planarization_stats stats{};
     detail::crossing_gate_planarization_impl p{ntk, ps};
 
-    auto result = p.run();
+    Ntk result{};
+    {
+        const mockturtle::stopwatch stop{stats.time_total};
+        result = p.run();
+    }
 
     // check for planarity
     if (ps.buffer)
@@ -635,6 +650,11 @@ template <typename Ntk>
         {
             throw std::runtime_error("Planarization failed: resulting network is not planar");
         }
+    }
+
+    if (pst != nullptr)
+    {
+        *pst = stats;
     }
 
     return result;

@@ -9,6 +9,7 @@
 #include "fiction/algorithms/physical_design/orthogonal.hpp"
 #include "fiction/layouts/clocking_scheme.hpp"
 #include "fiction/traits.hpp"
+#include "fiction/utils/debug/network_writer.hpp"
 #include "fiction/utils/network_utils.hpp"
 #include "fiction/utils/placement_utils.hpp"
 
@@ -26,6 +27,7 @@
 #include <iostream>
 #include <iterator>
 #include <numeric>
+#include <optional>
 #include <stdexcept>
 #include <tuple>
 #include <unordered_map>
@@ -805,10 +807,22 @@ compute_wiring(const Ntk& ntk, const mockturtle::node_map<mockturtle::signal<Lyt
             cluster_index_start = two_input_indices[i - 2] + 1;
         }
 
+        const auto p = propagate_left;
+
         // Save the left propagated new_lines
         propagate_left = (two_input_new_lines[i - 1] > cluster_new_lines[i] + propagate_left) ?
                              0 :
                              propagate_left + cluster_new_lines[i] - two_input_new_lines[i - 1];
+
+        // ToDo: There is an issue with propagating left values
+        /*if (lvl == 132 )
+        {
+            propagate_left = p + cluster_new_lines[i];
+        }
+        if (lvl == 123)
+        {
+            propagate_left = p + cluster_new_lines[i];
+        }*/
 
         // ALso set the new lines for two input nodes
         if (cluster_index_end != new_lines.size() - 1)
@@ -825,6 +839,121 @@ compute_wiring(const Ntk& ntk, const mockturtle::node_map<mockturtle::signal<Lyt
     adjust_final_values(x, y, two_input_indices, two_input_new_lines);
 
     return std::make_pair(x, y);
+}
+
+template <typename Lyt>
+mockturtle::signal<Lyt> wire_east_planar(Lyt& lyt, const tile<Lyt>& src, const tile<Lyt>& dest)
+{
+    if (src.y != dest.y)
+    {
+        throw std::logic_error("wire_east_planar requires identical y coordinates");
+    }
+    if (dest.x <= src.x)
+    {
+        throw std::logic_error("wire_east_planar requires destination to be east of source");
+    }
+    if (lyt.is_empty_tile(src))
+    {
+        throw std::logic_error("wire_east_planar source tile is empty");
+    }
+
+    auto a = static_cast<mockturtle::signal<Lyt>>(src);
+
+    for (auto x = src.x + 1; x < dest.x; ++x)
+    {
+        auto t = tile<Lyt>{x, src.y, 0};
+        if (!lyt.is_empty_tile(t))
+        {
+            t = lyt.above(t);
+        }
+        /*if (!lyt.is_empty_tile(t))
+        {
+            std::cout << "Node already placed: " << lyt.get_node(static_cast<mockturtle::signal<Lyt>>(t)) << std::endl;
+            std::cout << "Tile X: " << t.x << " Tile Y: " << t.y << std::endl;
+            throw std::logic_error("wire_east_planar attempted to place a buffer on an occupied tile");
+        }*/
+
+        a = lyt.create_buf(a, t);
+    }
+
+    return a;
+}
+
+template <typename Lyt>
+mockturtle::signal<Lyt> wire_south_planar(Lyt& lyt, const tile<Lyt>& src, const tile<Lyt>& dest)
+{
+    if (src.x != dest.x)
+    {
+        throw std::logic_error("wire_south_planar requires identical x coordinates");
+    }
+    if (dest.y <= src.y)
+    {
+        throw std::logic_error("wire_south_planar requires destination to be south of source");
+    }
+    if (lyt.is_empty_tile(src))
+    {
+        throw std::logic_error("wire_south_planar source tile is empty");
+    }
+
+    auto a = static_cast<mockturtle::signal<Lyt>>(src);
+
+    for (auto y = src.y + 1; y < dest.y; ++y)
+    {
+        auto t = tile<Lyt>{src.x, y, 0};
+        if (!lyt.is_empty_tile(t))
+        {
+            t = lyt.above(t);
+        }
+        /*if (!lyt.is_empty_tile(t))
+        {
+            std::cout << "Node already placed: " << lyt.get_node(static_cast<mockturtle::signal<Lyt>>(t)) << std::endl;
+            std::cout << "Tile X: " << t.x << " Tile Y: " << t.y << std::endl;
+            throw std::logic_error("wire_south_planar attempted to place a buffer on an occupied tile");
+        }*/
+
+        a = lyt.create_buf(a, t);
+    }
+
+    return a;
+}
+
+template <typename Lyt, typename Ntk>
+mockturtle::signal<Lyt> connect_and_place_planar(Lyt& lyt, const tile<Lyt>& t, const Ntk& ntk,
+                                                 const mockturtle::node<Ntk>& n, tile<Lyt> pre1_t, tile<Lyt> pre2_t,
+                                                 const std::optional<bool>& c = std::nullopt)
+{
+    if (!lyt.is_empty_tile(t))
+    {
+        throw std::logic_error("connect_and_place_planar attempted to place a gate on an occupied tile");
+    }
+
+    if (pre2_t < pre1_t)
+    {
+        std::swap(pre1_t, pre2_t);
+    }
+
+    return place(lyt, t, ntk, n, wire_south_planar(lyt, pre1_t, t), wire_east_planar(lyt, pre2_t, t), c);
+}
+
+template <typename Lyt, typename Ntk>
+mockturtle::signal<Lyt> connect_and_place_planar(Lyt& lyt, const tile<Lyt>& t, const Ntk& ntk,
+                                                 const mockturtle::node<Ntk>& n, const tile<Lyt>& pre_t)
+{
+    if (!lyt.is_empty_tile(t))
+    {
+        throw std::logic_error("connect_and_place_planar attempted to place a gate on an occupied tile");
+    }
+
+    if (lyt.is_westwards_of(t, pre_t))
+    {
+        return place(lyt, t, ntk, n, wire_east_planar(lyt, pre_t, t));
+    }
+    if (lyt.is_northwards_of(t, pre_t))
+    {
+        return place(lyt, t, ntk, n, wire_south_planar(lyt, pre_t, t));
+    }
+
+    throw std::logic_error("connect_and_place_planar could not determine a valid cardinal routing direction");
 }
 
 /**
@@ -858,6 +987,7 @@ class plane_impl
         mockturtle::stopwatch stop{pst.time_total};
         // initialize mapping from nodes to positions
         mockturtle::node_map<mockturtle::signal<Lyt>, mockturtle::fanout_view<Ntk>> node2pos{ntk};
+        std::unordered_map<mockturtle::node<Lyt>, mockturtle::node<Ntk>> new2old{};
         // initialize the aspect ratio
         aspect_ratio<Lyt> aspect_ratio = {0, 0};
         // instantiate the layout
@@ -875,22 +1005,103 @@ class plane_impl
         tile<Lyt> place_t{0, 0};
         assert(ntk.num_pis() > 0);
         tile<Lyt> first_pos = {ntk.num_pis() - 1, 0};
+
+        layout.resize({1000, 1000});
+
+        auto check_level_connectivity = [&layout, &new2old](const std::vector<tile<Lyt>>& placed_tiles, const uint32_t level)
+        {
+            for (const auto& t : placed_tiles)
+            {
+                if (layout.is_empty_tile(t))
+                {
+                    continue;
+                }
+
+                const auto n = layout.get_node(t);
+                const bool dangling_out_connection = layout.fanout_size(n) == 0 && !layout.is_po_tile(t);
+                if (dangling_out_connection)
+                {
+                    const auto it = new2old.find(n);
+                    if (it != new2old.cend())
+                    {
+                        std::cout << "Dangling fanout in level " << level << " at tile (" << t.x << ", " << t.y
+                                  << "): lyt node " << n << ", ntk node: " << it->second
+                                  << " has no outgoing connection" << std::endl;
+                    }
+                    else
+                    {
+                        std::cout << "Dangling fanout in level " << level << " at tile (" << t.x << ", " << t.y
+                                  << "): lyt node " << n << ", ntk node: <unmapped>"
+                                  << " has no outgoing connection" << std::endl;
+                    }
+                }
+            }
+        };
+
+        std::vector<tile<Lyt>> placed_tiles_prev_level{};
         // place and route the nodes in ascending level order
         for (uint32_t lvl = 0; lvl < ntk.depth() + 1; lvl++)
         {
+            // std::cout << "Processing level " << lvl << " with " << ntk.rank_width(lvl) << " nodes." << std::endl;
             const auto variable_tuple = compute_pr_variables<mockturtle::fanout_view<Ntk>, Lyt>(ntk, node2pos, lvl);
             const auto orientation    = std::get<0>(variable_tuple);
             const auto new_lines      = std::get<1>(variable_tuple);
 
+            if (lvl == 132)
+            {
+                int zz = 0;
+            }
+
+            if (lvl == 123)
+            {
+                int zz = 0;
+            }
+
             const auto  wiring = compute_wiring<decltype(ntk), Lyt>(ntk, node2pos, new_lines, lvl);
             const auto& x      = wiring.first;
             const auto& y      = wiring.second;
+
+
+
+            if (x[0] > 0 && y[0] > 0)
+            {
+                std::cout << "Level " << lvl << ": x[0] = " << x[0] << ", y[0] = " << y[0] << std::endl;
+            }
+
+            /*for (const auto& xx : x)
+            {
+                if (xx > 0)
+                {
+                    std::cout << "x: " << xx << " ";
+                }
+            }
+            for (const auto& yy : y)
+            {
+                if (yy > 0)
+                {
+                    std::cout << "y: " << yy << " ";
+                }
+            }*/
+
+            std::unordered_map<mockturtle::node<Ntk>, std::pair<uint32_t, uint32_t>> fanout_map{};
+
+            std::optional<uint64_t> diagonal_sum_ref{};
+            tile<Lyt>               diagonal_root{};
+            std::vector<tile<Lyt>>  placed_tiles_current_level{};
+
+            bool once = true;
+
             // place and route the nodes in ascending rank order
             ntk.foreach_node_in_rank(
                 lvl,
-                [this, &layout, &pi2node, &node2pos, &orientation, &first_pos, &place_t, &x, &y](const auto& n,
-                                                                                                 const auto& i)
+                [this, &layout, &pi2node, &node2pos, &orientation, &first_pos, &place_t, &x, &y, &diagonal_sum_ref,
+                 &diagonal_root, &lvl, &placed_tiles_current_level, &once, &new2old](const auto& n, const auto& i)
                 {
+                    if (once)
+                    {
+                        // std::cout << "Node: " << n << std::endl;
+                        once = false;
+                    }
                     if (!ntk.is_constant(n))
                     {
                         // if node is a PI, move it to its correct position
@@ -899,6 +1110,7 @@ class plane_impl
                             if (ntk.rank_position(n) == 0)
                             {
                                 node2pos[n] = layout.move_node(pi2node[n], first_pos);
+                                new2old[layout.get_node(node2pos[n])] = n;
                                 place_t     = first_pos;
                             }
                             else
@@ -907,20 +1119,24 @@ class plane_impl
                                 if (place_t.x == 0)
                                 {
                                     node2pos[n] = layout.move_node(pi2node[n], place_t);
+                                    new2old[layout.get_node(node2pos[n])] = n;
                                 }
                                 else if (place_t.x < (first_pos.x / 2))
                                 {
                                     node2pos[n] = layout.move_node(pi2node[n], {0, place_t.y});
-
+                                    new2old[layout.get_node(node2pos[n])] = n;
                                     node2pos[n] =
-                                        layout.create_buf(wire_east(layout, {0, place_t.y}, place_t), place_t);
+                                        layout.create_buf(wire_east_planar(layout, {0, place_t.y}, place_t), place_t);
+                                    new2old[layout.get_node(node2pos[n])] = n;
                                 }
                                 else
                                 {
                                     node2pos[n] = layout.move_node(pi2node[n], {place_t.x, 0});
+                                    new2old[layout.get_node(node2pos[n])] = n;
 
                                     node2pos[n] =
-                                        layout.create_buf(wire_south(layout, {place_t.x, 0}, place_t), place_t);
+                                        layout.create_buf(wire_south_planar(layout, {place_t.x, 0}, place_t), place_t);
+                                    new2old[layout.get_node(node2pos[n])] = n;
                                 }
                             }
                         }
@@ -935,12 +1151,12 @@ class plane_impl
                             {
                                 if (x[i] != 0)
                                 {
-                                    wire_east(layout, pre_t, {pre_t.x + x[i] + 1, pre_t.y});
+                                    wire_east_planar(layout, pre_t, {pre_t.x + x[i] + 1, pre_t.y});
                                     pre_t.x += x[i];
                                 }
                                 if (y[i] != 0)
                                 {
-                                    wire_south(layout, pre_t, {pre_t.x, pre_t.y + y[i] + 1});
+                                    wire_south_planar(layout, pre_t, {pre_t.x, pre_t.y + y[i] + 1});
                                     pre_t.y += y[i];
                                 }
                             }
@@ -964,15 +1180,15 @@ class plane_impl
                                     }
                                     if (y[i] != 0)
                                     {
-                                        wire_south(layout, pre_t, {pre_t.x, pre_t.y + y[i] + 1});
+                                        wire_south_planar(layout, pre_t, {pre_t.x, pre_t.y + y[i] + 1});
                                         pre_t.y += y[i];
                                     }
                                 }
                                 place_t.y = pre_t.y + 1;
                                 place_t.x = pre_t.x;
                             }
-
-                            node2pos[n] = connect_and_place(layout, place_t, ntk, n, pre_t);
+                            node2pos[n] = connect_and_place_planar(layout, place_t, ntk, n, pre_t);
+                            new2old[layout.get_node(node2pos[n])] = n;
 
                             if (ntk.rank_position(n) == 0)
                             {
@@ -985,47 +1201,121 @@ class plane_impl
                             const auto& pre1 = fc.fanin_nodes[0];
                             const auto& pre2 = fc.fanin_nodes[1];
 
+                            if (pre1 == 13468)
+                            {
+                                // std::cout << "Node: " << n << std::endl;
+                                once = false;
+                            }
+                            if (pre2 == 13468)
+                            {
+                                // std::cout << "Node: " << n << std::endl;
+                                once = false;
+                            }
+
                             auto pre1_t = static_cast<tile<Lyt>>(node2pos[pre1]);
                             auto pre2_t = static_cast<tile<Lyt>>(node2pos[pre2]);
 
-                            // Resolve new lines
-                            if (x[i] != 0)
-                            {
-                                wire_east(layout, pre1_t, {pre1_t.x + x[i] + 1, pre1_t.y});
-                                wire_east(layout, pre2_t, {pre2_t.x + x[i] + 1, pre2_t.y});
-                                pre1_t.x += x[i];
-                                pre2_t.x += x[i];
-                            }
-                            if (y[i] != 0)
-                            {
-                                wire_south(layout, pre1_t, {pre1_t.x, pre1_t.y + y[i] + 1});
-                                wire_south(layout, pre2_t, {pre2_t.x, pre2_t.y + y[i] + 1});
-                                pre1_t.y += y[i];
-                                pre2_t.y += y[i];
-                            }
-
-                            // pre1_t is the northwards/eastern tile.
+                            // pre1_t is the northwards tile.
                             if (pre2_t.y < pre1_t.y)
                             {
                                 std::swap(pre1_t, pre2_t);
                             }
 
+                            /*if (x[i] != 0 && y[i] != 0)
+                            {
+                                std::cout << "Node " << n << " at level " << lvl << " has both x and y new lines, which
+                            is not expected." << std::endl; std::cout << "x[" << i << "] = " << x[i] << ", y[" << i <<
+                            "] = " << y[i] << std::endl; std::cout << "pre1: " << pre1 << " at tile (" << pre1_t.x << ",
+                            " << pre1_t.y << "), pre2: " << pre2
+                                          << " at tile (" << pre2_t.x << ", " << pre2_t.y << ")" << std::endl;
+                                // throw std::logic_error("Node has both x and y new lines, which is not expected.");
+                            }*/
+
+                            // For clusters propagating left is stopped by two input nodes.
+                            // But if the next node has to be wired in x direction, further than the current node,
+                            // then it would interfere with the routing from pre2.
+                            // Hence, the available space, between the two predecessors in x direction is used to
+                            // resolve this.
+                            uint32_t route_diff = 0;
+                            if (i + 1 < x.size() && x[i + 1] > x[i])
+                            {
+                                uint32_t route_x_cur = x[i];
+                                uint32_t route_x_next = x[i + 1];
+                                route_diff = route_x_next - route_x_cur;
+                                assert(pre1_t.x > pre2_t.x);
+                                uint32_t route_space = pre1_t.x - pre2_t.x;
+                                wire_east(layout, pre2_t, {pre2_t.x + route_diff + 1, pre2_t.y});
+                                pre2_t.x += route_diff;
+                                assert(route_space > route_diff);
+                            }
+
+                            // Resolve new lines
+                            if (x[i] != 0)
+                            {
+                                wire_east(layout, pre1_t, {pre1_t.x + x[i] + 1, pre1_t.y});
+                                wire_east(layout, pre2_t, {pre2_t.x + x[i] - route_diff + 1, pre2_t.y});
+                                pre1_t.x += x[i];
+                                pre2_t.x += x[i] - route_diff;
+                            }
+                            if (y[i] != 0)
+                            {
+                                wire_south_planar(layout, pre1_t, {pre1_t.x, pre1_t.y + y[i] + 1});
+                                wire_south_planar(layout, pre2_t, {pre2_t.x, pre2_t.y + y[i] + 1});
+                                pre1_t.y += y[i];
+                                pre2_t.y += y[i];
+                            }
+
                             place_t = {pre1_t.x, pre2_t.y};
 
-                            node2pos[n] = connect_and_place(layout, place_t, ntk, n, pre1_t, pre2_t, fc.constant_fanin);
+                            node2pos[n] = connect_and_place_planar(layout, place_t, ntk, n, pre1_t, pre2_t, fc.constant_fanin);
+                            new2old[layout.get_node(node2pos[n])] = n;
 
                             if (ntk.rank_position(n) == 0)
                             {
                                 first_pos = place_t;
                             }
                         }
+
+                        const auto placed_t = static_cast<tile<Lyt>>(node2pos[n]);
+                        const auto placed_diag_sum = static_cast<uint64_t>(placed_t.x) + static_cast<uint64_t>(placed_t.y);
+
+                        if (lvl != 0)
+                        {
+                            if (!diagonal_sum_ref.has_value())
+                            {
+                                diagonal_sum_ref = placed_diag_sum;
+                                diagonal_root    = placed_t;
+                            }
+                            else if (placed_diag_sum != *diagonal_sum_ref)
+                            {
+                                const auto root_x   = static_cast<uint64_t>(diagonal_root.x);
+                                const auto root_y   = static_cast<uint64_t>(diagonal_root.y);
+                                const auto placed_x = static_cast<uint64_t>(placed_t.x);
+                                const auto placed_y = static_cast<uint64_t>(placed_t.y);
+
+                                throw std::logic_error(
+                                    fmt::format("Diagonal mismatch in level {}: expected x+y={} (root at ({}, {})), got x+y={} for node at ({}, {})",
+                                                lvl, *diagonal_sum_ref, root_x, root_y, placed_diag_sum,
+                                                placed_x, placed_y));
+                            }
+                        }
+
+                        placed_tiles_current_level.push_back(placed_t);
                     }
                 });
+
+            /*if (!placed_tiles_prev_level.empty())
+            {
+                check_level_connectivity(placed_tiles_prev_level, lvl - 1);
+            }*/
+            placed_tiles_prev_level = std::move(placed_tiles_current_level);
 #if (PROGRESS_BARS)
             // update progress
             bar(lvl);
 #endif
         }
+
+        std::cout << "Starting placement and routing of primary outputs...\n";
 
         // place and route POs
         mockturtle::node_map<uint8_t, Ntk> count_map{ntk, 0};
@@ -1048,7 +1338,7 @@ class plane_impl
                             {
                                 add_line = 1;
                             }
-                            po_tile = static_cast<tile<Lyt>>(wire_south(layout, po_tile, {po_tile.x, po_tile.y + 2}));
+                            po_tile = static_cast<tile<Lyt>>(wire_south_planar(layout, po_tile, {po_tile.x, po_tile.y + 2}));
                         }
                         const tile<Lyt> anker{po_tile};
                         po_tile.x = first_pos.x + 1;
@@ -1056,14 +1346,14 @@ class plane_impl
                         // Create PO and increment the count
                         if constexpr (mockturtle::has_has_output_name_v<Ntk>)
                         {
-                            layout.create_po(wire_east(layout, anker, po_tile),
+                            layout.create_po(wire_east_planar(layout, anker, po_tile),
                                              ntk.has_output_name(po_counter) ? ntk.get_output_name(po_counter++) :
                                                                                fmt::format("po{}", po_counter++),
                                              po_tile);
                         }
                         else
                         {
-                            layout.create_po(wire_east(layout, anker, po_tile), fmt::format("po{}", po_counter++),
+                            layout.create_po(wire_east_planar(layout, anker, po_tile), fmt::format("po{}", po_counter++),
                                              po_tile);
                         }
 
@@ -1075,6 +1365,11 @@ class plane_impl
                     }
                 }
             });
+
+        /*if (!placed_tiles_prev_level.empty())
+        {
+            check_level_connectivity(placed_tiles_prev_level, ntk.depth());
+        }*/
 
         layout.resize({first_pos.x + 1, place_t.y + add_line, 0});
 

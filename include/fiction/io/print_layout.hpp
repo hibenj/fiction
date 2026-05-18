@@ -239,7 +239,7 @@ void print_gate_level_layout(std::ostream& os, const Lyt& layout, const bool io_
                 color = color | detail::OUT_COLOR;
             }
 
-            os << fmt::format(color, gate);
+            os << fmt::format(color, "{}", gate);
 
             os << x_dirs[r_ctr][c_ctr];
             ++c_ctr;

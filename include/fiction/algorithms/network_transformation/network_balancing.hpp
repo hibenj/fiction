@@ -112,7 +112,7 @@ class network_balancing_impl
 
                 auto tgt_po = ntk_topo.is_complemented(po) ? balanced.create_not(tgt_signal) : tgt_signal;
 
-                if (ps.unify_outputs)
+                if (ps.unify_outputs && !ntk_topo.is_constant(ntk_topo.get_node(po)))
                 {
                     insert_buf_chain(balanced, max_po_level - po_levels[i], tgt_po);
                 }

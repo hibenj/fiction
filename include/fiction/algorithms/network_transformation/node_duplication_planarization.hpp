@@ -11,6 +11,7 @@
 
 #include <mockturtle/traits.hpp>
 #include <mockturtle/utils/node_map.hpp>
+#include <mockturtle/utils/stopwatch.hpp>
 
 #include <algorithm>
 #include <cassert>
@@ -50,6 +51,17 @@ struct node_duplication_planarization_params
      * The output order used. Defaults to KEEP_PO_ORDER.
      */
     output_order po_order = output_order::KEEP_PO_ORDER;
+};
+
+/**
+ * This struct stores statistics about the node duplication planarization process.
+ */
+struct node_duplication_planarization_stats
+{
+    /**
+     * Runtime of the duplication core only (excludes planarity checks).
+     */
+    mockturtle::stopwatch<>::duration time_total{0};
 };
 
 namespace detail
@@ -709,7 +721,7 @@ class node_duplication_planarization_impl
         ntk.foreach_node(
             [this, &pos](const auto n)
             {
-                if (ntk.is_po(n))
+                if (ntk.is_po(n) && !ntk.is_constant(n))
                 {
                     const auto po = ntk.get_node(n);
                     if (std::find(pos.begin(), pos.end(), po) == pos.end())
@@ -834,12 +846,14 @@ class node_duplication_planarization_impl
  * @tparam Ntk Source network type.
  * @param ntk Source network to be utilized for the planarization.
  * @param ps Node duplication parameters used in the computation.
+ * @param pst Optional statistics pointer.
  *
  * @return A planarized virtual_pi_network.
  */
 template <typename Ntk>
 [[nodiscard]] virtual_pi_network<Ntk> node_duplication_planarization(const Ntk&                            ntk,
-                                                                     node_duplication_planarization_params ps = {})
+                                                                     node_duplication_planarization_params ps  = {},
+                                                                     node_duplication_planarization_stats* pst = nullptr)
 {
     static_assert(mockturtle::is_network_type_v<Ntk>, "NtkSrc is not a network type");
     static_assert(mockturtle::has_create_node_v<Ntk>, "NtkSrc does not implement the create_node function");
@@ -850,9 +864,15 @@ template <typename Ntk>
         throw std::invalid_argument("Networks have to be balanced for this duplication");
     }
 
+    node_duplication_planarization_stats stats{};
+
     detail::node_duplication_planarization_impl p{ntk, ps};
 
-    auto result = p.run();
+    virtual_pi_network<Ntk> result{};
+    {
+        const mockturtle::stopwatch stop{stats.time_total};
+        result = p.run();
+    }
 
     // check for planarity
     mincross_stats  st_min{};
@@ -863,6 +883,11 @@ template <typename Ntk>
     if (st_min.num_crossings != 0)
     {
         throw std::runtime_error("Planarization failed: resulting network is not planar");
+    }
+
+    if (pst != nullptr)
+    {
+        *pst = stats;
     }
 
     return result;
