@@ -1,0 +1,8 @@
+//
+// Created by benjamin on 2/18/26.
+//
+
+#ifndef FICTION_PLANARIZATION_FO_HPP
+#define FICTION_PLANARIZATION_FO_HPP
+
+#endif  // FICTION_PLANARIZATION_FO_HPP
