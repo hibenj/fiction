@@ -4163,6 +4163,10 @@ static const char *__doc_fiction_crossing_gate_planarization_params_verbose = R"
 
 static const char *__doc_fiction_crossing_gate_planarization_params_xor_gates = R"doc()doc";
 
+static const char *__doc_fiction_crossing_gate_planarization_stats = R"doc()doc";
+
+static const char *__doc_fiction_crossing_gate_planarization_stats_duration = R"doc(Runtime of the planarization core only (excludes planarity checks).)doc";
+
 static const char *__doc_fiction_csv_writer =
 R"doc(Utility class for writing delimited (e.g. CSV) data into an output
 stream. It provides a variadic member function, `write_line`, that can
@@ -6088,6 +6092,10 @@ static const char *__doc_fiction_detail_connect_and_place = R"doc()doc";
 
 static const char *__doc_fiction_detail_connect_and_place_2 = R"doc()doc";
 
+static const char *__doc_fiction_detail_connect_and_place_planar = R"doc()doc";
+
+static const char *__doc_fiction_detail_connect_and_place_planar_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_convert_array =
 R"doc(Based on https://stackoverflow.com/questions/57756557/initializing-a-
 stdarray-with-a-constant-value)doc";
@@ -7885,6 +7893,10 @@ static const char *__doc_fiction_detail_fanout_substitution_impl_ps = R"doc(Para
 static const char *__doc_fiction_detail_fanout_substitution_impl_rng = R"doc(Optional helper struct holding the RNG and its distribution.)doc";
 
 static const char *__doc_fiction_detail_fanout_substitution_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_fill_gap_array_zeros = R"doc()doc";
+
+static const char *__doc_fiction_detail_fill_gap_array_zeros_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_gate_level_drvs_impl = R"doc()doc";
 
@@ -10185,6 +10197,18 @@ static const char *__doc_fiction_detail_orthogonal_impl_pst = R"doc()doc";
 
 static const char *__doc_fiction_detail_orthogonal_impl_run = R"doc()doc";
 
+static const char *__doc_fiction_detail_orthogonal_planar_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_orthogonal_planar_impl = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_po_counter = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_ps = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_pst = R"doc()doc";
+
+static const char *__doc_fiction_detail_orthogonal_planar_impl_run = R"doc()doc";
+
 static const char *__doc_fiction_detail_physical_population_stability_impl =
 R"doc(This class implements the simulation of the population stability for a
 given SiDB layout. It determines the minimum electrostatic potential
@@ -10793,6 +10817,10 @@ Parameter ``item``:
 Parameter ``priority``:
     The priority of the element.)doc";
 
+static const char *__doc_fiction_detail_propagate_backward = R"doc()doc";
+
+static const char *__doc_fiction_detail_propagate_forward = R"doc()doc";
+
 static const char *__doc_fiction_detail_qca_energy_dissipation_impl = R"doc()doc";
 
 static const char *__doc_fiction_detail_qca_energy_dissipation_impl_lyt = R"doc()doc";
@@ -11326,6 +11354,8 @@ static const char *__doc_fiction_detail_search_space_graph_pi_locs =
 R"doc(Enum indicating if primary inputs (PIs) can be placed at the top or
 left.)doc";
 
+static const char *__doc_fiction_detail_start_orientation = R"doc()doc";
+
 static const char *__doc_fiction_detail_sweep_parameter_to_string =
 R"doc(Converts a sweep parameter to a string representation. This is used to
 write the parameter name to the CSV file.
@@ -11451,7 +11481,11 @@ Throws:
 
 static const char *__doc_fiction_detail_wire_east = R"doc()doc";
 
+static const char *__doc_fiction_detail_wire_east_planar = R"doc()doc";
+
 static const char *__doc_fiction_detail_wire_south = R"doc()doc";
+
+static const char *__doc_fiction_detail_wire_south_planar = R"doc()doc";
 
 static const char *__doc_fiction_detail_wiring_reduction_impl = R"doc()doc";
 
@@ -17880,6 +17914,9 @@ Parameter ``ntk``:
 Parameter ``ps``:
     Node duplication parameters used in the computation.
 
+Parameter ``pst``:
+    Optional statistics pointer.
+
 Returns:
     A planarized virtual_pi_network.)doc";
 
@@ -17909,6 +17946,9 @@ Parameter ``ntk``:
 
 Parameter ``ps``:
     Node duplication parameters used in the computation.
+
+Parameter ``pst``:
+    Optional statistics pointer.
 
 Returns:
     A planarized virtual_pi_network.)doc";
@@ -17947,6 +17987,12 @@ static const char *__doc_fiction_node_duplication_planarization_f_params_po_orde
 
 static const char *__doc_fiction_node_duplication_planarization_f_params_xor_gates = R"doc(Whether xor gates are allowed in the network.)doc";
 
+static const char *__doc_fiction_node_duplication_planarization_f_stats =
+R"doc(This struct stores statistics about the node duplication planarization
+process.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_f_stats_duration = R"doc(Runtime of the duplication core only (excludes planarity checks).)doc";
+
 static const char *__doc_fiction_node_duplication_planarization_params = R"doc(Parameters for the node duplication algorithm.)doc";
 
 static const char *__doc_fiction_node_duplication_planarization_params_output_order = R"doc(Controls how output nodes are ordered before starting the algorithm.)doc";
@@ -17956,6 +18002,12 @@ static const char *__doc_fiction_node_duplication_planarization_params_output_or
 static const char *__doc_fiction_node_duplication_planarization_params_output_order_RANDOM_PO_ORDER = R"doc(Randomize the PO order.)doc";
 
 static const char *__doc_fiction_node_duplication_planarization_params_po_order = R"doc(The output order used. Defaults to KEEP_PO_ORDER.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_stats =
+R"doc(This struct stores statistics about the node duplication planarization
+process.)doc";
+
+static const char *__doc_fiction_node_duplication_planarization_stats_duration = R"doc(Runtime of the duplication core only (excludes planarity checks).)doc";
 
 static const char *__doc_fiction_normalize_layout_coordinates =
 R"doc(A new layout is constructed and returned that is equivalent to the
@@ -18879,6 +18931,8 @@ static const char *__doc_fiction_orthogonal_physical_design_stats_report = R"doc
 static const char *__doc_fiction_orthogonal_physical_design_stats_x_size = R"doc()doc";
 
 static const char *__doc_fiction_orthogonal_physical_design_stats_y_size = R"doc()doc";
+
+static const char *__doc_fiction_orthogonal_planar = R"doc(Description)doc";
 
 static const char *__doc_fiction_out_of_cell_names_exception = R"doc()doc";
 
