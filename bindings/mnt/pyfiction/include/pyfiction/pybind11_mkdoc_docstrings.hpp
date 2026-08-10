@@ -4155,13 +4155,23 @@ static const char *__doc_fiction_critical_temperature_stats_simulation_parameter
 
 static const char *__doc_fiction_crossing_gate_planarization = R"doc()doc";
 
+static const char *__doc_fiction_crossing_gate_planarization_2 = R"doc()doc";
+
 static const char *__doc_fiction_crossing_gate_planarization_params = R"doc()doc";
+
+static const char *__doc_fiction_crossing_gate_planarization_params_2 = R"doc()doc";
 
 static const char *__doc_fiction_crossing_gate_planarization_params_buffer = R"doc()doc";
 
+static const char *__doc_fiction_crossing_gate_planarization_params_buffer_2 = R"doc()doc";
+
 static const char *__doc_fiction_crossing_gate_planarization_params_verbose = R"doc()doc";
 
+static const char *__doc_fiction_crossing_gate_planarization_params_verbose_2 = R"doc()doc";
+
 static const char *__doc_fiction_crossing_gate_planarization_params_xor_gates = R"doc()doc";
+
+static const char *__doc_fiction_crossing_gate_planarization_params_xor_gates_2 = R"doc()doc";
 
 static const char *__doc_fiction_crossing_gate_planarization_stats = R"doc()doc";
 
@@ -6333,55 +6343,139 @@ static const char *__doc_fiction_detail_critical_temperature_impl_stats = R"doc(
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_ctn = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_ctn_2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_ctn_fo = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_gate_planarization_impl = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_gate_planarization_impl_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_crossing_item = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_crossing_item_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_e1 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_e1_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_e2 = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_e2_2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_fo = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_fo_crossing_item_fo = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_fo_e1 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_fo_e2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_fo_fo_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_fo_level = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_crossing_item_level_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_hash = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_hash_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_hash_operator_call = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_hash_operator_call_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_operator_eq = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_operator_eq_2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_operator_ne = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_source = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_source_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_target = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_edge_target_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_fanout_ntk = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_fanout_ntk_2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_multi_signal = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_ncross_extended = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_ncross_extended_2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_ncross_fo = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_ntk = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_ntk_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_print_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_print_crossings_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_ps = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_ps_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_run = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_run_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_crossings_2 = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_crossings_per_level = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_crossings_per_level_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_edges = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_edges_2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_fo = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_fo_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_fo_crossings_per_level = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_fo_edges = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_fo_unaffected = R"doc()doc";
 
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_unaffected = R"doc()doc";
 
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_stage_result_unaffected_2 = R"doc()doc";
+
 static const char *__doc_fiction_detail_crossing_gate_planarization_impl_total_crossings = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_total_crossings_2 = R"doc()doc";
+
+static const char *__doc_fiction_detail_crossing_gate_planarization_impl_total_crossings_fo = R"doc()doc";
 
 static const char *__doc_fiction_detail_defect_influence_impl = R"doc()doc";
 
