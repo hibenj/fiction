@@ -74,4 +74,7 @@ foreach(FILE IN LISTS FILENAMES)
   endif()
 
   add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME}) # group tests by file
+  if(TEST_NAME STREQUAL "test_mutable_rank_view") # DIAGNOSTIC: surface the ClangCL hang
+    set_tests_properties(${TEST_NAME} PROPERTIES TIMEOUT 900)
+  endif()
 endforeach()

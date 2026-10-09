@@ -38,6 +38,7 @@
 #include <mockturtle/traits.hpp>
 
 #include <functional>
+#include <iostream>
 #include <optional>
 #include <stdexcept>
 #include <vector>
@@ -78,6 +79,7 @@ TEMPLATE_TEST_CASE("Traits", "[mutable-rank-view]", mockturtle::aig_network, moc
                    mockturtle::cover_network, mockturtle::buffered_aig_network, mockturtle::buffered_mig_network,
                    mockturtle::crossed_klut_network, mockturtle::buffered_crossed_klut_network)
 {
+    std::cerr << "[diag] Traits" << std::endl;
     CHECK(mockturtle::is_network_type_v<TestType>);
     CHECK(!mockturtle::has_rank_position_v<TestType>);
     CHECK(!mockturtle::has_at_rank_position_v<TestType>);
@@ -112,6 +114,7 @@ TEMPLATE_TEST_CASE("Traits", "[mutable-rank-view]", mockturtle::aig_network, moc
 
 TEST_CASE("Test constructors", "[mutable-rank-view]")
 {
+    std::cerr << "[diag] Test constructors" << std::endl;
     technology_network                    tec{};
     mutable_rank_view<technology_network> tec_r;
 
@@ -144,6 +147,7 @@ TEST_CASE("Test constructors", "[mutable-rank-view]")
 
 TEST_CASE("Foreach", "[mutable-rank-view]")
 {
+    std::cerr << "[diag] Foreach" << std::endl;
     mutable_rank_view<technology_network> tec_r;
 
     const auto x1_r = tec_r.create_pi();
@@ -179,6 +183,7 @@ TEST_CASE("Foreach", "[mutable-rank-view]")
 
 TEST_CASE("Construct mutable_rank_view with given rank order", "[mutable-rank-view]")
 {
+    std::cerr << "[diag] Construct mutable_rank_view with given rank order" << std::endl;
     technology_network tec{};
 
     CHECK(mockturtle::has_clear_visited_v<technology_network>);
@@ -218,6 +223,7 @@ TEST_CASE("Construct mutable_rank_view with given rank order", "[mutable-rank-vi
 
 TEST_CASE("Check modify ranks", "[mutable-rank-view]")
 {
+    std::cerr << "[diag] Check modify ranks" << std::endl;
     technology_network tec{};
 
     CHECK(mockturtle::has_clear_visited_v<technology_network>);
@@ -254,6 +260,7 @@ TEMPLATE_TEST_CASE("Check equivalence checking", "[mutable-rank-view]", mockturt
                    mockturtle::buffered_aig_network, mockturtle::buffered_mig_network, mockturtle::crossed_klut_network,
                    mockturtle::buffered_crossed_klut_network)
 {
+    std::cerr << "[diag] Check equivalence checking" << std::endl;
     TestType ntk{};
 
     const auto a = ntk.create_pi();
@@ -288,6 +295,7 @@ TEMPLATE_TEST_CASE("Check equivalence checking", "[mutable-rank-view]", mockturt
 
 TEST_CASE("Check equivalence checking for virtual PIs", "[mutable-rank-view]")
 {
+    std::cerr << "[diag] Check equivalence checking for virtual PIs" << std::endl;
     technology_network                     tec{};
     virtual_pi_network<technology_network> vpi{};
 
@@ -327,6 +335,7 @@ TEST_CASE("Check equivalence checking for virtual PIs", "[mutable-rank-view]")
 
 TEST_CASE("Check PI order for equivalence checking", "[mutable-rank-view]")
 {
+    std::cerr << "[diag] Check PI order for equivalence checking" << std::endl;
     technology_network tec{};
 
     const auto a = tec.create_pi();
@@ -362,6 +371,7 @@ TEST_CASE("Check PI order for equivalence checking", "[mutable-rank-view]")
 
 TEST_CASE("Dangling nodes are not ranked", "[mutable-rank-view]")
 {
+    std::cerr << "[diag] Dangling nodes are not ranked" << std::endl;
     technology_network tec{};
 
     const auto x1 = tec.create_pi();
@@ -384,6 +394,7 @@ TEST_CASE("Dangling nodes are not ranked", "[mutable-rank-view]")
 
 TEST_CASE("Primary inputs without fanout are visited last", "[mutable-rank-view]")
 {
+    std::cerr << "[diag] Primary inputs without fanout are visited last" << std::endl;
     technology_network tec{};
 
     const auto unused = tec.create_pi();
@@ -411,6 +422,7 @@ TEST_CASE("Primary inputs without fanout are visited last", "[mutable-rank-view]
 }
 TEST_CASE("Several unranked primary inputs keep their index order", "[mutable-rank-view]")
 {
+    std::cerr << "[diag] Several unranked primary inputs keep their index order" << std::endl;
     technology_network tec{};
 
     const auto unused_1 = tec.create_pi();
