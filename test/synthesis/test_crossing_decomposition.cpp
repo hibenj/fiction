@@ -16,10 +16,13 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "utils/blueprints/network_blueprints.hpp"
+
 #include <fiction/networks/technology_network.hpp>
 #include <fiction/networks/views/mutable_rank_view.hpp>
 #include <fiction/synthesis/crossing_decomposition.hpp>
 #include <fiction/synthesis/network_balancing.hpp>
+#include <fiction/synthesis/network_conversion.hpp>
 #include <fiction/utils/graph/mincross.hpp>
 #include <fiction/verification/virtual_miter.hpp>
 
@@ -29,6 +32,9 @@
 #include <kitty/operators.hpp>
 #include <kitty/print.hpp>
 #include <mockturtle/algorithms/equivalence_checking.hpp>
+#include <mockturtle/algorithms/lut_mapper.hpp>
+#include <mockturtle/networks/aig.hpp>
+#include <mockturtle/networks/klut.hpp>
 #include <mockturtle/traits.hpp>
 
 #include <algorithm>
@@ -85,6 +91,80 @@ technology_network figure_7_network()
     tec.create_po(y);
 
     return tec;
+}
+
+/**
+ * Two Figure 7 pairs side by side: x, y over a, b, c, d and u, v over e, f, g, h in one level.
+ */
+technology_network two_figure_7_pairs_network()
+{
+    technology_network tec{};
+
+    for (auto pair = 0; pair < 2; ++pair)
+    {
+        const auto a = tec.create_pi();
+        const auto b = tec.create_pi();
+        const auto c = tec.create_pi();
+        const auto d = tec.create_pi();
+
+        kitty::dynamic_truth_table va{4u};
+        kitty::dynamic_truth_table vb{4u};
+        kitty::dynamic_truth_table vc{4u};
+        kitty::dynamic_truth_table vd{4u};
+        kitty::create_nth_var(va, 0u);
+        kitty::create_nth_var(vb, 1u);
+        kitty::create_nth_var(vc, 2u);
+        kitty::create_nth_var(vd, 3u);
+
+        tec.create_po(tec.create_node({a, b, c, d}, va & vb & ~vc & vd));
+        tec.create_po(tec.create_node({a, b, c, d}, ~va & vb & ~vc & vd));
+    }
+
+    return tec;
+}
+
+/**
+ * The Figure 7 pair in the middle of a network: its inputs are buffers of the primary inputs, and one gate above
+ * combines the pair into the only output.
+ */
+technology_network buried_figure_7_network()
+{
+    technology_network tec{};
+
+    const auto a = tec.create_buf(tec.create_pi());
+    const auto b = tec.create_buf(tec.create_pi());
+    const auto c = tec.create_buf(tec.create_pi());
+    const auto d = tec.create_buf(tec.create_pi());
+
+    kitty::dynamic_truth_table va{4u};
+    kitty::dynamic_truth_table vb{4u};
+    kitty::dynamic_truth_table vc{4u};
+    kitty::dynamic_truth_table vd{4u};
+    kitty::create_nth_var(va, 0u);
+    kitty::create_nth_var(vb, 1u);
+    kitty::create_nth_var(vc, 2u);
+    kitty::create_nth_var(vd, 3u);
+
+    const auto x = tec.create_node({a, b, c, d}, va & vb & ~vc & vd);
+    const auto y = tec.create_node({a, b, c, d}, ~va & vb & ~vc & vd);
+
+    tec.create_po(tec.create_or(x, y));
+
+    return tec;
+}
+
+/**
+ * Maps a network to 4-LUTs, converts it to a technology network and balances it.
+ */
+template <typename Ntk>
+technology_network lut_mapped(const Ntk& ntk)
+{
+    mockturtle::lut_map_params lps{};
+    lps.cut_enumeration_ps.cut_size = 4u;
+
+    const auto klut = mockturtle::lut_map(ntk, lps);
+
+    return network_balancing<technology_network>(convert_network<technology_network>(klut));
 }
 
 /**
@@ -271,7 +351,7 @@ TEST_CASE("Fewer than two shared inputs", "[crossing-decomposition]")
     CHECK(!fiction::synthesis::detail::find_shared_decomposition(f1, fanins1, f2, fanins3).has_value());
 }
 
-TEST_CASE("Figure 7 starts with six crossings", "[crossing-decomposition]")
+TEST_CASE("Figure 7 drops from six crossings to one", "[crossing-decomposition]")
 {
     const auto tec = figure_7_network();
 
@@ -284,17 +364,156 @@ TEST_CASE("Figure 7 starts with six crossings", "[crossing-decomposition]")
     const auto                   result = crossing_decomposition(balanced, {}, &st);
 
     CHECK(st.crossings_before == 6);
-    CHECK(st.crossings_after == 6);
-    CHECK(st.decompositions == 0);
-    CHECK(st.levels_inserted == 0);
+    CHECK(st.crossings_after == 1);
+    CHECK(st.decompositions == 1);
+    CHECK(st.levels_inserted == 1);
 
     // `mincross` agrees on the returned network
-    CHECK(count_crossings(result) == 6);
+    CHECK(count_crossings(result) == 1);
 
-    CHECK(result.depth() == 1);
+    // the inserted level holds the shared node b ~c d and a buffer of a; the pair became two 2-LUTs over them
+    CHECK(result.depth() == 2);
+    CHECK(result.rank_width(0) == 4);
+    CHECK(result.rank_width(1) == 2);
+    CHECK(result.rank_width(2) == 2);
+
+    uint32_t buffers{0};
+    uint32_t shared_nodes{0};
+    result.foreach_node_in_rank(1,
+                                [&result, &buffers, &shared_nodes](const auto& n)
+                                {
+                                    if (result.is_buf(n))
+                                    {
+                                        ++buffers;
+                                    }
+                                    else
+                                    {
+                                        ++shared_nodes;
+                                        CHECK(result.fanin_size(n) == 3);
+                                    }
+                                });
+    CHECK(buffers == 1);
+    CHECK(shared_nodes == 1);
+
+    result.foreach_node_in_rank(2, [&result](const auto& n) { CHECK(result.fanin_size(n) == 2); });
+
     CHECK(is_balanced(result));
     CHECK(result.check_validity());
     check_equivalent(tec, result);
+}
+
+TEST_CASE("Two pairs in one level share the inserted level", "[crossing-decomposition]")
+{
+    const auto tec = two_figure_7_pairs_network();
+
+    crossing_decomposition_stats st{};
+    const auto                   result = crossing_decomposition(tec, {}, &st);
+
+    CHECK(st.crossings_before == 12);
+    CHECK(st.crossings_after == 2);
+    CHECK(st.decompositions == 2);
+    CHECK(st.levels_inserted == 1);
+
+    CHECK(count_crossings(result) == 2);
+    CHECK(result.depth() == 2);
+    CHECK(result.rank_width(1) == 4);
+    CHECK(result.rank_width(2) == 4);
+
+    CHECK(is_balanced(result));
+    CHECK(result.check_validity());
+    check_equivalent(tec, result);
+}
+
+TEST_CASE("A pair in the middle of a network", "[crossing-decomposition]")
+{
+    const auto tec = buried_figure_7_network();
+    REQUIRE(is_balanced(tec));
+
+    // the six crossings of the pair do not depend on the order of the buffers, so `mincross` may leave the buffer of a
+    // between those of b, c, and d; existing ranks are never re-sorted, and the shared node would then cross the
+    // buffer of a on its way up. Fixing the inputs keeps the buffers in input order and the result at one crossing.
+    crossing_decomposition_params ps{};
+    ps.mincross.fixed_pis = true;
+
+    crossing_decomposition_stats st{};
+    const auto                   result = crossing_decomposition(tec, ps, &st);
+
+    CHECK(st.crossings_before == 6);
+    CHECK(st.crossings_after == 1);
+    CHECK(st.decompositions == 1);
+    CHECK(st.levels_inserted == 1);
+
+    // inputs, their buffers, the inserted level, the pair, the output gate
+    CHECK(count_crossings(result) == 1);
+    CHECK(result.depth() == 4);
+    CHECK(result.rank_width(2) == 2);
+    CHECK(result.rank_width(3) == 2);
+    CHECK(result.rank_width(4) == 1);
+    CHECK(result.num_pos() == 1);
+
+    CHECK(is_balanced(result));
+    CHECK(result.check_validity());
+    check_equivalent(tec, result);
+}
+
+TEST_CASE("Pairs below the shared-fanin threshold are left alone", "[crossing-decomposition]")
+{
+    // f1 = (a ^ b) & c and f2 = d | (a ^ b) share two inputs
+    technology_network tec{};
+
+    const auto a = tec.create_pi();
+    const auto b = tec.create_pi();
+    const auto c = tec.create_pi();
+    const auto d = tec.create_pi();
+
+    tec.create_po(tec.create_node({a, b, c}, (var(3, 0) ^ var(3, 1)) & var(3, 2)));
+    tec.create_po(tec.create_node({d, a, b}, var(3, 0) | (var(3, 1) ^ var(3, 2))));
+
+    crossing_decomposition_params ps{};
+    crossing_decomposition_stats  st{};
+
+    ps.min_shared_fanins = 3;
+    const auto untouched = crossing_decomposition(tec, ps, &st);
+
+    CHECK(st.decompositions == 0);
+    CHECK(st.levels_inserted == 0);
+    CHECK(st.crossings_after == st.crossings_before);
+    CHECK(untouched.depth() == 1);
+
+    ps.min_shared_fanins  = 2;
+    const auto decomposed = crossing_decomposition(tec, ps, &st);
+
+    CHECK(st.crossings_before == 1);
+    CHECK(st.crossings_after == 0);
+    CHECK(st.decompositions == 1);
+    CHECK(decomposed.depth() == 2);
+    check_equivalent(tec, decomposed);
+}
+
+TEST_CASE("LUT-mapped networks stay equivalent and never gain crossings", "[crossing-decomposition]")
+{
+    const auto check = [](const auto& aig)
+    {
+        const auto tec = lut_mapped(aig);
+        REQUIRE(is_balanced(tec));
+
+        crossing_decomposition_stats st{};
+        const auto                   result = crossing_decomposition(tec, {}, &st);
+
+        CHECK(st.crossings_after <= st.crossings_before);
+        CHECK(count_crossings(result) == st.crossings_after);
+        CHECK(is_balanced(result));
+        CHECK(result.check_validity());
+        check_equivalent(tec, result);
+    };
+
+    check(blueprints::maj4_network<mockturtle::aig_network>());
+    check(blueprints::full_adder_network<mockturtle::aig_network>());
+    check(blueprints::mux21_network<mockturtle::aig_network>());
+    check(blueprints::parity_network<mockturtle::aig_network>());
+    check(blueprints::clpl<mockturtle::aig_network>());
+    check(blueprints::nand_xnor_network<mockturtle::aig_network>());
+    check(blueprints::se_coloring_corner_case_network<mockturtle::aig_network>());
 }
 
 TEST_CASE("The initial ordering follows the mincross parameters", "[crossing-decomposition]")

@@ -27,6 +27,7 @@
 #include <kitty/dynamic_truth_table.hpp>
 #include <kitty/operations.hpp>
 #include <mockturtle/traits.hpp>
+#include <mockturtle/utils/node_map.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
 
 #include <algorithm>
@@ -39,6 +40,8 @@
 #include <iterator>
 #include <optional>
 #include <stdexcept>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace fiction::synthesis
@@ -232,17 +235,19 @@ outer_function(const kitty::dynamic_truth_table& f, const std::vector<uint32_t>&
  * fanin edges in any order, and the shared node collapses the k edges to each LUT into one.
  *
  * @tparam Node Node type of the network.
+ * @tparam Pred Predicate type on nodes.
  * @param f1 Function of the first LUT.
  * @param fanins1 Fanins of the first LUT in variable order.
  * @param f2 Function of the second LUT.
  * @param fanins2 Fanins of the second LUT in variable order.
+ * @param shareable Tells for a fanin whether it may feed the shared node; fanins it rejects do not count as shared.
  * @return The decomposition with the largest shared node found, or `std::nullopt` if no subset of the shared fanins
  * admits one.
  */
-template <typename Node>
+template <typename Node, typename Pred>
 [[nodiscard]] std::optional<shared_decomposition<Node>>
 find_shared_decomposition(const kitty::dynamic_truth_table& f1, const std::vector<Node>& fanins1,
-                          const kitty::dynamic_truth_table& f2, const std::vector<Node>& fanins2)
+                          const kitty::dynamic_truth_table& f2, const std::vector<Node>& fanins2, Pred&& shareable)
 {
     assert(f1.num_vars() == fanins1.size() && "f1 must have one variable per fanin");
     assert(f2.num_vars() == fanins2.size() && "f2 must have one variable per fanin");
@@ -259,6 +264,11 @@ find_shared_decomposition(const kitty::dynamic_truth_table& f1, const std::vecto
 
     for (uint32_t i = 0; i < fanins1.size(); ++i)
     {
+        if (!shareable(fanins1[i]))
+        {
+            continue;
+        }
+
         if (const auto it = std::find(fanins2.cbegin(), fanins2.cend(), fanins1[i]); it != fanins2.cend())
         {
             shared.push_back({fanins1[i], i, static_cast<uint32_t>(std::distance(fanins2.cbegin(), it))});
@@ -366,7 +376,59 @@ find_shared_decomposition(const kitty::dynamic_truth_table& f1, const std::vecto
 }
 
 /**
+ * Searches for a node two LUTs can share, with every common fanin allowed to feed it.
+ *
+ * @tparam Node Node type of the network.
+ * @param f1 Function of the first LUT.
+ * @param fanins1 Fanins of the first LUT in variable order.
+ * @param f2 Function of the second LUT.
+ * @param fanins2 Fanins of the second LUT in variable order.
+ * @return The decomposition with the largest shared node found, or `std::nullopt` if no subset of the shared fanins
+ * admits one.
+ */
+template <typename Node>
+[[nodiscard]] std::optional<shared_decomposition<Node>>
+find_shared_decomposition(const kitty::dynamic_truth_table& f1, const std::vector<Node>& fanins1,
+                          const kitty::dynamic_truth_table& f2, const std::vector<Node>& fanins2)
+{
+    return find_shared_decomposition(f1, fanins1, f2, fanins2, [](const Node&) { return true; });
+}
+
+/**
+ * Median of a list of rank positions: the middle one, or the mean of the two middle ones for an even count.
+ *
+ * @param positions Positions; sorted by this function.
+ * @return The median, or 0 for an empty list.
+ */
+[[nodiscard]] inline double median_position(std::vector<uint32_t>& positions) noexcept
+{
+    if (positions.empty())
+    {
+        return 0.0;
+    }
+
+    std::ranges::sort(positions);
+
+    const auto mid = positions.size() / 2;
+
+    if (positions.size() % 2 == 1)
+    {
+        return static_cast<double>(positions[mid]);
+    }
+
+    return (static_cast<double>(positions[mid - 1]) + static_cast<double>(positions[mid])) / 2.0;
+}
+
+/**
  * Implementation of the crossing-aware LUT decomposition.
+ *
+ * The pass walks the levels of the ordered network from the inputs to the outputs. In every level it looks for a pair
+ * of LUTs that share fanins and admit a shared node (`find_shared_decomposition`). A candidate is materialized into a
+ * fresh network whose rank order is derived from the current one, counted with `mincross` without reordering, and
+ * accepted only if the count drops; the search then restarts in the same level on the new network. The first accepted
+ * decomposition of a level inserts a new level below it that holds the shared node and one buffer for every other
+ * node of the level below that still feeds the level; later decompositions of the same level put their shared node
+ * into that inserted level. Existing ranks are never re-sorted.
  *
  * @tparam Ntk Balanced LUT network type with node functions.
  */
@@ -378,6 +440,14 @@ class crossing_decomposition_impl
      * Ranked network type the algorithm works on and returns.
      */
     using ranked_network = fiction::networks::views::mutable_rank_view<Ntk>;
+    /**
+     * Node type.
+     */
+    using node = mockturtle::node<Ntk>;
+    /**
+     * Signal type.
+     */
+    using signal = mockturtle::signal<Ntk>;
 
     /**
      * Creates the implementation.
@@ -394,10 +464,9 @@ class crossing_decomposition_impl
     {}
 
     /**
-     * Runs the algorithm: ranks the network, orders it with `mincross`, and records the crossing count. The
-     * decomposition itself follows in a later slice; until then, the ordered network is returned unchanged.
+     * Runs the algorithm: ranks the network, orders it with `mincross`, and then improves it level by level.
      *
-     * @return The ordered network.
+     * @return The ordered network with the accepted decompositions applied.
      */
     [[nodiscard]] ranked_network run()
     {
@@ -405,15 +474,359 @@ class crossing_decomposition_impl
 
         fiction::utils::graph::mincross_stats mincross_st{};
 
-        auto ordered = fiction::utils::graph::mincross(ranked, ps.mincross, &mincross_st);
+        auto current           = fiction::utils::graph::mincross(ranked, ps.mincross, &mincross_st);
+        auto current_crossings = mincross_st.num_crossings;
 
-        pst.crossings_before = mincross_st.num_crossings;
-        pst.crossings_after  = pst.crossings_before;
+        pst.crossings_before = current_crossings;
 
-        return ordered;
+        const auto original_depth = current.depth();
+
+        // levels inserted so far; the original level `r_orig` now sits at `r_orig + shift`
+        uint32_t shift = 0;
+
+        for (uint32_t r_orig = 1; r_orig <= original_depth; ++r_orig)
+        {
+            auto r             = r_orig + shift;
+            bool inserted_here = false;
+
+            while (auto improved = find_improvement(current, r, inserted_here, current_crossings))
+            {
+                current           = std::move(improved->network);
+                current_crossings = improved->crossings;
+                ++pst.decompositions;
+
+                if (!inserted_here)
+                {
+                    // the first accepted decomposition of this level inserted a level below it
+                    inserted_here = true;
+                    ++shift;
+                    ++r;
+                    ++pst.levels_inserted;
+                }
+            }
+        }
+
+        pst.crossings_after = current_crossings;
+
+        return current;
     }
 
   private:
+    /**
+     * A materialized candidate with its crossing count.
+     */
+    struct improvement
+    {
+        ranked_network network;
+        uint64_t       crossings;
+    };
+
+    /**
+     * Looks for the first pair of LUTs in level `r` whose decomposition lowers the crossing count below `bound`.
+     *
+     * @param cur Current network.
+     * @param r Level to search.
+     * @param below_is_inserted Whether level `r - 1` was inserted by this pass for level `r`; then only its buffers may
+     * feed a new shared node, and no further level is inserted.
+     * @param bound Crossing count to beat.
+     * @return The improved network and its count, or `std::nullopt` if no pair improves on the bound.
+     */
+    [[nodiscard]] std::optional<improvement> find_improvement(const ranked_network& cur, const uint32_t r,
+                                                              const bool below_is_inserted, const uint64_t bound) const
+    {
+        // the LUTs of the level, left to right; buffers compute no function worth decomposing
+        std::vector<node> luts{};
+        cur.foreach_node_in_rank(r,
+                                 [&cur, &luts](const auto& n)
+                                 {
+                                     if (!cur.is_constant(n) && !cur.is_ci(n) && !cur.is_buf(n))
+                                     {
+                                         luts.push_back(n);
+                                     }
+                                 });
+
+        const auto shareable = [&cur, below_is_inserted](const node& n)
+        { return !cur.is_constant(n) && (!below_is_inserted || cur.is_buf(n)); };
+
+        std::vector<std::vector<node>> fanins(luts.size());
+
+        for (std::size_t i = 0; i < luts.size(); ++i)
+        {
+            cur.foreach_fanin(luts[i], [&cur, &fanins, i](const auto& f) { fanins[i].push_back(cur.get_node(f)); });
+        }
+
+        for (std::size_t i = 0; i < luts.size(); ++i)
+        {
+            for (std::size_t j = i + 1; j < luts.size(); ++j)
+            {
+                const auto num_shared = static_cast<uint32_t>(std::count_if(
+                    fanins[i].cbegin(), fanins[i].cend(),
+                    [&fanins, &shareable, j](const auto& f)
+                    {
+                        return shareable(f) && std::find(fanins[j].cbegin(), fanins[j].cend(), f) != fanins[j].cend();
+                    }));
+
+                if (num_shared < std::max(ps.min_shared_fanins, 2u))
+                {
+                    continue;
+                }
+
+                const auto dec = find_shared_decomposition(cur.node_function(luts[i]), fanins[i],
+                                                           cur.node_function(luts[j]), fanins[j], shareable);
+
+                if (!dec.has_value())
+                {
+                    continue;
+                }
+
+                auto candidate = materialize(cur, r, luts[i], luts[j], *dec, !below_is_inserted);
+
+                const auto crossings = count_crossings(candidate);
+
+                if (crossings < bound)
+                {
+                    return improvement{std::move(candidate), crossings};
+                }
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    /**
+     * Counts the crossings of a ranked network without reordering it, with the `mincross` parameters of the pass.
+     *
+     * @param ranked Ranked network.
+     * @return Number of crossings.
+     */
+    [[nodiscard]] uint64_t count_crossings(const ranked_network& ranked) const
+    {
+        auto count_ps     = ps.mincross;
+        count_ps.optimize = false;
+
+        fiction::utils::graph::mincross_stats st{};
+        fiction::utils::graph::mincross(ranked, count_ps, &st);
+
+        return st.num_crossings;
+    }
+
+    /**
+     * Builds the network in which the LUTs `n1` and `n2` of level `r` are replaced by `dec`: a fresh network is
+     * created level by level in the rank order of `cur`, and the result is ranked with that order.
+     *
+     * With `insert_level`, a new level is placed between `r - 1` and `r`: it holds the shared node at the median
+     * position of its fanins and one buffer for every node of level `r - 1` that still feeds level `r`, each at its
+     * source's position. Without it, level `r - 1` is the level inserted earlier for level `r`: the shared node is
+     * placed there over the sources of the buffers it replaces, and a buffer that fed only `n1` and `n2` is dropped.
+     *
+     * @param cur Current network.
+     * @param r Level of the pair.
+     * @param n1 First LUT of the pair.
+     * @param n2 Second LUT of the pair.
+     * @param dec Decomposition of the pair.
+     * @param insert_level Whether to insert a level for the shared node.
+     * @return The ranked network with the decomposition applied.
+     */
+    [[nodiscard]] ranked_network materialize(const ranked_network& cur, const uint32_t r, const node& n1,
+                                             const node& n2, const shared_decomposition<node>& dec,
+                                             const bool insert_level) const
+    {
+        Ntk dest{};
+
+        mockturtle::node_map<signal, ranked_network> old2new{cur};
+
+        old2new[cur.get_constant(false)] = dest.get_constant(false);
+        if (cur.get_node(cur.get_constant(true)) != cur.get_node(cur.get_constant(false)))
+        {
+            old2new[cur.get_constant(true)] = dest.get_constant(true);
+        }
+
+        cur.foreach_pi_unranked([&dest, &old2new](const auto& pi) { old2new[pi] = dest.create_pi(); });
+
+        std::vector<std::vector<node>> new_ranks{};
+        new_ranks.reserve(cur.depth() + 2);
+
+        // the nodes of an old rank in the new network, in the old order
+        const auto map_rank = [&dest, &old2new](const std::vector<node>& old_rank)
+        {
+            std::vector<node> mapped{};
+            mapped.reserve(old_rank.size());
+            std::ranges::transform(old_rank, std::back_inserter(mapped),
+                                   [&dest, &old2new](const auto& n) { return dest.get_node(old2new[n]); });
+            return mapped;
+        };
+
+        // copies a node with its fanins mapped
+        const auto clone = [&cur, &dest, &old2new](const node& n)
+        {
+            std::vector<signal> children{};
+            children.reserve(cur.fanin_size(n));
+            cur.foreach_fanin(n, [&cur, &old2new, &children](const auto& f)
+                              { children.push_back(old2new[cur.get_node(f)]); });
+            old2new[n] = dest.clone_node(cur, n, children);
+        };
+
+        const auto is_y = [&dec](const node& n)
+        { return std::find(dec.h_fanins.cbegin(), dec.h_fanins.cend(), n) != dec.h_fanins.cend(); };
+
+        // nodes of level r - 1 that keep a fanout into level r once the Y edges into n1 and n2 are gone
+        std::unordered_set<node> keeps_fanout{};
+        cur.foreach_node_in_rank(r,
+                                 [&cur, &n1, &n2, &is_y, &keeps_fanout](const auto& m)
+                                 {
+                                     cur.foreach_fanin(m,
+                                                       [&cur, &n1, &n2, &m, &is_y, &keeps_fanout](const auto& f)
+                                                       {
+                                                           const auto fn = cur.get_node(f);
+                                                           if (!cur.is_constant(fn) &&
+                                                               !((m == n1 || m == n2) && is_y(fn)))
+                                                           {
+                                                               keeps_fanout.insert(fn);
+                                                           }
+                                                       });
+                                 });
+
+        // levels up to the one the shared node goes into are copied as they are
+        new_ranks.push_back(map_rank(cur.get_ranks(0)));
+
+        const auto last_verbatim = insert_level ? r - 1 : r - 2;
+
+        for (uint32_t l = 1; l <= last_verbatim; ++l)
+        {
+            const auto old_rank = cur.get_ranks(l);
+            std::ranges::for_each(old_rank, clone);
+            new_ranks.push_back(map_rank(old_rank));
+        }
+
+        // the level of the shared node: new nodes with the position that orders them
+        struct placed
+        {
+            node   n;
+            double key;
+        };
+
+        std::vector<placed> shared_level{};
+        // maps a node of level r - 1 to the signal that replaces it as a fanin of level r
+        mockturtle::node_map<signal, ranked_network> replaced_by{cur};
+        std::vector<uint32_t>                        h_positions{};
+        std::vector<signal>                          h_children{};
+
+        if (insert_level)
+        {
+            cur.foreach_node_in_rank(r - 1,
+                                     [&cur, &dest, &old2new, &keeps_fanout, &replaced_by, &shared_level](const auto& f)
+                                     {
+                                         if (keeps_fanout.contains(f))
+                                         {
+                                             replaced_by[f] = dest.create_buf(old2new[f]);
+                                             shared_level.push_back({dest.get_node(replaced_by[f]),
+                                                                     static_cast<double>(cur.rank_position(f))});
+                                         }
+                                     });
+
+            for (const auto& y : dec.h_fanins)
+            {
+                h_children.push_back(old2new[y]);
+                h_positions.push_back(cur.rank_position(y));
+            }
+        }
+        else
+        {
+            cur.foreach_node_in_rank(
+                r - 1,
+                [&cur, &dest, &old2new, &is_y, &keeps_fanout, &replaced_by, &shared_level, &clone](const auto& q)
+                {
+                    // a buffer whose only fanouts were the Y edges disappears with them
+                    if (is_y(q) && !keeps_fanout.contains(q))
+                    {
+                        return;
+                    }
+                    clone(q);
+                    replaced_by[q] = old2new[q];
+                    shared_level.push_back({dest.get_node(old2new[q]), static_cast<double>(cur.rank_position(q))});
+                });
+
+            for (const auto& y : dec.h_fanins)
+            {
+                assert(cur.is_buf(y) && "only buffers of the inserted level feed a shared node placed there");
+                // the source of the buffer sits in level r - 2 and is mapped already
+                cur.foreach_fanin(y, [&cur, &old2new, &h_children](const auto& f)
+                                  { h_children.push_back(old2new[cur.get_node(f)]); });
+                h_positions.push_back(cur.rank_position(y));
+            }
+        }
+
+        const auto h = dest.create_node(h_children, dec.h);
+        shared_level.push_back({dest.get_node(h), median_position(h_positions)});
+
+        std::ranges::stable_sort(shared_level, [](const auto& a, const auto& b) { return a.key < b.key; });
+
+        {
+            std::vector<node> level_nodes{};
+            level_nodes.reserve(shared_level.size());
+            std::ranges::transform(shared_level, std::back_inserter(level_nodes), [](const auto& p) { return p.n; });
+            new_ranks.push_back(std::move(level_nodes));
+        }
+
+        // level r: the pair becomes g1 and g2 over the shared node, every other node is copied over the replacements
+        const auto new_lut =
+            [&dest, &replaced_by, &h](const std::vector<node>& own_fanins, const kitty::dynamic_truth_table& g)
+        {
+            std::vector<signal> children{};
+            children.reserve(own_fanins.size() + 1);
+            std::ranges::transform(own_fanins, std::back_inserter(children),
+                                   [&replaced_by](const auto& z) { return replaced_by[z]; });
+            children.push_back(h);
+            return dest.create_node(children, g);
+        };
+
+        const auto old_rank_r = cur.get_ranks(r);
+
+        for (const auto& m : old_rank_r)
+        {
+            if (m == n1)
+            {
+                old2new[m] = new_lut(dec.g1_fanins, dec.g1);
+            }
+            else if (m == n2)
+            {
+                old2new[m] = new_lut(dec.g2_fanins, dec.g2);
+            }
+            else
+            {
+                std::vector<signal> children{};
+                children.reserve(cur.fanin_size(m));
+                cur.foreach_fanin(m,
+                                  [&cur, &old2new, &replaced_by, &children](const auto& f)
+                                  {
+                                      const auto fn = cur.get_node(f);
+                                      children.push_back(cur.is_constant(fn) ? old2new[fn] : replaced_by[fn]);
+                                  });
+                old2new[m] = dest.clone_node(cur, m, children);
+            }
+        }
+
+        new_ranks.push_back(map_rank(old_rank_r));
+
+        // levels above are copied as they are
+        for (uint32_t l = r + 1; l <= cur.depth(); ++l)
+        {
+            const auto old_rank = cur.get_ranks(l);
+            std::ranges::for_each(old_rank, clone);
+            new_ranks.push_back(map_rank(old_rank));
+        }
+
+        cur.foreach_po([&cur, &dest, &old2new](const auto& po) { dest.create_po(old2new[cur.get_node(po)]); });
+
+        ranked_network result{dest, new_ranks};
+
+        assert(result.depth() + 1 == new_ranks.size() && "the derived order must cover every level");
+        assert(result.check_validity() && "the derived order must match the levels");
+        assert(is_balanced(result) && "the result must stay balanced");
+
+        return result;
+    }
+
     /**
      * Source network.
      */
@@ -454,6 +867,8 @@ crossing_decomposition(const Ntk& ntk, const crossing_decomposition_params& ps =
     static_assert(mockturtle::has_node_function_v<Ntk>, "Ntk does not implement the node_function method");
     static_assert(mockturtle::has_create_node_v<Ntk>, "Ntk does not implement the create_node method");
     static_assert(mockturtle::has_create_buf_v<Ntk>, "Ntk does not implement the create_buf method");
+    static_assert(mockturtle::has_clone_node_v<Ntk>, "Ntk does not implement the clone_node method");
+    static_assert(mockturtle::has_is_buf_v<Ntk>, "Ntk does not implement the is_buf method");
 
     if (!is_balanced(ntk))
     {
