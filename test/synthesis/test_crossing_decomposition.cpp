@@ -24,15 +24,20 @@
 #include <fiction/verification/virtual_miter.hpp>
 
 #include <kitty/constructors.hpp>
+#include <kitty/decomposition.hpp>
 #include <kitty/dynamic_truth_table.hpp>
 #include <kitty/operators.hpp>
 #include <kitty/print.hpp>
 #include <mockturtle/algorithms/equivalence_checking.hpp>
+#include <mockturtle/traits.hpp>
 
+#include <algorithm>
 #include <cstdint>
+#include <iterator>
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 using namespace fiction;
 using namespace fiction::networks;
@@ -116,7 +121,155 @@ void check_equivalent(const Spec& spec, const Impl& impl)
     }
 }
 
+using node = mockturtle::node<technology_network>;
+
+/**
+ * Creates the variable `index` of a truth table over `num_vars` variables.
+ */
+kitty::dynamic_truth_table var(uint32_t num_vars, uint8_t index)
+{
+    kitty::dynamic_truth_table tt{num_vars};
+    kitty::create_nth_var(tt, index);
+    return tt;
+}
+
+/**
+ * Checks a found decomposition of f over `fanins` against kitty's Ashenhurst oracle: the outer function g over the
+ * fanins that are not shared-node inputs plus the shared node must compose back to f.
+ */
+void check_oracle(const kitty::dynamic_truth_table& f, const std::vector<node>& fanins,
+                  const std::vector<node>& g_fanins, const kitty::dynamic_truth_table& g,
+                  const fiction::synthesis::detail::shared_decomposition<node>& dec)
+{
+    std::vector<uint32_t> ys{};
+    std::vector<uint32_t> zs{};
+
+    for (const auto& n : dec.h_fanins)
+    {
+        const auto it = std::find(fanins.cbegin(), fanins.cend(), n);
+        REQUIRE(it != fanins.cend());
+        ys.push_back(static_cast<uint32_t>(std::distance(fanins.cbegin(), it)));
+    }
+    for (const auto& n : g_fanins)
+    {
+        const auto it = std::find(fanins.cbegin(), fanins.cend(), n);
+        REQUIRE(it != fanins.cend());
+        zs.push_back(static_cast<uint32_t>(std::distance(fanins.cbegin(), it)));
+    }
+
+    CHECK(g.num_vars() == zs.size() + 1);
+    CHECK(kitty::is_ashenhurst_decomposable(f, zs, ys, g, dec.h));
+}
+
 }  // namespace
+
+TEST_CASE("Figure 7 LUT pair shares b ~c d", "[crossing-decomposition]")
+{
+    // x = a b ~c d and y = ~a b ~c d over the fanins a, b, c, d (node ids 1 to 4)
+    const std::vector<node> fanins{1, 2, 3, 4};
+
+    const auto f1 = var(4, 0) & var(4, 1) & ~var(4, 2) & var(4, 3);
+    const auto f2 = ~var(4, 0) & var(4, 1) & ~var(4, 2) & var(4, 3);
+
+    const auto dec = fiction::synthesis::detail::find_shared_decomposition(f1, fanins, f2, fanins);
+
+    REQUIRE(dec.has_value());
+
+    // the shared node is h = b ~c d; a stays with each LUT, which becomes a h and ~a h
+    CHECK(dec->h_fanins == std::vector<node>{2, 3, 4});
+    CHECK(dec->h == (var(3, 0) & ~var(3, 1) & var(3, 2)));
+    CHECK(dec->g1_fanins == std::vector<node>{1});
+    CHECK(dec->g1 == (var(2, 0) & var(2, 1)));
+    CHECK(dec->g2_fanins == std::vector<node>{1});
+    CHECK(dec->g2 == (~var(2, 0) & var(2, 1)));
+
+    check_oracle(f1, fanins, dec->g1_fanins, dec->g1, *dec);
+    check_oracle(f2, fanins, dec->g2_fanins, dec->g2, *dec);
+}
+
+TEST_CASE("Two shared inputs with a common XOR", "[crossing-decomposition]")
+{
+    // f1 = (a ^ b) & c over a, b, c; f2 = d | (a ^ b) over d, a, b: the shared inputs sit at different positions
+    const std::vector<node> fanins1{1, 2, 3};
+    const std::vector<node> fanins2{4, 1, 2};
+
+    const auto f1 = (var(3, 0) ^ var(3, 1)) & var(3, 2);
+    const auto f2 = var(3, 0) | (var(3, 1) ^ var(3, 2));
+
+    const auto dec = fiction::synthesis::detail::find_shared_decomposition(f1, fanins1, f2, fanins2);
+
+    REQUIRE(dec.has_value());
+
+    CHECK(dec->h_fanins == std::vector<node>{1, 2});
+    CHECK(dec->h == (var(2, 0) ^ var(2, 1)));
+    CHECK(dec->g1_fanins == std::vector<node>{3});
+    CHECK(dec->g1 == (var(2, 0) & var(2, 1)));
+    CHECK(dec->g2_fanins == std::vector<node>{4});
+    CHECK(dec->g2 == (var(2, 0) | var(2, 1)));
+
+    check_oracle(f1, fanins1, dec->g1_fanins, dec->g1, *dec);
+    check_oracle(f2, fanins2, dec->g2_fanins, dec->g2, *dec);
+}
+
+TEST_CASE("The largest shared node is preferred", "[crossing-decomposition]")
+{
+    // f1 = a ^ b ^ c ^ d and f2 = ~(a ^ b ^ c ^ d): the parity of all four inputs is the shared node, the LUTs
+    // collapse to a buffer and an inverter of it
+    const std::vector<node> fanins{1, 2, 3, 4};
+
+    const auto f1 = var(4, 0) ^ var(4, 1) ^ var(4, 2) ^ var(4, 3);
+    const auto f2 = ~f1;
+
+    const auto dec = fiction::synthesis::detail::find_shared_decomposition(f1, fanins, f2, fanins);
+
+    REQUIRE(dec.has_value());
+
+    CHECK(dec->h_fanins == fanins);
+    CHECK(dec->h == f1);
+    CHECK(dec->g1_fanins.empty());
+    CHECK(dec->g1 == var(1, 0));
+    CHECK(dec->g2_fanins.empty());
+    CHECK(dec->g2 == ~var(1, 0));
+
+    check_oracle(f1, fanins, dec->g1_fanins, dec->g1, *dec);
+    check_oracle(f2, fanins, dec->g2_fanins, dec->g2, *dec);
+}
+
+TEST_CASE("Shared inputs without a common sub-function", "[crossing-decomposition]")
+{
+    // a & b needs h to single out the minterm 11, a | b needs it to single out 00: no binary h does both
+    const std::vector<node> fanins{1, 2};
+
+    const auto f1 = var(2, 0) & var(2, 1);
+    const auto f2 = var(2, 0) | var(2, 1);
+
+    CHECK(!fiction::synthesis::detail::find_shared_decomposition(f1, fanins, f2, fanins).has_value());
+
+    // with a third shared input c, the pair a & b & c and (a | b) & c has no common sub-function either: h would have
+    // to be over {a, b} (impossible, see above), over {a, c}, {b, c} (the other variable is symmetric in neither) or
+    // over all three (impossible for the same reason as {a, b})
+    const std::vector<node> fanins3{1, 2, 3};
+
+    const auto f3 = var(3, 0) & var(3, 1) & var(3, 2);
+    const auto f4 = (var(3, 0) | var(3, 1)) & var(3, 2);
+
+    CHECK(!fiction::synthesis::detail::find_shared_decomposition(f3, fanins3, f4, fanins3).has_value());
+}
+
+TEST_CASE("Fewer than two shared inputs", "[crossing-decomposition]")
+{
+    const std::vector<node> fanins1{1, 2};
+    const std::vector<node> fanins2{2, 3};
+
+    const auto f1 = var(2, 0) & var(2, 1);
+    const auto f2 = var(2, 0) & var(2, 1);
+
+    CHECK(!fiction::synthesis::detail::find_shared_decomposition(f1, fanins1, f2, fanins2).has_value());
+
+    const std::vector<node> fanins3{3, 4};
+
+    CHECK(!fiction::synthesis::detail::find_shared_decomposition(f1, fanins1, f2, fanins3).has_value());
+}
 
 TEST_CASE("Figure 7 starts with six crossings", "[crossing-decomposition]")
 {
