@@ -507,6 +507,47 @@ TEST_CASE("A pair in the middle of a network", "[crossing-decomposition]")
     }
 }
 
+TEST_CASE("LUT functions with unused top variables are read over the fanins", "[crossing-decomposition]")
+{
+    // a LUT mapper may leave an unused variable in a function: four variables, three fanins, evaluated with the
+    // top variable at zero
+    technology_network tec{};
+
+    const auto a = tec.create_pi();
+    const auto b = tec.create_pi();
+    const auto c = tec.create_pi();
+    const auto d = tec.create_pi();
+
+    const auto x = tec.create_node({a, b, c, d}, var(4u, 0) & var(4u, 1) & ~var(4u, 2) & var(4u, 3));
+    const auto y = tec.create_node({a, b, c, d}, ~var(4u, 0) & var(4u, 1) & ~var(4u, 2) & var(4u, 3));
+
+    // z = b & ~c & d as a four-variable function over three fanins (its variable 3 is unused)
+    kitty::dynamic_truth_table vb{4u};
+    kitty::dynamic_truth_table vc{4u};
+    kitty::dynamic_truth_table vd{4u};
+    kitty::create_nth_var(vb, 0u);
+    kitty::create_nth_var(vc, 1u);
+    kitty::create_nth_var(vd, 2u);
+    const auto z = tec.create_node({b, c, d}, vb & ~vc & vd);
+
+    tec.create_po(x);
+    tec.create_po(y);
+    tec.create_po(z);
+
+    REQUIRE(tec.node_function(tec.get_node(z)).num_vars() == 4u);
+    REQUIRE(tec.fanin_size(tec.get_node(z)) == 3u);
+
+    crossing_decomposition_stats st{};
+    const auto                   result = crossing_decomposition(tec, {}, &st);
+
+    CHECK(st.crossings_after < st.crossings_before);
+    CHECK(st.decompositions >= 1);
+
+    CHECK(is_balanced(result));
+    CHECK(result.check_validity());
+    check_equivalent(tec, result);
+}
+
 TEST_CASE("Pairs below the shared-fanin threshold are left alone", "[crossing-decomposition]")
 {
     // f1 = (a ^ b) & c and f2 = d | (a ^ b) share two inputs

@@ -592,8 +592,8 @@ class crossing_decomposition_impl
                     continue;
                 }
 
-                const auto dec = find_shared_decomposition(cur.node_function(luts[i]), fanins[i],
-                                                           cur.node_function(luts[j]), fanins[j], shareable);
+                const auto dec = find_shared_decomposition(lut_function(cur, luts[i], fanins[i]), fanins[i],
+                                                           lut_function(cur, luts[j], fanins[j]), fanins[j], shareable);
 
                 if (!dec.has_value())
                 {
@@ -617,6 +617,31 @@ class crossing_decomposition_impl
         }
 
         return std::nullopt;
+    }
+
+    /**
+     * Returns the function of a LUT over exactly its fanins. A LUT mapper may store a function with more variables
+     * than the node has fanins (the unused top variables are left in the table); mockturtle evaluates such a node with
+     * those variables at zero, which is the low part of the table.
+     *
+     * @param cur Network.
+     * @param n LUT.
+     * @param fanins Its fanins.
+     * @return The function over `fanins.size()` variables.
+     */
+    [[nodiscard]] static kitty::dynamic_truth_table lut_function(const ranked_network& cur, const node& n,
+                                                                 const std::vector<node>& fanins)
+    {
+        auto f = cur.node_function(n);
+
+        assert(f.num_vars() >= fanins.size() && "a LUT cannot have more fanins than variables");
+
+        if (f.num_vars() > fanins.size())
+        {
+            f = kitty::shrink_to(f, static_cast<uint32_t>(fanins.size()));
+        }
+
+        return f;
     }
 
     /**
