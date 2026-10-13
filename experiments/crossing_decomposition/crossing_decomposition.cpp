@@ -11,7 +11,8 @@
 /**
  * @file
  * @brief Maps benchmark networks to 4-LUTs, balances them, and decomposes LUT pairs with shared fanins into shared
- * nodes where that lowers the crossing count; every result is checked by SAT.
+ * nodes where that lowers the crossing count; every result is checked by SAT or, where SAT gives up, by random
+ * simulation.
  * @author Benjamin Hien (hibenj)
  */
 
@@ -27,9 +28,11 @@
 #include <fiction/verification/virtual_miter.hpp>
 
 #include <fmt/format.h>
+#include <kitty/partial_truth_table.hpp>
 #include <mockturtle/algorithms/cleanup.hpp>
 #include <mockturtle/algorithms/equivalence_checking.hpp>
 #include <mockturtle/algorithms/lut_mapper.hpp>
+#include <mockturtle/algorithms/simulation.hpp>
 #include <mockturtle/networks/aig.hpp>
 #include <mockturtle/networks/klut.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
@@ -62,6 +65,14 @@ constexpr uint64_t PAPER_BENCHMARKS =
  * LUT size of the mapping.
  */
 constexpr uint32_t LUT_SIZE = 4;
+/**
+ * Conflicts after which the SAT-based equivalence check gives way to random simulation.
+ */
+constexpr uint32_t SAT_CONFLICT_LIMIT = 1000000;
+/**
+ * Number of random input patterns of the simulation-based check.
+ */
+constexpr uint32_t SIMULATION_PATTERNS = 4096;
 
 /**
  * Reads a benchmark as an AIG.
@@ -104,22 +115,64 @@ uint32_t num_luts(const Ntk& ntk)
 }
 
 /**
- * Checks equivalence of the decomposed network against the balanced one by SAT on the `virtual_miter`.
+ * Result of an equivalence check.
+ */
+struct equivalence_result
+{
+    /**
+     * Whether the networks were found equivalent.
+     */
+    bool equivalent{false};
+    /**
+     * `SAT` for a proof, `simulation` for a random-pattern check, `miter` if no miter could be built.
+     */
+    std::string method{"miter"};
+};
+
+/**
+ * Simulates `SIMULATION_PATTERNS` random patterns on both networks and compares the outputs. Used where SAT runs
+ * into its conflict limit, e.g., on multipliers.
  */
 template <typename Spec, typename Impl>
-bool is_equivalent(const Spec& spec, const Impl& impl)
+bool simulate_equivalent(const Spec& spec, const Impl& impl)
+{
+    using tt_t = kitty::partial_truth_table;
+
+    const mockturtle::partial_simulator sim{spec.num_pis(), SIMULATION_PATTERNS};
+
+    // the plain network underneath the rank view: its `foreach_pi` runs in creation order, as the simulator expects
+    const auto reference = mockturtle::simulate<tt_t>(spec, sim);
+    const auto result    = mockturtle::simulate<tt_t>(static_cast<const technology_network&>(impl), sim);
+
+    return reference == result;
+}
+
+/**
+ * Checks equivalence of the decomposed network against the balanced one: by SAT on the `virtual_miter` up to
+ * `SAT_CONFLICT_LIMIT` conflicts, by random simulation if SAT gives up.
+ */
+template <typename Spec, typename Impl>
+equivalence_result is_equivalent(const Spec& spec, const Impl& impl)
 {
     const auto miter = virtual_miter<technology_network>(spec, impl);
 
     if (!miter.has_value())
     {
-        return false;
+        return {};
     }
 
-    mockturtle::equivalence_checking_stats st{};
-    const auto                             cec = mockturtle::equivalence_checking(*miter, {}, &st);
+    mockturtle::equivalence_checking_params ps{};
+    ps.conflict_limit = SAT_CONFLICT_LIMIT;
 
-    return cec.has_value() && *cec;
+    mockturtle::equivalence_checking_stats st{};
+    const auto                             cec = mockturtle::equivalence_checking(*miter, ps, &st);
+
+    if (cec.has_value())
+    {
+        return {*cec, "SAT"};
+    }
+
+    return {simulate_equivalent(spec, impl), "simulation"};
 }
 
 }  // namespace
@@ -127,7 +180,7 @@ bool is_equivalent(const Spec& spec, const Impl& impl)
 int main(const int argc, const char** argv)  // NOLINT
 {
     experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t,
-                            uint32_t, uint32_t, uint64_t, double, bool>
+                            uint32_t, uint32_t, uint64_t, uint64_t, double, bool, std::string>
         decomposition_exp{"crossing_decomposition",
                           "benchmark",
                           "inputs",
@@ -141,8 +194,10 @@ int main(const int argc, const char** argv)  // NOLINT
                           "shared nodes",
                           "levels inserted",
                           "swaps",
+                          "candidates",
                           "runtime [s]",
-                          "equivalent"};
+                          "equivalent",
+                          "check"};
 
     // benchmark names on the command line restrict the run, e.g., `ISCAS85/c17`
     std::vector<std::string> benchmarks{};
@@ -181,10 +236,12 @@ int main(const int argc, const char** argv)  // NOLINT
             crossing_decomposition_stats  st{};
             const auto                    result = crossing_decomposition(balanced, ps, &st);
 
+            st.report();
+
             fmt::print("[i]   checking equivalence\n");
             const auto equivalent = is_equivalent(balanced, result);
 
-            if (!equivalent)
+            if (!equivalent.equivalent)
             {
                 ++failures;
                 fmt::print("[e] {}: not equivalent\n", benchmark);
@@ -192,8 +249,8 @@ int main(const int argc, const char** argv)  // NOLINT
 
             decomposition_exp(benchmark, balanced.num_pis(), balanced.num_pos(), num_luts(balanced), num_luts(result),
                               mutable_rank_view{balanced}.depth(), result.depth(), st.crossings_before,
-                              st.crossings_after, st.decompositions, st.levels_inserted, st.swaps,
-                              mockturtle::to_seconds(st.time_total), equivalent);
+                              st.crossings_after, st.decompositions, st.levels_inserted, st.swaps, st.candidates,
+                              mockturtle::to_seconds(st.time_total), equivalent.equivalent, equivalent.method);
 
             decomposition_exp.save();
             decomposition_exp.table();

@@ -39,6 +39,7 @@
 #include <iostream>
 #include <iterator>
 #include <optional>
+#include <set>
 #include <stdexcept>
 #include <unordered_map>
 #include <unordered_set>
@@ -69,6 +70,12 @@ struct crossing_decomposition_params
      * re-sorting.
      */
     uint32_t local_transpose_levels = 3;
+    /**
+     * Tries a pair again after every accepted decomposition of its level, even if it did not lower the crossing
+     * count before. The network around the pair changes with every acceptance, so a pair rejected once may pay off
+     * later; without this, every pair is tried at most once per level, which is faster.
+     */
+    bool retry_rejected_pairs = true;
 };
 
 /**
@@ -97,9 +104,29 @@ struct crossing_decomposition_stats
      */
     uint64_t swaps = 0;
     /**
+     * Number of candidates that were built and counted, accepted ones included.
+     */
+    uint64_t candidates = 0;
+    /**
      * Total runtime, the initial ordering included.
      */
     mockturtle::stopwatch<>::duration time_total{0};
+    /**
+     * Time spent searching shared functions.
+     */
+    mockturtle::stopwatch<>::duration time_search{0};
+    /**
+     * Time spent building candidates.
+     */
+    mockturtle::stopwatch<>::duration time_materialize{0};
+    /**
+     * Time spent re-sorting candidates locally.
+     */
+    mockturtle::stopwatch<>::duration time_transpose{0};
+    /**
+     * Time spent counting the crossings of candidates.
+     */
+    mockturtle::stopwatch<>::duration time_count{0};
     /**
      * Writes the statistics to a stream.
      *
@@ -108,11 +135,16 @@ struct crossing_decomposition_stats
     void report(std::ostream& out = std::cout) const
     {
         out << fmt::format("[i] total time        = {:.2f} secs\n", mockturtle::to_seconds(time_total));
+        out << fmt::format("[i]   search          = {:.2f} secs\n", mockturtle::to_seconds(time_search));
+        out << fmt::format("[i]   materialize     = {:.2f} secs\n", mockturtle::to_seconds(time_materialize));
+        out << fmt::format("[i]   transpose       = {:.2f} secs\n", mockturtle::to_seconds(time_transpose));
+        out << fmt::format("[i]   count           = {:.2f} secs\n", mockturtle::to_seconds(time_count));
         out << fmt::format("[i] crossings before  = {}\n", crossings_before);
         out << fmt::format("[i] crossings after   = {}\n", crossings_after);
         out << fmt::format("[i] decompositions    = {}\n", decompositions);
         out << fmt::format("[i] levels inserted   = {}\n", levels_inserted);
         out << fmt::format("[i] local swaps       = {}\n", swaps);
+        out << fmt::format("[i] candidates        = {}\n", candidates);
     }
 };
 
@@ -120,8 +152,7 @@ namespace detail
 {
 
 /**
- * Largest number of inputs of a shared node the decomposition search enumerates. The search tries every function over
- * the shared inputs, 2^(2^k) for k inputs, which is cheap up to k = 4 (65536 functions) and prohibitive beyond.
+ * Largest number of inputs of a shared node the decomposition search considers; the LUT size bounds it anyway.
  */
 inline constexpr uint32_t MAX_SHARED_NODE_INPUTS = 4u;
 /**
@@ -245,10 +276,120 @@ outer_function(const kitty::dynamic_truth_table& f, const std::vector<uint32_t>&
 }
 
 /**
+ * Computes the function h over the variables `ys1` of f1 (and `ys2` of f2) such that both LUTs have the form
+ * f(z, h(y)), if there is one. For every assignment y the column of the decomposition chart is the vector of the
+ * values f1(z, y) over all z, followed by f2(z, y) over all z; two y with the same h(y) must have the same column, so
+ * a shared function exists iff there are at most two distinct columns, and it is then unique up to polarity. The
+ * column of y = 0 gets h = 0. A single column means neither LUT depends on y, and a function that does not depend on
+ * one of its variables removes no edge for that variable; both are rejected.
+ *
+ * @param f1 Function of the first LUT.
+ * @param ys1 Positions of the shared variables in f1, in the variable order of h.
+ * @param f2 Function of the second LUT.
+ * @param ys2 Positions of the same shared variables in f2, in the same order.
+ * @return The shared function, or `std::nullopt` if the LUTs admit none over these variables.
+ */
+[[nodiscard]] inline std::optional<kitty::dynamic_truth_table> shared_function(const kitty::dynamic_truth_table& f1,
+                                                                               const std::vector<uint32_t>&      ys1,
+                                                                               const kitty::dynamic_truth_table& f2,
+                                                                               const std::vector<uint32_t>&      ys2)
+{
+    assert(ys1.size() == ys2.size() && "both LUTs must share the same number of variables");
+
+    const auto k = static_cast<uint32_t>(ys1.size());
+
+    // the column of y: all values of f over the remaining variables, with y fixed
+    const auto column = [](const kitty::dynamic_truth_table& f, const std::vector<uint32_t>& ys, const uint64_t y)
+    {
+        std::vector<uint32_t> zs{};
+        for (uint32_t v = 0; v < f.num_vars(); ++v)
+        {
+            if (std::find(ys.cbegin(), ys.cend(), v) == ys.cend())
+            {
+                zs.push_back(v);
+            }
+        }
+
+        std::vector<uint8_t> values{};
+        values.reserve(uint64_t{1} << zs.size());
+
+        for (uint64_t z = 0; z < (uint64_t{1} << zs.size()); ++z)
+        {
+            uint64_t minterm{0};
+
+            for (std::size_t i = 0; i < zs.size(); ++i)
+            {
+                minterm |= ((z >> i) & 1u) << zs[i];
+            }
+            for (std::size_t i = 0; i < ys.size(); ++i)
+            {
+                minterm |= ((y >> i) & 1u) << ys[i];
+            }
+
+            values.push_back(static_cast<uint8_t>(kitty::get_bit(f, minterm)));
+        }
+
+        return values;
+    };
+
+    const auto joint_column = [&column, &f1, &ys1, &f2, &ys2](const uint64_t y)
+    {
+        auto       c1 = column(f1, ys1, y);
+        const auto c2 = column(f2, ys2, y);
+        c1.insert(c1.end(), c2.cbegin(), c2.cend());
+        return c1;
+    };
+
+    kitty::dynamic_truth_table h{k};
+
+    const auto class0 = joint_column(0);
+
+    std::optional<std::vector<uint8_t>> class1{};
+
+    for (uint64_t y = 1; y < (uint64_t{1} << k); ++y)
+    {
+        const auto c = joint_column(y);
+
+        if (c == class0)
+        {
+            continue;
+        }
+
+        if (!class1.has_value())
+        {
+            class1 = c;
+        }
+        else if (c != *class1)
+        {
+            // three distinct columns: no single shared function separates them
+            return std::nullopt;
+        }
+
+        kitty::set_bit(h, y);
+    }
+
+    if (!class1.has_value())
+    {
+        return std::nullopt;
+    }
+
+    for (uint32_t v = 0; v < k; ++v)
+    {
+        if (!kitty::has_var(h, static_cast<uint8_t>(v)))
+        {
+            return std::nullopt;
+        }
+    }
+
+    return h;
+}
+
+/**
  * Searches for a node that two LUTs can share. Given the LUTs' functions and fanin lists (variable `i` of a function
  * is fanin `i`), the shared fanins S are the fanins both lists contain. For every subset Y of S with at least two and
- * at most `MAX_SHARED_NODE_INPUTS` fanins, larger subsets first, and for every function h over Y that depends on all of
- * Y, both LUTs are tested for the form f(z, h(y)) (see `outer_function`). The first decomposition found is returned.
+ * at most `MAX_SHARED_NODE_INPUTS` fanins, larger subsets first, the shared function h over Y is read off the columns
+ * of the decomposition chart (see `shared_function`) and the outer functions from the cofactors (see
+ * `outer_function`). The first decomposition found is returned.
  *
  * A larger Y removes more crossings: two LUTs in one rank that share k fanins carry k(k-1)/2 crossings among their
  * fanin edges in any order, and the shared node collapses the k edges to each LUT into one.
@@ -325,69 +466,40 @@ find_shared_decomposition(const kitty::dynamic_truth_table& f1, const std::vecto
                 }
             }
 
-            kitty::dynamic_truth_table h{k};
+            const auto h = shared_function(f1, ys1, f2, ys2);
 
-            const auto num_functions = uint64_t{1} << (uint64_t{1} << k);
-
-            for (uint64_t bits = 0; bits < num_functions; ++bits)
+            if (!h.has_value())
             {
-                kitty::create_from_words(h, &bits, &bits + 1);
-
-                // a shared node must use every one of its inputs, otherwise it removes no edge for that input;
-                // this also excludes the constants and the (complemented) projections
-                bool depends_on_all = true;
-
-                for (uint32_t v = 0; v < k; ++v)
-                {
-                    if (!kitty::has_var(h, static_cast<uint8_t>(v)))
-                    {
-                        depends_on_all = false;
-                        break;
-                    }
-                }
-
-                if (!depends_on_all)
-                {
-                    continue;
-                }
-
-                const auto g1 = outer_function(f1, ys1, h);
-
-                if (!g1.has_value())
-                {
-                    continue;
-                }
-
-                const auto g2 = outer_function(f2, ys2, h);
-
-                if (!g2.has_value())
-                {
-                    continue;
-                }
-
-                shared_decomposition<Node> result{};
-                result.h_fanins = y_nodes;
-                result.h        = h;
-                result.g1       = *g1;
-                result.g2       = *g2;
-
-                for (uint32_t i = 0; i < fanins1.size(); ++i)
-                {
-                    if (std::find(ys1.cbegin(), ys1.cend(), i) == ys1.cend())
-                    {
-                        result.g1_fanins.push_back(fanins1[i]);
-                    }
-                }
-                for (uint32_t i = 0; i < fanins2.size(); ++i)
-                {
-                    if (std::find(ys2.cbegin(), ys2.cend(), i) == ys2.cend())
-                    {
-                        result.g2_fanins.push_back(fanins2[i]);
-                    }
-                }
-
-                return result;
+                continue;
             }
+
+            const auto g1 = outer_function(f1, ys1, *h);
+            const auto g2 = outer_function(f2, ys2, *h);
+
+            assert(g1.has_value() && g2.has_value() && "the shared function must decompose both LUTs");
+
+            shared_decomposition<Node> result{};
+            result.h_fanins = y_nodes;
+            result.h        = *h;
+            result.g1       = *g1;
+            result.g2       = *g2;
+
+            for (uint32_t i = 0; i < fanins1.size(); ++i)
+            {
+                if (std::find(ys1.cbegin(), ys1.cend(), i) == ys1.cend())
+                {
+                    result.g1_fanins.push_back(fanins1[i]);
+                }
+            }
+            for (uint32_t i = 0; i < fanins2.size(); ++i)
+            {
+                if (std::find(ys2.cbegin(), ys2.cend(), i) == ys2.cend())
+                {
+                    result.g2_fanins.push_back(fanins2[i]);
+                }
+            }
+
+            return result;
         }
     }
 
@@ -508,8 +620,22 @@ class crossing_decomposition_impl
             auto r             = r_orig + shift;
             bool inserted_here = false;
 
-            while (auto improved = find_improvement(current, r, inserted_here, current_crossings))
+            rejected_pairs rejected{};
+
+            while (auto improved = find_improvement(current, r, inserted_here, current_crossings, rejected))
             {
+                // carry the rejected pairs over to the new network; pairs of the decomposed LUTs are new pairs
+                rejected_pairs carried{};
+                for (const auto& [a, b] : rejected)
+                {
+                    if (a != improved->pair.first && a != improved->pair.second && b != improved->pair.first &&
+                        b != improved->pair.second)
+                    {
+                        carried.emplace(improved->renamed.at(a), improved->renamed.at(b));
+                    }
+                }
+                rejected = std::move(carried);
+
                 current           = std::move(improved->network);
                 current_crossings = improved->crossings;
                 pst.swaps += improved->swaps;
@@ -540,7 +666,28 @@ class crossing_decomposition_impl
         ranked_network network;
         uint64_t       crossings;
         uint64_t       swaps;
+        /**
+         * The decomposed pair in the network the candidate was built from.
+         */
+        std::pair<node, node> pair;
+        /**
+         * Maps every LUT of the pair's level in that network to its clone in the candidate.
+         */
+        std::unordered_map<node, node> renamed;
     };
+    /**
+     * A built candidate with the map of the pair's level.
+     */
+    struct materialized
+    {
+        ranked_network                 network;
+        std::unordered_map<node, node> renamed;
+    };
+    /**
+     * Pairs of a level not to try again: pairs without a shared function and, unless `retry_rejected_pairs` is set,
+     * pairs whose candidate did not improve the count.
+     */
+    using rejected_pairs = std::set<std::pair<node, node>>;
 
     /**
      * Looks for the first pair of LUTs in level `r` whose decomposition lowers the crossing count below `bound`.
@@ -550,10 +697,13 @@ class crossing_decomposition_impl
      * @param below_is_inserted Whether level `r - 1` was inserted by this pass for level `r`; then only its buffers may
      * feed a new shared node, and no further level is inserted.
      * @param bound Crossing count to beat.
+     * @param rejected Pairs not to try again; pairs without a shared function are added, and pairs that fail to
+     * improve on the bound unless `retry_rejected_pairs` is set.
      * @return The improved network and its count, or `std::nullopt` if no pair improves on the bound.
      */
     [[nodiscard]] std::optional<improvement> find_improvement(const ranked_network& cur, const uint32_t r,
-                                                              const bool below_is_inserted, const uint64_t bound) const
+                                                              const bool below_is_inserted, const uint64_t bound,
+                                                              rejected_pairs& rejected) const
     {
         // the LUTs of the level, left to right; buffers compute no function worth decomposing
         std::vector<node> luts{};
@@ -592,26 +742,53 @@ class crossing_decomposition_impl
                     continue;
                 }
 
-                const auto dec = find_shared_decomposition(lut_function(cur, luts[i], fanins[i]), fanins[i],
-                                                           lut_function(cur, luts[j], fanins[j]), fanins[j], shareable);
+                const std::pair<node, node> pair{luts[i], luts[j]};
 
-                if (!dec.has_value())
+                if (rejected.contains(pair))
                 {
                     continue;
                 }
 
-                auto candidate = materialize(cur, r, luts[i], luts[j], *dec, !below_is_inserted);
+                const auto dec = mockturtle::call_with_stopwatch(
+                    pst.time_search,
+                    [&]
+                    {
+                        return find_shared_decomposition(lut_function(cur, luts[i], fanins[i]), fanins[i],
+                                                         lut_function(cur, luts[j], fanins[j]), fanins[j], shareable);
+                    });
+
+                if (!dec.has_value())
+                {
+                    // a pair without a shared function stays without one: a later acceptance only removes fanins
+                    // from the shareable set
+                    rejected.insert(pair);
+                    continue;
+                }
+
+                auto candidate = mockturtle::call_with_stopwatch(
+                    pst.time_materialize,
+                    [&] { return materialize(cur, r, luts[i], luts[j], *dec, !below_is_inserted); });
+                ++pst.candidates;
 
                 // the level of the pair in the candidate: one higher if a level was inserted below it
                 const auto pair_level = below_is_inserted ? r : r + 1;
 
-                const auto swaps = ps.local_transpose_levels > 0u ? transpose_locally(candidate, pair_level) : 0u;
+                const auto swaps = mockturtle::call_with_stopwatch(
+                    pst.time_transpose, [&]
+                    { return ps.local_transpose_levels > 0u ? transpose_locally(candidate.network, pair_level) : 0u; });
 
-                const auto crossings = count_crossings(candidate);
+                const auto crossings =
+                    mockturtle::call_with_stopwatch(pst.time_count, [&] { return count_crossings(candidate.network); });
 
                 if (crossings < bound)
                 {
-                    return improvement{std::move(candidate), crossings, swaps};
+                    return improvement{std::move(candidate.network), crossings, swaps, pair,
+                                       std::move(candidate.renamed)};
+                }
+
+                if (!ps.retry_rejected_pairs)
+                {
+                    rejected.insert(pair);
                 }
             }
         }
@@ -838,11 +1015,10 @@ class crossing_decomposition_impl
      * @param n2 Second LUT of the pair.
      * @param dec Decomposition of the pair.
      * @param insert_level Whether to insert a level for the shared node.
-     * @return The ranked network with the decomposition applied.
+     * @return The ranked network with the decomposition applied and the map of the pair's level.
      */
-    [[nodiscard]] ranked_network materialize(const ranked_network& cur, const uint32_t r, const node& n1,
-                                             const node& n2, const shared_decomposition<node>& dec,
-                                             const bool insert_level) const
+    [[nodiscard]] materialized materialize(const ranked_network& cur, const uint32_t r, const node& n1, const node& n2,
+                                           const shared_decomposition<node>& dec, const bool insert_level) const
     {
         Ntk dest{};
 
@@ -1037,7 +1213,13 @@ class crossing_decomposition_impl
         assert(result.check_validity() && "the derived order must match the levels");
         assert(is_balanced(result) && "the result must stay balanced");
 
-        return result;
+        std::unordered_map<node, node> renamed{};
+        for (const auto& m : old_rank_r)
+        {
+            renamed[m] = dest.get_node(old2new[m]);
+        }
+
+        return {std::move(result), std::move(renamed)};
     }
 
     /**
