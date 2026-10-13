@@ -58,6 +58,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <functional>
 #include <iterator>
 #include <optional>
@@ -115,6 +116,22 @@ aig_nt read_aig(const std::string& name)
     {
         throw std::runtime_error{
             fmt::format("could not read {}: {}", fiction_experiments::benchmark_path(name), os.str())};
+    }
+
+    return *reader.get_networks().front();
+}
+
+/**
+ * Reads a BLIF file (an ABC result) as a technology network.
+ */
+technology_network read_blif(const std::string& path)
+{
+    std::ostringstream      os{};
+    network_reader<tec_ptr> reader{path, os};
+
+    if (reader.get_networks().empty())
+    {
+        throw std::runtime_error{fmt::format("could not read {}: {}", path, os.str())};
     }
 
     return *reader.get_networks().front();
@@ -733,6 +750,7 @@ int main(const int argc, const char** argv)  // NOLINT
     std::vector<uint32_t>    ks{4u, 5u, 6u, 8u};
     std::vector<std::string> wanted{};
     std::vector<std::string> benchmarks{};
+    std::string              blif_dir{};
 
     const std::span<const char*> args{argv, static_cast<std::size_t>(argc)};
 
@@ -751,6 +769,11 @@ int main(const int argc, const char** argv)  // NOLINT
         else if (arg == "--strategy" && i + 1 < args.size())
         {
             wanted = split(args[++i]);
+        }
+        else if (arg == "--blif-dir" && i + 1 < args.size())
+        {
+            // ABC results: <dir>/<set>__<name>/<K>/<variant>.blif, evaluated instead of the mockturtle strategies
+            blif_dir = args[++i];
         }
         else
         {
@@ -840,6 +863,63 @@ int main(const int argc, const char** argv)  // NOLINT
         try
         {
             const auto aig = mockturtle::cleanup_dangling(read_aig(benchmark));
+
+            if (!blif_dir.empty())
+            {
+                // every variant of every K in the benchmark's directory, checked against the AIG
+                auto benchmark_dir = benchmark;
+                std::replace(benchmark_dir.begin(), benchmark_dir.end(), '/', '_');
+                benchmark_dir.insert(benchmark_dir.find('_'), "_");
+
+                for (const auto k : ks)
+                {
+                    const std::filesystem::path dir =
+                        std::filesystem::path{blif_dir} / benchmark_dir / std::to_string(k);
+
+                    if (!std::filesystem::is_directory(dir))
+                    {
+                        continue;
+                    }
+
+                    std::vector<std::filesystem::path> files{};
+                    for (const auto& entry : std::filesystem::directory_iterator{dir})
+                    {
+                        if (entry.path().extension() == ".blif")
+                        {
+                            files.push_back(entry.path());
+                        }
+                    }
+                    std::ranges::sort(files);
+
+                    for (const auto& file : files)
+                    {
+                        const auto name = file.stem().string();
+
+                        if (!wanted.empty() && std::find(wanted.cbegin(), wanted.cend(), name) == wanted.cend())
+                        {
+                            continue;
+                        }
+
+                        decomposed dec{};
+                        dec.network = read_blif(file.string());
+
+                        if (dec.network.num_pis() != aig.num_pis() || dec.network.num_pos() != aig.num_pos())
+                        {
+                            ++failures;
+                            fmt::print("[e] {} K={} {}: {} inputs and {} outputs, the AIG has {} and {}\n", benchmark,
+                                       k, name, dec.network.num_pis(), dec.network.num_pos(), aig.num_pis(),
+                                       aig.num_pos());
+                            continue;
+                        }
+
+                        // the K-LUT column is unknown for ABC results; the AIG is the specification
+                        evaluate(benchmark, k, name, mockturtle::klut_network{},
+                                 convert_network<technology_network>(aig), dec, 0.0);
+                    }
+                }
+
+                continue;
+            }
 
             for (const auto k : ks)
             {
