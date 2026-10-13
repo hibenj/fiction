@@ -231,7 +231,7 @@ TEST_CASE("The input order is never made worse", "[mincross]")
     mincross(tec_r, p, &st);
     CHECK(st.num_crossings == 4);
 
-    std::vector<mockturtle::node<technology_network>> rank1{tec_r.get_node(f2), tec_r.get_node(f1)};
+    const std::vector<mockturtle::node<technology_network>> rank1{tec_r.get_node(f2), tec_r.get_node(f1)};
     tec_r.set_ranks(1, rank1);
     mincross(tec_r, p, &st);
     CHECK(st.num_crossings == 0);

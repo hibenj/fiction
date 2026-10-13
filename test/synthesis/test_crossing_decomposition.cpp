@@ -34,7 +34,6 @@
 #include <mockturtle/algorithms/equivalence_checking.hpp>
 #include <mockturtle/algorithms/lut_mapper.hpp>
 #include <mockturtle/networks/aig.hpp>
-#include <mockturtle/networks/klut.hpp>
 #include <mockturtle/traits.hpp>
 
 #include <algorithm>
@@ -255,17 +254,18 @@ TEST_CASE("Figure 7 LUT pair shares b ~c d", "[crossing-decomposition]")
     const auto dec = fiction::synthesis::detail::find_shared_decomposition(f1, fanins, f2, fanins);
 
     REQUIRE(dec.has_value());
+    const auto& d = dec.value();  // NOLINT(bugprone-unchecked-optional-access)
 
     // the shared node is h = b ~c d; a stays with each LUT, which becomes a h and ~a h
-    CHECK(dec->h_fanins == std::vector<node>{2, 3, 4});
-    CHECK(dec->h == (var(3, 0) & ~var(3, 1) & var(3, 2)));
-    CHECK(dec->g1_fanins == std::vector<node>{1});
-    CHECK(dec->g1 == (var(2, 0) & var(2, 1)));
-    CHECK(dec->g2_fanins == std::vector<node>{1});
-    CHECK(dec->g2 == (~var(2, 0) & var(2, 1)));
+    CHECK(d.h_fanins == std::vector<node>{2, 3, 4});
+    CHECK(d.h == (var(3, 0) & ~var(3, 1) & var(3, 2)));
+    CHECK(d.g1_fanins == std::vector<node>{1});
+    CHECK(d.g1 == (var(2, 0) & var(2, 1)));
+    CHECK(d.g2_fanins == std::vector<node>{1});
+    CHECK(d.g2 == (~var(2, 0) & var(2, 1)));
 
-    check_oracle(f1, fanins, dec->g1_fanins, dec->g1, *dec);
-    check_oracle(f2, fanins, dec->g2_fanins, dec->g2, *dec);
+    check_oracle(f1, fanins, d.g1_fanins, d.g1, d);
+    check_oracle(f2, fanins, d.g2_fanins, d.g2, d);
 }
 
 TEST_CASE("Two shared inputs with a common XOR", "[crossing-decomposition]")
@@ -280,16 +280,17 @@ TEST_CASE("Two shared inputs with a common XOR", "[crossing-decomposition]")
     const auto dec = fiction::synthesis::detail::find_shared_decomposition(f1, fanins1, f2, fanins2);
 
     REQUIRE(dec.has_value());
+    const auto& d = dec.value();  // NOLINT(bugprone-unchecked-optional-access)
 
-    CHECK(dec->h_fanins == std::vector<node>{1, 2});
-    CHECK(dec->h == (var(2, 0) ^ var(2, 1)));
-    CHECK(dec->g1_fanins == std::vector<node>{3});
-    CHECK(dec->g1 == (var(2, 0) & var(2, 1)));
-    CHECK(dec->g2_fanins == std::vector<node>{4});
-    CHECK(dec->g2 == (var(2, 0) | var(2, 1)));
+    CHECK(d.h_fanins == std::vector<node>{1, 2});
+    CHECK(d.h == (var(2, 0) ^ var(2, 1)));
+    CHECK(d.g1_fanins == std::vector<node>{3});
+    CHECK(d.g1 == (var(2, 0) & var(2, 1)));
+    CHECK(d.g2_fanins == std::vector<node>{4});
+    CHECK(d.g2 == (var(2, 0) | var(2, 1)));
 
-    check_oracle(f1, fanins1, dec->g1_fanins, dec->g1, *dec);
-    check_oracle(f2, fanins2, dec->g2_fanins, dec->g2, *dec);
+    check_oracle(f1, fanins1, d.g1_fanins, d.g1, d);
+    check_oracle(f2, fanins2, d.g2_fanins, d.g2, d);
 }
 
 TEST_CASE("The largest shared node is preferred", "[crossing-decomposition]")
@@ -304,16 +305,17 @@ TEST_CASE("The largest shared node is preferred", "[crossing-decomposition]")
     const auto dec = fiction::synthesis::detail::find_shared_decomposition(f1, fanins, f2, fanins);
 
     REQUIRE(dec.has_value());
+    const auto& d = dec.value();  // NOLINT(bugprone-unchecked-optional-access)
 
-    CHECK(dec->h_fanins == fanins);
-    CHECK(dec->h == f1);
-    CHECK(dec->g1_fanins.empty());
-    CHECK(dec->g1 == var(1, 0));
-    CHECK(dec->g2_fanins.empty());
-    CHECK(dec->g2 == ~var(1, 0));
+    CHECK(d.h_fanins == fanins);
+    CHECK(d.h == f1);
+    CHECK(d.g1_fanins.empty());
+    CHECK(d.g1 == var(1, 0));
+    CHECK(d.g2_fanins.empty());
+    CHECK(d.g2 == ~var(1, 0));
 
-    check_oracle(f1, fanins, dec->g1_fanins, dec->g1, *dec);
-    check_oracle(f2, fanins, dec->g2_fanins, dec->g2, *dec);
+    check_oracle(f1, fanins, d.g1_fanins, d.g1, d);
+    check_oracle(f2, fanins, d.g2_fanins, d.g2, d);
 }
 
 TEST_CASE("Shared inputs without a common sub-function", "[crossing-decomposition]")

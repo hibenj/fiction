@@ -33,12 +33,13 @@
 #include <mockturtle/algorithms/equivalence_checking.hpp>
 #include <mockturtle/algorithms/lut_mapper.hpp>
 #include <mockturtle/algorithms/simulation.hpp>
-#include <mockturtle/networks/aig.hpp>
-#include <mockturtle/networks/klut.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <iterator>
+#include <span>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -203,10 +204,8 @@ int main(const int argc, const char** argv)  // NOLINT
     std::vector<std::string> benchmarks{};
     if (argc > 1)
     {
-        for (int i = 1; i < argc; ++i)
-        {
-            benchmarks.emplace_back(argv[i]);
-        }
+        const std::span<const char*> args{argv, static_cast<std::size_t>(argc)};
+        benchmarks.assign(std::next(args.begin()), args.end());
     }
     else
     {
@@ -232,9 +231,9 @@ int main(const int argc, const char** argv)  // NOLINT
 
             fmt::print("[i]   decomposing {} LUTs in {} balanced nodes\n", num_luts(balanced), balanced.num_gates());
 
-            crossing_decomposition_params ps{};
-            crossing_decomposition_stats  st{};
-            const auto                    result = crossing_decomposition(balanced, ps, &st);
+            const crossing_decomposition_params ps{};
+            crossing_decomposition_stats        st{};
+            const auto                          result = crossing_decomposition(balanced, ps, &st);
 
             st.report();
 

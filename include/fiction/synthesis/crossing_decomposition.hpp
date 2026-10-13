@@ -249,14 +249,14 @@ outer_function(const kitty::dynamic_truth_table& f, const std::vector<uint32_t>&
                 minterm |= ((y >> i) & 1u) << ys[i];
             }
 
-            const auto b = kitty::get_bit(h, y);
-            const auto v = static_cast<uint8_t>(kitty::get_bit(f, minterm));
+            auto&      value = kitty::get_bit(h, y) == 1u ? class_value.back() : class_value.front();
+            const auto v     = static_cast<uint8_t>(kitty::get_bit(f, minterm));
 
-            if (class_value[b] == 2u)
+            if (value == 2u)
             {
-                class_value[b] = v;
+                value = v;
             }
-            else if (class_value[b] != v)
+            else if (value != v)
             {
                 return std::nullopt;
             }
@@ -265,7 +265,7 @@ outer_function(const kitty::dynamic_truth_table& f, const std::vector<uint32_t>&
         for (std::size_t b = 0; b < 2; ++b)
         {
             // every class is non-empty since h is not constant
-            if (class_value[b] == 1u)
+            if (class_value.at(b) == 1u)
             {
                 kitty::set_bit(g, z | (static_cast<uint64_t>(b) << zs.size()));
             }
@@ -407,7 +407,7 @@ outer_function(const kitty::dynamic_truth_table& f, const std::vector<uint32_t>&
 template <typename Node, typename Pred>
 [[nodiscard]] std::optional<shared_decomposition<Node>>
 find_shared_decomposition(const kitty::dynamic_truth_table& f1, const std::vector<Node>& fanins1,
-                          const kitty::dynamic_truth_table& f2, const std::vector<Node>& fanins2, Pred&& shareable)
+                          const kitty::dynamic_truth_table& f2, const std::vector<Node>& fanins2, const Pred& shareable)
 {
     assert(f1.num_vars() == fanins1.size() && "f1 must have one variable per fanin");
     assert(f2.num_vars() == fanins2.size() && "f2 must have one variable per fanin");

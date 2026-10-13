@@ -27,6 +27,7 @@
 #include <cstdint>
 #include <deque>
 #include <limits>
+#include <utility>
 #include <vector>
 
 namespace fiction::utils::graph
@@ -120,7 +121,7 @@ class mincross_impl
      * @param p Configuration parameters for the algorithm (e.g., `optimize`)
      * @param st Statistics object to store the resulting number of crossings.
      */
-    mincross_impl(const Ntk& src, const mincross_params p, mincross_stats& st) : ntk(src), ps(p), pst{st} {}
+    mincross_impl(Ntk src, const mincross_params& p, mincross_stats& st) : ntk(std::move(src)), ps(p), pst{st} {}
 
     /**
      * Runs the crossing minimization algorithm and returns a reordered network.
@@ -366,7 +367,9 @@ class mincross_impl
 
                 build_ranks(nodes, pass, fixed_inputs);
 
-                if ((cur_cross = ncross()) <= best_cross)
+                cur_cross = ncross();
+
+                if (cur_cross <= best_cross)
                 {
                     save_best();
                     best_cross = cur_cross;
@@ -394,7 +397,9 @@ class mincross_impl
 
                 mincross_step(iter);
 
-                if ((cur_cross = ncross()) <= best_cross)
+                cur_cross = ncross();
+
+                if (cur_cross <= best_cross)
                 {
                     save_best();
                     // Note: Conversion to double is safe here since best_cross < 2^53 in all practical cases.
@@ -677,11 +682,10 @@ class mincross_impl
     {
         std::vector<uint8_t> candidate(max_rank + 1, 1);
 
-        uint64_t delta = 0;
-
-        do
+        // every round that swaps removes at least one crossing, so the loop ends
+        while (true)
         {
-            delta = 0;
+            uint64_t delta = 0;
 
             for (uint32_t r = 0; r <= max_rank; ++r)
             {
@@ -695,7 +699,12 @@ class mincross_impl
                     delta += transpose_step(r, reverse, candidate);
                 }
             }
-        } while (delta >= 1);
+
+            if (delta == 0)
+            {
+                break;
+            }
+        }
     }
 
     /**
@@ -863,7 +872,7 @@ class mincross_impl
     /**
      * Parameters for crossing minimization.
      */
-    mincross_params ps;
+    const mincross_params& ps;
     /**
      * Statistics that store the final number of crossings after optimization.
      */
