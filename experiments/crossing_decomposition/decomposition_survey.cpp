@@ -11,7 +11,8 @@
 /**
  * @file
  * @brief Maps benchmark networks to K-LUTs, decomposes every LUT with more than four inputs into nodes of at most
- * four inputs with one of several strategies, balances and orders the result with `mincross`, and counts the
+ * four inputs with one of several strategies (resynthesis functors, exact synthesis, or Ashenhurst decompositions with
+ * a bound-set rule), balances and orders the result with `mincross`, and counts the
  * crossings; every result is checked against the K-LUT network by SAT or, where SAT gives up, by random simulation.
  * @author Benjamin Hien (hibenj)
  */
@@ -21,6 +22,7 @@
 #include <fiction/networks/io/network_reader.hpp>
 #include <fiction/networks/technology_network.hpp>
 #include <fiction/networks/views/mutable_rank_view.hpp>
+#include <fiction/synthesis/crossing_decomposition.hpp>
 #include <fiction/synthesis/network_balancing.hpp>
 #include <fiction/synthesis/network_conversion.hpp>
 #include <fiction/types.hpp>
@@ -35,6 +37,7 @@
 #include <mockturtle/algorithms/equivalence_checking.hpp>
 #include <mockturtle/algorithms/klut_to_graph.hpp>
 #include <mockturtle/algorithms/lut_mapper.hpp>
+#include <mockturtle/algorithms/miter.hpp>
 #include <mockturtle/algorithms/node_resynthesis/bidecomposition.hpp>
 #include <mockturtle/algorithms/node_resynthesis/davio.hpp>
 #include <mockturtle/algorithms/node_resynthesis/dsd.hpp>
@@ -47,9 +50,11 @@
 #include <mockturtle/networks/xag.hpp>
 #include <mockturtle/utils/node_map.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
+#include <mockturtle/views/depth_view.hpp>
 #include <mockturtle/views/topo_view.hpp>
 
 #include <algorithm>
+#include <bit>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -61,6 +66,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 using namespace fiction;
@@ -115,7 +121,44 @@ aig_nt read_aig(const std::string& name)
 }
 
 /**
- * Maps an AIG to K-LUTs.
+ * Rebuilds a LUT network so that every node's function has exactly one variable per fanin. `lut_map` can leave a
+ * function with more variables than the node has fanins; mockturtle evaluates such a node with the extra variables
+ * at zero in simulation but not in its CNF encoding, so the mapped network is not even equivalent to its own AIG
+ * under SAT. Shrinking the function to the fanins (the cofactor with the extra variables at zero) restores the
+ * function the mapper meant, which the check against the AIG confirms.
+ */
+mockturtle::klut_network normalize(const mockturtle::klut_network& klut)
+{
+    mockturtle::klut_network                                                         dest{};
+    mockturtle::node_map<mockturtle::klut_network::signal, mockturtle::klut_network> old2new{klut};
+
+    old2new[klut.get_constant(false)] = dest.get_constant(false);
+    old2new[klut.get_constant(true)]  = dest.get_constant(true);
+    klut.foreach_pi([&](const auto& n) { old2new[n] = dest.create_pi(); });
+
+    const mockturtle::topo_view topo{klut};
+    topo.foreach_gate(
+        [&](const auto& n)
+        {
+            std::vector<mockturtle::klut_network::signal> children{};
+            klut.foreach_fanin(n, [&](const auto& f) { children.push_back(old2new[klut.get_node(f)]); });
+
+            auto f = klut.node_function(n);
+            if (f.num_vars() > children.size())
+            {
+                f = kitty::shrink_to(f, static_cast<uint32_t>(children.size()));
+            }
+
+            old2new[n] = dest.create_node(children, f);
+        });
+
+    klut.foreach_po([&](const auto& po) { dest.create_po(old2new[klut.get_node(po)]); });
+
+    return dest;
+}
+
+/**
+ * Maps an AIG to K-LUTs with one variable per fanin.
  */
 template <typename Aig>
 mockturtle::klut_network map_to_luts(const Aig& aig, const uint32_t k)
@@ -123,7 +166,7 @@ mockturtle::klut_network map_to_luts(const Aig& aig, const uint32_t k)
     mockturtle::lut_map_params ps{};
     ps.cut_enumeration_ps.cut_size = k;
 
-    return mockturtle::lut_map(aig, ps);
+    return normalize(mockturtle::lut_map(aig, ps));
 }
 
 /**
@@ -252,7 +295,20 @@ std::vector<std::pair<std::string, builder>> strategies()
 
     static mockturtle::shannon_resynthesis<xag> shannon_fallback{};
 
-    return {{"shannon", via_xag(mockturtle::shannon_resynthesis<xag>{})},
+    return {{"klut",
+             [](const kitty::dynamic_truth_table& f) -> std::optional<mockturtle::klut_network>
+             {
+                 // the K-LUT itself: the crossings of the K-LUT network, nodes of more than four inputs
+                 mockturtle::klut_network                      klut{};
+                 std::vector<mockturtle::klut_network::signal> pis{};
+                 for (uint32_t i = 0; i < f.num_vars(); ++i)
+                 {
+                     pis.push_back(klut.create_pi());
+                 }
+                 klut.create_po(klut.create_node(pis, f));
+                 return klut;
+             }},
+            {"shannon", via_xag(mockturtle::shannon_resynthesis<xag>{})},
             {"davio_pos", via_xag(mockturtle::positive_davio_resynthesis<xag>{})},
             {"davio_neg", via_xag(mockturtle::negative_davio_resynthesis<xag>{})},
             {"dsd_shannon", via_xag(mockturtle::dsd_resynthesis<xag, decltype(shannon_fallback)>{shannon_fallback})},
@@ -363,6 +419,234 @@ decomposed decompose(const mockturtle::klut_network& klut, const builder& strate
                 });
 
             small->foreach_po([&](const auto& po) { old2new[n] = local[small->get_node(po)]; });
+        });
+
+    klut.foreach_po([&](const auto& po) { dest.create_po(old2new[klut.get_node(po)]); });
+
+    return result;
+}
+
+/**
+ * Rule for choosing the bound set of an Ashenhurst decomposition.
+ */
+enum class bound_set_rule : uint8_t
+{
+    /**
+     * The decomposable subset whose members are shared with the most other LUTs of the same level; larger subsets
+     * and lower indices break ties.
+     */
+    SHARED,
+    /**
+     * The decomposable subset whose members are shared with the fewest other LUTs of the same level (control).
+     */
+    UNSHARED,
+    /**
+     * The first decomposable subset, largest size first, then index order (what a structural decomposer does
+     * without any criterion).
+     */
+    FIRST
+};
+
+/**
+ * Rebuilds a K-LUT network with every LUT of more than `TARGET_LUT_SIZE` inputs split by disjoint Ashenhurst
+ * decompositions f(z, y) = g(z, h(y)), the bound set y chosen by `rule`, repeated on g until every node has at most
+ * `TARGET_LUT_SIZE` inputs; a function without any decomposition goes to the fallback strategy. "Shared" counts, for
+ * every fanin of the LUT, the other gates of the same level (by depth) that have the same fanin.
+ */
+decomposed decompose_ashenhurst(const mockturtle::klut_network& klut, const bound_set_rule rule,
+                                const builder& fallback)
+{
+    decomposed result{};
+    auto&      dest = result.network;
+
+    const mockturtle::depth_view depth{klut};
+
+    // fanin -> number of gates per level that use it
+    std::unordered_map<uint64_t, uint32_t> users{};
+    const auto                             key = [](const uint32_t level, const auto& n)
+    { return (static_cast<uint64_t>(level) << 32u) | static_cast<uint64_t>(n); };
+
+    klut.foreach_gate(
+        [&](const auto& n)
+        { klut.foreach_fanin(n, [&](const auto& f) { ++users[key(depth.level(n), klut.get_node(f))]; }); });
+
+    mockturtle::node_map<technology_network::signal, mockturtle::klut_network> old2new{klut};
+
+    old2new[klut.get_constant(false)] = dest.get_constant(false);
+    if (klut.get_node(klut.get_constant(true)) != klut.get_node(klut.get_constant(false)))
+    {
+        old2new[klut.get_constant(true)] = dest.get_constant(true);
+    }
+
+    klut.foreach_pi([&](const auto& n) { old2new[n] = dest.create_pi(); });
+
+    // splits f over `children` (with share counts `shares`) recursively; returns the output signal
+    std::function<technology_network::signal(kitty::dynamic_truth_table, std::vector<technology_network::signal>,
+                                             std::vector<uint32_t>, bool&)>
+        split = [&](kitty::dynamic_truth_table f, std::vector<technology_network::signal> children,
+                    std::vector<uint32_t> shares, bool& used_fallback) -> technology_network::signal
+    {
+        const auto k = static_cast<uint32_t>(children.size());
+
+        if (k <= TARGET_LUT_SIZE)
+        {
+            return dest.create_node(children, f);
+        }
+
+        // candidate bound sets: subsets of 2 to min(4, k - 1) inputs
+        const auto largest = std::min(TARGET_LUT_SIZE, k - 1u);
+
+        std::optional<std::vector<uint32_t>>      best_ys{};
+        std::optional<kitty::dynamic_truth_table> best_h{};
+        int64_t                                   best_score = 0;
+
+        for (auto size = largest; size >= 2u; --size)
+        {
+            for (uint64_t mask = 0; mask < (uint64_t{1} << k); ++mask)
+            {
+                if (static_cast<uint32_t>(std::popcount(mask)) != size)
+                {
+                    continue;
+                }
+
+                std::vector<uint32_t> ys{};
+                int64_t               share = 0;
+                for (uint32_t i = 0; i < k; ++i)
+                {
+                    if ((mask >> i) & 1u)
+                    {
+                        ys.push_back(i);
+                        share += shares[i];
+                    }
+                }
+
+                const auto h = fiction::synthesis::detail::shared_function(f, ys, f, ys);
+                if (!h.has_value())
+                {
+                    continue;
+                }
+
+                if (rule == bound_set_rule::FIRST)
+                {
+                    best_ys = ys;
+                    best_h  = h;
+                    break;
+                }
+
+                // larger subsets first within equal share, lower index order by enumeration
+                const auto score = (rule == bound_set_rule::SHARED ? share : -share) * 16 + static_cast<int64_t>(size);
+                if (!best_ys.has_value() || score > best_score)
+                {
+                    best_ys    = ys;
+                    best_h     = h;
+                    best_score = score;
+                }
+            }
+
+            if (rule == bound_set_rule::FIRST && best_ys.has_value())
+            {
+                break;
+            }
+        }
+
+        if (!best_ys.has_value())
+        {
+            used_fallback = true;
+
+            const auto small = fallback(f);
+            if (!small.has_value())
+            {
+                throw std::runtime_error{"the fallback strategy failed on a LUT"};
+            }
+
+            mockturtle::node_map<technology_network::signal, mockturtle::klut_network> local{*small};
+            local[small->get_constant(false)] = dest.get_constant(false);
+            if (small->get_node(small->get_constant(true)) != small->get_node(small->get_constant(false)))
+            {
+                local[small->get_constant(true)] = dest.get_constant(true);
+            }
+            small->foreach_pi([&](const auto& pi, const auto i) { local[pi] = children.at(i); });
+
+            const mockturtle::topo_view small_topo{*small};
+            small_topo.foreach_gate(
+                [&](const auto& m)
+                {
+                    std::vector<technology_network::signal> cs{};
+                    small->foreach_fanin(m, [&](const auto& g) { cs.push_back(local[small->get_node(g)]); });
+                    auto tt = small->node_function(m);
+                    if (tt.num_vars() > cs.size())
+                    {
+                        tt = kitty::shrink_to(tt, static_cast<uint32_t>(cs.size()));
+                    }
+                    local[m] = dest.create_node(cs, tt);
+                });
+
+            technology_network::signal out{};
+            small->foreach_po([&](const auto& po) { out = local[small->get_node(po)]; });
+            return out;
+        }
+
+        const auto g = fiction::synthesis::detail::outer_function(f, *best_ys, *best_h);
+
+        std::vector<technology_network::signal> h_children{};
+        for (const auto y : *best_ys)
+        {
+            h_children.push_back(children[y]);
+        }
+        const auto h_signal = dest.create_node(h_children, *best_h);
+
+        std::vector<technology_network::signal> g_children{};
+        std::vector<uint32_t>                   g_shares{};
+        for (uint32_t i = 0; i < k; ++i)
+        {
+            if (std::find(best_ys->cbegin(), best_ys->cend(), i) == best_ys->cend())
+            {
+                g_children.push_back(children[i]);
+                g_shares.push_back(shares[i]);
+            }
+        }
+        g_children.push_back(h_signal);
+        g_shares.push_back(0);
+
+        return split(*g, std::move(g_children), std::move(g_shares), used_fallback);
+    };
+
+    const mockturtle::topo_view topo{klut};
+
+    topo.foreach_gate(
+        [&](const auto& n)
+        {
+            std::vector<technology_network::signal> children{};
+            std::vector<uint32_t>                   shares{};
+            klut.foreach_fanin(n,
+                               [&](const auto& f)
+                               {
+                                   children.push_back(old2new[klut.get_node(f)]);
+                                   shares.push_back(users[key(depth.level(n), klut.get_node(f))] - 1u);
+                               });
+
+            auto f = klut.node_function(n);
+            if (f.num_vars() > children.size())
+            {
+                f = kitty::shrink_to(f, static_cast<uint32_t>(children.size()));
+            }
+
+            if (children.size() <= TARGET_LUT_SIZE)
+            {
+                old2new[n] = dest.create_node(children, f);
+                return;
+            }
+
+            bool used_fallback = false;
+            old2new[n]         = split(f, children, shares, used_fallback);
+            if (used_fallback)
+            {
+                ++result.fallbacks;
+            }
+            else
+            {
+                ++result.decomposed_luts;
+            }
         });
 
     klut.foreach_po([&](const auto& po) { dest.create_po(old2new[klut.get_node(po)]); });
@@ -490,7 +774,9 @@ int main(const int argc, const char** argv)  // NOLINT
     const bool want_direct = wanted.empty() || std::find(wanted.cbegin(), wanted.cend(), "direct") != wanted.cend();
     const bool want_remap  = wanted.empty() || std::find(wanted.cbegin(), wanted.cend(), "remap") != wanted.cend();
 
-    const auto fallback = via_xag(mockturtle::shannon_resynthesis<mockturtle::xag_network>{});
+    static mockturtle::shannon_resynthesis<mockturtle::xag_network> shannon_for_fallback{};
+    const auto                                                      fallback = via_xag(
+        mockturtle::dsd_resynthesis<mockturtle::xag_network, decltype(shannon_for_fallback)>{shannon_for_fallback});
 
     experiments::experiment<std::string, uint32_t, std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
                             uint32_t, uint32_t, uint64_t, uint64_t, double, double, bool, std::string>
@@ -562,6 +848,17 @@ int main(const int argc, const char** argv)  // NOLINT
 
                 fmt::print("[i]   K = {}: {} LUTs\n", k, klut.num_gates());
 
+                // the K-LUT network must be equivalent to the AIG, otherwise nothing below means anything
+                if (const auto m = mockturtle::miter<mockturtle::klut_network>(aig, klut); m.has_value())
+                {
+                    mockturtle::equivalence_checking_params eps{};
+                    eps.conflict_limit = SAT_CONFLICT_LIMIT;
+                    if (const auto r = mockturtle::equivalence_checking(*m, eps); r.has_value() && !*r)
+                    {
+                        throw std::runtime_error{fmt::format("the {}-LUT mapping is not equivalent to the AIG", k)};
+                    }
+                }
+
                 if (k == TARGET_LUT_SIZE && want_direct)
                 {
                     decomposed dec{};
@@ -583,6 +880,25 @@ int main(const int argc, const char** argv)  // NOLINT
 
                 if (k > TARGET_LUT_SIZE)
                 {
+                    for (const auto& [name, rule] :
+                         std::vector<std::pair<std::string, bound_set_rule>>{{"ash_shared", bound_set_rule::SHARED},
+                                                                             {"ash_unshared", bound_set_rule::UNSHARED},
+                                                                             {"ash_first", bound_set_rule::FIRST}})
+                    {
+                        if (!wanted.empty() && std::find(wanted.cbegin(), wanted.cend(), name) == wanted.cend())
+                        {
+                            continue;
+                        }
+
+                        mockturtle::stopwatch<>::duration t{};
+                        decomposed                        dec{};
+                        {
+                            const mockturtle::stopwatch stop{t};
+                            dec = decompose_ashenhurst(klut, rule, fallback);
+                        }
+                        evaluate(benchmark, k, name, klut, spec, dec, mockturtle::to_seconds(t));
+                    }
+
                     for (const auto& [name, strategy] : all_strategies)
                     {
                         mockturtle::stopwatch<>::duration t{};

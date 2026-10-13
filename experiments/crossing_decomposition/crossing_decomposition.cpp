@@ -29,12 +29,15 @@
 #include <fiction/verification/virtual_miter.hpp>
 
 #include <fmt/format.h>
+#include <kitty/operations.hpp>
 #include <kitty/partial_truth_table.hpp>
 #include <mockturtle/algorithms/cleanup.hpp>
 #include <mockturtle/algorithms/equivalence_checking.hpp>
 #include <mockturtle/algorithms/lut_mapper.hpp>
 #include <mockturtle/algorithms/simulation.hpp>
+#include <mockturtle/utils/node_map.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
+#include <mockturtle/views/topo_view.hpp>
 
 #include <algorithm>
 #include <cstddef>
@@ -100,6 +103,42 @@ aig_nt read_aig(const std::string& name)
     }
 
     return *reader.get_networks().front();
+}
+
+/**
+ * Rebuilds a LUT network so that every node's function has exactly one variable per fanin. `lut_map` can leave a
+ * function with more variables than the node has fanins; mockturtle evaluates such a node with the extra variables
+ * at zero in simulation but not in its CNF encoding, so the mapped network is not even equivalent to its own AIG
+ * under SAT. Shrinking the function to the fanins restores the function the mapper meant.
+ */
+mockturtle::klut_network normalize(const mockturtle::klut_network& klut)
+{
+    mockturtle::klut_network                                                         dest{};
+    mockturtle::node_map<mockturtle::klut_network::signal, mockturtle::klut_network> old2new{klut};
+
+    old2new[klut.get_constant(false)] = dest.get_constant(false);
+    old2new[klut.get_constant(true)]  = dest.get_constant(true);
+    klut.foreach_pi([&](const auto& n) { old2new[n] = dest.create_pi(); });
+
+    const mockturtle::topo_view topo{klut};
+    topo.foreach_gate(
+        [&](const auto& n)
+        {
+            std::vector<mockturtle::klut_network::signal> children{};
+            klut.foreach_fanin(n, [&](const auto& f) { children.push_back(old2new[klut.get_node(f)]); });
+
+            auto f = klut.node_function(n);
+            if (f.num_vars() > children.size())
+            {
+                f = kitty::shrink_to(f, static_cast<uint32_t>(children.size()));
+            }
+
+            old2new[n] = dest.create_node(children, f);
+        });
+
+    klut.foreach_po([&](const auto& po) { dest.create_po(old2new[klut.get_node(po)]); });
+
+    return dest;
 }
 
 /**
@@ -254,7 +293,7 @@ int main(const int argc, const char** argv)  // NOLINT
 
             mockturtle::lut_map_params map_ps{};
             map_ps.cut_enumeration_ps.cut_size = LUT_SIZE;
-            const auto klut                    = mockturtle::lut_map(aig, map_ps);
+            const auto klut                    = normalize(mockturtle::lut_map(aig, map_ps));
 
             const auto mapped   = convert_network<technology_network>(klut);
             const auto balanced = network_balancing<technology_network>(mapped);
