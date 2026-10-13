@@ -131,8 +131,9 @@ technology_network buried_figure_7_network()
 {
     technology_network tec{};
 
-    const auto a = tec.create_buf(tec.create_pi());
+    // b is created before a so that, in creation order, the buffer of a sits between those of b, c, and d
     const auto b = tec.create_buf(tec.create_pi());
+    const auto a = tec.create_buf(tec.create_pi());
     const auto c = tec.create_buf(tec.create_pi());
     const auto d = tec.create_buf(tec.create_pi());
 
@@ -429,10 +430,7 @@ TEST_CASE("A pair in the middle of a network", "[crossing-decomposition]")
     const auto tec = buried_figure_7_network();
     REQUIRE(is_balanced(tec));
 
-    // the six crossings of the pair do not depend on the order of the buffers, so `mincross` leaves the buffer of a
-    // between those of b, c, and d; the shared node over b, c, and d then crosses the buffer of a on its way up unless
-    // the level of the buffers is re-sorted locally
-    SECTION("the local re-sorting moves the buffer of a aside")
+    SECTION("default parameters")
     {
         crossing_decomposition_stats st{};
         const auto                   result = crossing_decomposition(tec, {}, &st);
@@ -441,7 +439,6 @@ TEST_CASE("A pair in the middle of a network", "[crossing-decomposition]")
         CHECK(st.crossings_after == 1);
         CHECK(st.decompositions == 1);
         CHECK(st.levels_inserted == 1);
-        CHECK(st.swaps > 0);
 
         // inputs, their buffers, the inserted level, the pair, the output gate
         CHECK(count_crossings(result) == 1);
@@ -455,9 +452,30 @@ TEST_CASE("A pair in the middle of a network", "[crossing-decomposition]")
         CHECK(result.check_validity());
         check_equivalent(tec, result);
     }
+
+    // in creation order, the buffer of a sits between those of b, c, and d; the six crossings of the pair do not depend
+    // on that, but the shared node over b, c, and d crosses the buffer of a on its way up unless the buffers and the
+    // inputs are re-sorted. Without the initial optimization the creation order is where the pass starts.
+    SECTION("the local re-sorting moves the buffer of a and its input aside")
+    {
+        crossing_decomposition_params ps{};
+        ps.mincross.optimize = false;
+
+        crossing_decomposition_stats st{};
+        const auto                   result = crossing_decomposition(tec, ps, &st);
+
+        CHECK(st.crossings_before == 6);
+        CHECK(st.crossings_after == 1);
+        CHECK(st.decompositions == 1);
+        CHECK(st.swaps > 0);
+
+        CHECK(count_crossings(result) == 1);
+        check_equivalent(tec, result);
+    }
     SECTION("without the local re-sorting one crossing with the buffer of a remains")
     {
         crossing_decomposition_params ps{};
+        ps.mincross.optimize      = false;
         ps.local_transpose_levels = 0;
 
         crossing_decomposition_stats st{};
@@ -471,18 +489,20 @@ TEST_CASE("A pair in the middle of a network", "[crossing-decomposition]")
         CHECK(count_crossings(result) == 2);
         check_equivalent(tec, result);
     }
-    SECTION("fixed inputs keep the buffers in input order")
+    SECTION("with fixed inputs the crossing can only move, so the re-sorting is undone")
     {
         crossing_decomposition_params ps{};
-        ps.mincross.fixed_pis     = true;
-        ps.local_transpose_levels = 0;
+        ps.mincross.optimize  = false;
+        ps.mincross.fixed_pis = true;
 
         crossing_decomposition_stats st{};
         const auto                   result = crossing_decomposition(tec, ps, &st);
 
         CHECK(st.crossings_before == 6);
-        CHECK(st.crossings_after == 1);
-        CHECK(count_crossings(result) == 1);
+        CHECK(st.crossings_after == 2);
+        CHECK(st.swaps == 0);
+
+        CHECK(count_crossings(result) == 2);
         check_equivalent(tec, result);
     }
 }
