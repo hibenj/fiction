@@ -610,6 +610,37 @@ TEST_CASE("LUT-mapped networks stay equivalent and never gain crossings", "[cros
     check(blueprints::se_coloring_corner_case_network<mockturtle::aig_network>());
 }
 
+TEST_CASE("Every decomposable pair is taken without the improvement requirement", "[crossing-decomposition]")
+{
+    const auto check = [](auto&& aig)
+    {
+        const auto tec = lut_mapped(aig);
+
+        crossing_decomposition_stats st_default{};
+        const auto                   with_requirement = crossing_decomposition(tec, {}, &st_default);
+
+        crossing_decomposition_params ps{};
+        ps.require_improvement = false;
+
+        crossing_decomposition_stats st_all{};
+        const auto                   all = crossing_decomposition(tec, ps, &st_all);
+
+        CHECK(st_all.decompositions >= st_default.decompositions);
+        CHECK(st_all.candidates == st_all.decompositions);
+        CHECK(st_default.crossings_after <= st_default.crossings_before);
+
+        CHECK(is_balanced(all));
+        CHECK(all.check_validity());
+        check_equivalent(tec, all);
+        check_equivalent(tec, with_requirement);
+    };
+
+    check(blueprints::maj4_network<mockturtle::aig_network>());
+    check(blueprints::full_adder_network<mockturtle::aig_network>());
+    check(blueprints::parity_network<mockturtle::aig_network>());
+    check(blueprints::clpl<mockturtle::aig_network>());
+}
+
 TEST_CASE("The initial ordering follows the mincross parameters", "[crossing-decomposition]")
 {
     technology_network tec{};

@@ -12,7 +12,7 @@
  * @file
  * @brief Maps benchmark networks to 4-LUTs, balances them, and decomposes LUT pairs with shared fanins into shared
  * nodes where that lowers the crossing count; every result is checked by SAT or, where SAT gives up, by random
- * simulation.
+ * simulation. `--accept-all` decomposes every pair with a shared function, as in the original work.
  * @author Benjamin Hien (hibenj)
  */
 
@@ -25,6 +25,7 @@
 #include <fiction/synthesis/network_balancing.hpp>
 #include <fiction/synthesis/network_conversion.hpp>
 #include <fiction/types.hpp>
+#include <fiction/utils/graph/mincross.hpp>
 #include <fiction/verification/virtual_miter.hpp>
 
 #include <fmt/format.h>
@@ -35,6 +36,7 @@
 #include <mockturtle/algorithms/simulation.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <exception>
@@ -43,6 +45,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <vector>
 
 using namespace fiction;
@@ -66,6 +69,10 @@ constexpr uint64_t PAPER_BENCHMARKS =
  * LUT size of the mapping.
  */
 constexpr uint32_t LUT_SIZE = 4;
+/**
+ * Command-line option that switches the improvement requirement off.
+ */
+constexpr std::string_view ACCEPT_ALL_OPTION = "--accept-all";
 /**
  * Conflicts after which the SAT-based equivalence check gives way to random simulation.
  */
@@ -149,6 +156,21 @@ bool simulate_equivalent(const Spec& spec, const Impl& impl)
 }
 
 /**
+ * Counts the crossings of a ranked network in its current order.
+ */
+template <typename Ntk>
+uint64_t count_crossings(const Ntk& ntk)
+{
+    utils::graph::mincross_params ps{};
+    ps.optimize = false;
+    utils::graph::mincross_stats st{};
+
+    utils::graph::mincross(ntk, ps, &st);
+
+    return st.num_crossings;
+}
+
+/**
  * Checks equivalence of the decomposed network against the balanced one: by SAT on the `virtual_miter` up to
  * `SAT_CONFLICT_LIMIT` conflicts, by random simulation if SAT gives up.
  */
@@ -180,9 +202,15 @@ equivalence_result is_equivalent(const Spec& spec, const Impl& impl)
 
 int main(const int argc, const char** argv)  // NOLINT
 {
+    // `--accept-all` decomposes every pair with a shared function, as in the original work, instead of only the
+    // pairs that lower the crossing count
+    const std::span<const char*> all_args{argv, static_cast<std::size_t>(argc)};
+    const bool                   accept_all =
+        std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == ACCEPT_ALL_OPTION; });
+
     experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t,
-                            uint32_t, uint32_t, uint64_t, uint64_t, double, bool, std::string>
-        decomposition_exp{"crossing_decomposition",
+                            uint64_t, uint32_t, uint32_t, uint64_t, uint64_t, double, bool, std::string>
+        decomposition_exp{accept_all ? "crossing_decomposition_accept_all" : "crossing_decomposition",
                           "benchmark",
                           "inputs",
                           "outputs",
@@ -190,6 +218,7 @@ int main(const int argc, const char** argv)  // NOLINT
                           "LUTs after",
                           "depth",
                           "depth after",
+                          "crossings unordered",
                           "crossings",
                           "crossings after",
                           "shared nodes",
@@ -206,8 +235,9 @@ int main(const int argc, const char** argv)  // NOLINT
     {
         const std::span<const char*> args{argv, static_cast<std::size_t>(argc)};
         benchmarks.assign(std::next(args.begin()), args.end());
+        std::erase(benchmarks, ACCEPT_ALL_OPTION);
     }
-    else
+    if (benchmarks.empty())
     {
         benchmarks = fiction_experiments::all_benchmarks(PAPER_BENCHMARKS);
     }
@@ -231,9 +261,13 @@ int main(const int argc, const char** argv)  // NOLINT
 
             fmt::print("[i]   decomposing {} LUTs in {} balanced nodes\n", num_luts(balanced), balanced.num_gates());
 
-            const crossing_decomposition_params ps{};
-            crossing_decomposition_stats        st{};
-            const auto                          result = crossing_decomposition(balanced, ps, &st);
+            const auto unordered = count_crossings(mutable_rank_view{balanced});
+
+            crossing_decomposition_params ps{};
+            ps.require_improvement = !accept_all;
+
+            crossing_decomposition_stats st{};
+            const auto                   result = crossing_decomposition(balanced, ps, &st);
 
             st.report();
 
@@ -247,7 +281,7 @@ int main(const int argc, const char** argv)  // NOLINT
             }
 
             decomposition_exp(benchmark, balanced.num_pis(), balanced.num_pos(), num_luts(balanced), num_luts(result),
-                              mutable_rank_view{balanced}.depth(), result.depth(), st.crossings_before,
+                              mutable_rank_view{balanced}.depth(), result.depth(), unordered, st.crossings_before,
                               st.crossings_after, st.decompositions, st.levels_inserted, st.swaps, st.candidates,
                               mockturtle::to_seconds(st.time_total), equivalent.equivalent, equivalent.method);
 

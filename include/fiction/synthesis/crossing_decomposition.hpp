@@ -76,6 +76,11 @@ struct crossing_decomposition_params
      * later; without this, every pair is tried at most once per level, which is faster.
      */
     bool retry_rejected_pairs = true;
+    /**
+     * Accepts a candidate only if it lowers the crossing count. When cleared, every pair with a shared function is
+     * decomposed, as in the original work, and the count is only reported.
+     */
+    bool require_improvement = true;
 };
 
 /**
@@ -690,7 +695,8 @@ class crossing_decomposition_impl
     using rejected_pairs = std::set<std::pair<node, node>>;
 
     /**
-     * Looks for the first pair of LUTs in level `r` whose decomposition lowers the crossing count below `bound`.
+     * Looks for the first pair of LUTs in level `r` whose decomposition lowers the crossing count below `bound`, or,
+     * without `require_improvement`, the first pair that has a decomposition at all.
      *
      * @param cur Current network.
      * @param r Level to search.
@@ -780,7 +786,7 @@ class crossing_decomposition_impl
                 const auto crossings =
                     mockturtle::call_with_stopwatch(pst.time_count, [&] { return count_crossings(candidate.network); });
 
-                if (crossings < bound)
+                if (crossings < bound || !ps.require_improvement)
                 {
                     return improvement{std::move(candidate.network), crossings, swaps, pair,
                                        std::move(candidate.renamed)};
