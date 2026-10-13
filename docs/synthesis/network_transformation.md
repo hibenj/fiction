@@ -81,6 +81,42 @@
 
 ::::
 
+## Crossing-Aware LUT Decomposition
+
+Two LUTs of one level that share inputs cross each other's input wires in every drawing: k shared inputs cost
+k(k-1)/2 crossings. If a function h over some of the shared inputs is a sub-function of both LUTs, a shared node
+computing h replaces those k wires per LUT by a single one {cite:p}`nano_2024_5`. `crossing_decomposition` ranks a
+balanced LUT network, orders it with {ref}`mincross <mincross>`, and then walks the levels from the inputs upwards:
+for every pair of LUTs with shared inputs it searches a shared node by truth-table cofactors, builds the network with
+the shared node in a level inserted below the pair, re-sorts the levels around it locally, and keeps the result only
+if the crossing count drops. The rest of the order is left as `mincross` produced it; the pass never reorders the
+whole network again. The experiment in `experiments/crossing_decomposition` runs the pass on the benchmark sets of
+the paper and checks every result for equivalence.
+
+::::{tab-set}
+:sync-group: language
+
+:::{tab-item} C++
+:sync: cpp
+
+**Header:** `fiction/synthesis/crossing_decomposition.hpp`
+
+```{doxygenstruct} fiction::synthesis::crossing_decomposition_params
+:members:
+```
+
+```{doxygenstruct} fiction::synthesis::crossing_decomposition_stats
+:members:
+```
+
+```{doxygenfunction} fiction::synthesis::crossing_decomposition
+
+```
+
+:::
+
+::::
+
 ## Technology Mapping
 
 ::::{tab-set}

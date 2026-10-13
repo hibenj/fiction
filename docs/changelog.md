@@ -10,6 +10,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Algorithms:
 
+  - `synthesis::crossing_decomposition` decomposes LUT pairs with shared fanins into a shared node when that lowers
+    the `mincross` crossing count of a balanced network, re-sorting only the levels around the shared node
   - `synthesis::planarization` turns a balanced, ranked network into a planar, balanced, fanout-substituted one and
     verifies that contract on its result
   - `synthesis::node_duplication_planarization` planarizes a balanced, ranked network by duplicating nodes, breaking
@@ -74,6 +76,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Experiments:
 
+  - `crossing_decomposition` maps the ISCAS85 and the small EPFL benchmarks to 4-LUTs, balances them, runs the
+    crossing-aware LUT decomposition, and checks every result by SAT
   - `planarization` runs the trindade16, fontes18, ISCAS85, and IWLS93 benchmarks whose balanced network has at most
     8000 nodes through node duplication and through the planarization pipeline with its defaults, and checks every
     result by SAT or, above 50000 nodes, by random simulation
@@ -141,6 +145,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Algorithms:
 
+  - `utils::graph::mincross` follows Graphviz's `mincross.c` more closely: two breadth-first seeds, an exchange sweep
+    that leaves nodes without neighbours in place, tie breaking by the reverse flag only, transpositions that re-visit
+    the neighbouring ranks, and one pass per connected component. It works on arrays indexed by node and is two
+    orders of magnitude faster; the input order is kept as a candidate, so results never get worse.
   - **Breaking:** A*, path enumeration, and Yen's algorithm route around the gates and wires of every gate-level
     layout and take temporary constraints as a separate `obstructions` argument, leaving the caller's data unchanged.
     `&a_star_distance<Lyt, Dist>` no longer converts to a `distance_functor`; use `a_star_distance_functor`.

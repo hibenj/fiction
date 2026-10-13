@@ -73,6 +73,11 @@ If you use an algorithm or gate library, please also cite its corresponding pape
 
   [Scalable post-layout optimization experiment script](https://github.com/cda-tum/fiction/blob/main/experiments/post_layout_optimization/scalable_post_layout_optimization.cpp)
 
+- Reducing Wire Crossings in Field-Coupled Nanotechnologies (`crossing_decomposition`):
+  {cite:p}`nano_2024_5`
+
+  [Crossing decomposition experiment script](https://github.com/cda-tum/fiction/tree/main/experiments/crossing_decomposition)
+
 - {ref}`Wiring reduction <wiring_reduction>` (`wiring_reduction`):
   {cite:p}`hofmann2024wiring`
 
