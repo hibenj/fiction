@@ -77,6 +77,10 @@ constexpr uint32_t LUT_SIZE = 4;
  */
 constexpr std::string_view ACCEPT_ALL_OPTION = "--accept-all";
 /**
+ * Command-line option that names a directory of AIGER inputs.
+ */
+constexpr std::string_view INPUT_DIR_OPTION = "--input-dir";
+/**
  * Conflicts after which the SAT-based equivalence check gives way to random simulation.
  */
 constexpr uint32_t SAT_CONFLICT_LIMIT = 1000000;
@@ -139,6 +143,27 @@ mockturtle::klut_network normalize(const mockturtle::klut_network& klut)
     klut.foreach_po([&](const auto& po) { dest.create_po(old2new[klut.get_node(po)]); });
 
     return dest;
+}
+
+/**
+ * Reads an AIGER file `<dir>/<set>__<name>.aig` of a benchmark.
+ */
+aig_nt read_aig_file(const std::string& dir, const std::string& benchmark)
+{
+    auto file = benchmark;
+    std::replace(file.begin(), file.end(), '/', '_');
+    file.insert(file.find('_'), "_");
+
+    const auto              path = fmt::format("{}/{}.aig", dir, file);
+    std::ostringstream      os{};
+    network_reader<aig_ptr> reader{path, os};
+
+    if (reader.get_networks().empty())
+    {
+        throw std::runtime_error{fmt::format("could not read {}: {}", path, os.str())};
+    }
+
+    return *reader.get_networks().front();
 }
 
 /**
@@ -247,6 +272,16 @@ int main(const int argc, const char** argv)  // NOLINT
     const bool                   accept_all =
         std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == ACCEPT_ALL_OPTION; });
 
+    // `--input-dir <dir>` reads AIGER files <dir>/<set>__<name>.aig (e.g., optimized AIGs) instead of the Verilog
+    std::string input_dir{};
+    for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
+    {
+        if (std::string_view{all_args[i]} == INPUT_DIR_OPTION)
+        {
+            input_dir = all_args[i + 1];
+        }
+    }
+
     experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t,
                             uint64_t, uint32_t, uint32_t, uint64_t, uint64_t, double, bool, std::string>
         decomposition_exp{accept_all ? "crossing_decomposition_accept_all" : "crossing_decomposition",
@@ -275,6 +310,11 @@ int main(const int argc, const char** argv)  // NOLINT
         const std::span<const char*> args{argv, static_cast<std::size_t>(argc)};
         benchmarks.assign(std::next(args.begin()), args.end());
         std::erase(benchmarks, ACCEPT_ALL_OPTION);
+        if (!input_dir.empty())
+        {
+            std::erase(benchmarks, INPUT_DIR_OPTION);
+            std::erase(benchmarks, input_dir);
+        }
     }
     if (benchmarks.empty())
     {
@@ -289,7 +329,8 @@ int main(const int argc, const char** argv)  // NOLINT
 
         try
         {
-            const auto aig = mockturtle::cleanup_dangling(read_aig(benchmark));
+            const auto aig = mockturtle::cleanup_dangling(input_dir.empty() ? read_aig(benchmark) :
+                                                                              read_aig_file(input_dir, benchmark));
 
             mockturtle::lut_map_params map_ps{};
             map_ps.cut_enumeration_ps.cut_size = LUT_SIZE;

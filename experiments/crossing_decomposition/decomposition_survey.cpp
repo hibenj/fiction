@@ -122,6 +122,27 @@ aig_nt read_aig(const std::string& name)
 }
 
 /**
+ * Reads an AIGER file `<dir>/<set>__<name>.aig` of a benchmark.
+ */
+aig_nt read_aig_file(const std::string& dir, const std::string& benchmark)
+{
+    auto file = benchmark;
+    std::replace(file.begin(), file.end(), '/', '_');
+    file.insert(file.find('_'), "_");
+
+    const auto              path = fmt::format("{}/{}.aig", dir, file);
+    std::ostringstream      os{};
+    network_reader<aig_ptr> reader{path, os};
+
+    if (reader.get_networks().empty())
+    {
+        throw std::runtime_error{fmt::format("could not read {}: {}", path, os.str())};
+    }
+
+    return *reader.get_networks().front();
+}
+
+/**
  * Reads a BLIF file (an ABC result) as a technology network.
  */
 technology_network read_blif(const std::string& path)
@@ -232,6 +253,70 @@ uint64_t count_crossings(const Ntk& ntk)
     utils::graph::mincross(ntk, ps, &st);
 
     return st.num_crossings;
+}
+
+/**
+ * Structural measures of a balanced, ranked network that bear on the crossing count.
+ */
+struct structure
+{
+    /**
+     * Edges between adjacent levels (sum of fanins of all gates, buffers included).
+     */
+    uint64_t edges{0};
+    /**
+     * Pairs of gates of one level that share at least two fanins.
+     */
+    uint64_t sharing_pairs{0};
+    /**
+     * Crossings no ordering can avoid: for every pair of gates of one level sharing k >= 2 fanins, k(k-1)/2.
+     */
+    uint64_t unavoidable{0};
+};
+
+template <typename Ntk>
+structure measure(const Ntk& ntk)
+{
+    structure st{};
+
+    for (uint32_t l = 0; l <= ntk.depth(); ++l)
+    {
+        std::vector<std::vector<uint64_t>> fanins{};
+
+        ntk.foreach_node_in_rank(l,
+                                 [&](const auto& n)
+                                 {
+                                     std::vector<uint64_t> fs{};
+                                     ntk.foreach_fanin(n,
+                                                       [&](const auto& f)
+                                                       {
+                                                           if (!ntk.is_constant(ntk.get_node(f)))
+                                                           {
+                                                               fs.push_back(ntk.get_node(f));
+                                                           }
+                                                       });
+                                     std::ranges::sort(fs);
+                                     st.edges += fs.size();
+                                     fanins.push_back(std::move(fs));
+                                 });
+
+        for (std::size_t i = 0; i < fanins.size(); ++i)
+        {
+            for (std::size_t j = i + 1; j < fanins.size(); ++j)
+            {
+                std::vector<uint64_t> common{};
+                std::ranges::set_intersection(fanins[i], fanins[j], std::back_inserter(common));
+
+                if (common.size() >= 2)
+                {
+                    ++st.sharing_pairs;
+                    st.unavoidable += common.size() * (common.size() - 1) / 2;
+                }
+            }
+        }
+    }
+
+    return st;
 }
 
 /**
@@ -751,6 +836,7 @@ int main(const int argc, const char** argv)  // NOLINT
     std::vector<std::string> wanted{};
     std::vector<std::string> benchmarks{};
     std::string              blif_dir{};
+    std::string              input_dir{};
 
     const std::span<const char*> args{argv, static_cast<std::size_t>(argc)};
 
@@ -769,6 +855,11 @@ int main(const int argc, const char** argv)  // NOLINT
         else if (arg == "--strategy" && i + 1 < args.size())
         {
             wanted = split(args[++i]);
+        }
+        else if (arg == "--input-dir" && i + 1 < args.size())
+        {
+            // AIGER files <dir>/<set>__<name>.aig (e.g., optimized AIGs) instead of the benchmark Verilog
+            input_dir = args[++i];
         }
         else if (arg == "--blif-dir" && i + 1 < args.size())
         {
@@ -802,7 +893,8 @@ int main(const int argc, const char** argv)  // NOLINT
         mockturtle::dsd_resynthesis<mockturtle::xag_network, decltype(shannon_for_fallback)>{shannon_for_fallback});
 
     experiments::experiment<std::string, uint32_t, std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
-                            uint32_t, uint32_t, uint64_t, uint64_t, double, double, bool, std::string>
+                            uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, double, double, bool,
+                            std::string>
         survey{"decomposition_survey",
                "benchmark",
                "K",
@@ -816,6 +908,9 @@ int main(const int argc, const char** argv)  // NOLINT
                "fallbacks",
                "crossings unordered",
                "crossings",
+               "edges",
+               "sharing pairs",
+               "unavoidable",
                "t decomp [s]",
                "t mincross [s]",
                "equivalent",
@@ -840,6 +935,8 @@ int main(const int argc, const char** argv)  // NOLINT
             utils::graph::mincross(ranked, {}, &mc_st);
         }
 
+        const auto st_ranked = measure(ranked);
+
         const auto eq = is_equivalent(spec, balanced);
 
         if (!eq.equivalent)
@@ -850,7 +947,8 @@ int main(const int argc, const char** argv)  // NOLINT
 
         survey(benchmark, k, strategy, klut.num_gates(), num_luts(dec.network), max_fanin(dec.network),
                balanced.num_gates(), ranked.depth(), dec.decomposed_luts, dec.fallbacks, unordered, mc_st.num_crossings,
-               t_decomp, mockturtle::to_seconds(t_mincross), eq.equivalent, eq.method);
+               st_ranked.edges, st_ranked.sharing_pairs, st_ranked.unavoidable, t_decomp,
+               mockturtle::to_seconds(t_mincross), eq.equivalent, eq.method);
 
         survey.save();
         survey.table();
@@ -862,7 +960,8 @@ int main(const int argc, const char** argv)  // NOLINT
 
         try
         {
-            const auto aig = mockturtle::cleanup_dangling(read_aig(benchmark));
+            const auto aig = mockturtle::cleanup_dangling(input_dir.empty() ? read_aig(benchmark) :
+                                                                              read_aig_file(input_dir, benchmark));
 
             if (!blif_dir.empty())
             {
