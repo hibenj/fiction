@@ -429,31 +429,62 @@ TEST_CASE("A pair in the middle of a network", "[crossing-decomposition]")
     const auto tec = buried_figure_7_network();
     REQUIRE(is_balanced(tec));
 
-    // the six crossings of the pair do not depend on the order of the buffers, so `mincross` may leave the buffer of a
-    // between those of b, c, and d; existing ranks are never re-sorted, and the shared node would then cross the
-    // buffer of a on its way up. Fixing the inputs keeps the buffers in input order and the result at one crossing.
-    crossing_decomposition_params ps{};
-    ps.mincross.fixed_pis = true;
+    // the six crossings of the pair do not depend on the order of the buffers, so `mincross` leaves the buffer of a
+    // between those of b, c, and d; the shared node over b, c, and d then crosses the buffer of a on its way up unless
+    // the level of the buffers is re-sorted locally
+    SECTION("the local re-sorting moves the buffer of a aside")
+    {
+        crossing_decomposition_stats st{};
+        const auto                   result = crossing_decomposition(tec, {}, &st);
 
-    crossing_decomposition_stats st{};
-    const auto                   result = crossing_decomposition(tec, ps, &st);
+        CHECK(st.crossings_before == 6);
+        CHECK(st.crossings_after == 1);
+        CHECK(st.decompositions == 1);
+        CHECK(st.levels_inserted == 1);
+        CHECK(st.swaps > 0);
 
-    CHECK(st.crossings_before == 6);
-    CHECK(st.crossings_after == 1);
-    CHECK(st.decompositions == 1);
-    CHECK(st.levels_inserted == 1);
+        // inputs, their buffers, the inserted level, the pair, the output gate
+        CHECK(count_crossings(result) == 1);
+        CHECK(result.depth() == 4);
+        CHECK(result.rank_width(2) == 2);
+        CHECK(result.rank_width(3) == 2);
+        CHECK(result.rank_width(4) == 1);
+        CHECK(result.num_pos() == 1);
 
-    // inputs, their buffers, the inserted level, the pair, the output gate
-    CHECK(count_crossings(result) == 1);
-    CHECK(result.depth() == 4);
-    CHECK(result.rank_width(2) == 2);
-    CHECK(result.rank_width(3) == 2);
-    CHECK(result.rank_width(4) == 1);
-    CHECK(result.num_pos() == 1);
+        CHECK(is_balanced(result));
+        CHECK(result.check_validity());
+        check_equivalent(tec, result);
+    }
+    SECTION("without the local re-sorting one crossing with the buffer of a remains")
+    {
+        crossing_decomposition_params ps{};
+        ps.local_transpose_levels = 0;
 
-    CHECK(is_balanced(result));
-    CHECK(result.check_validity());
-    check_equivalent(tec, result);
+        crossing_decomposition_stats st{};
+        const auto                   result = crossing_decomposition(tec, ps, &st);
+
+        CHECK(st.crossings_before == 6);
+        CHECK(st.crossings_after == 2);
+        CHECK(st.decompositions == 1);
+        CHECK(st.swaps == 0);
+
+        CHECK(count_crossings(result) == 2);
+        check_equivalent(tec, result);
+    }
+    SECTION("fixed inputs keep the buffers in input order")
+    {
+        crossing_decomposition_params ps{};
+        ps.mincross.fixed_pis     = true;
+        ps.local_transpose_levels = 0;
+
+        crossing_decomposition_stats st{};
+        const auto                   result = crossing_decomposition(tec, ps, &st);
+
+        CHECK(st.crossings_before == 6);
+        CHECK(st.crossings_after == 1);
+        CHECK(count_crossings(result) == 1);
+        check_equivalent(tec, result);
+    }
 }
 
 TEST_CASE("Pairs below the shared-fanin threshold are left alone", "[crossing-decomposition]")
@@ -574,4 +605,5 @@ TEST_CASE("Statistics report", "[crossing-decomposition]")
     CHECK(text.find("crossings after   = 1") != std::string::npos);
     CHECK(text.find("decompositions    = 1") != std::string::npos);
     CHECK(text.find("levels inserted   = 1") != std::string::npos);
+    CHECK(text.find("local swaps       = ") != std::string::npos);
 }

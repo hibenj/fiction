@@ -40,6 +40,7 @@
 #include <iterator>
 #include <optional>
 #include <stdexcept>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -60,6 +61,14 @@ struct crossing_decomposition_params
      * Smallest number of shared fanins a LUT pair must have to be considered for a shared node.
      */
     uint32_t min_shared_fanins = 2;
+    /**
+     * Number of levels below the level of a decomposed pair that may be re-sorted locally before the candidate is
+     * counted: the pair's level and that many levels below it are swept by adjacent swaps while they lower the
+     * crossing count. The level of the shared node is the first one below the pair, the level of its sources the
+     * second. Every other level keeps its order; the pass never reorders the whole network again. `0` disables the
+     * re-sorting.
+     */
+    uint32_t local_transpose_levels = 3;
 };
 
 /**
@@ -84,6 +93,10 @@ struct crossing_decomposition_stats
      */
     uint32_t levels_inserted = 0;
     /**
+     * Number of adjacent swaps the local re-sorting made in accepted candidates.
+     */
+    uint64_t swaps = 0;
+    /**
      * Total runtime, the initial ordering included.
      */
     mockturtle::stopwatch<>::duration time_total{0};
@@ -99,6 +112,7 @@ struct crossing_decomposition_stats
         out << fmt::format("[i] crossings after   = {}\n", crossings_after);
         out << fmt::format("[i] decompositions    = {}\n", decompositions);
         out << fmt::format("[i] levels inserted   = {}\n", levels_inserted);
+        out << fmt::format("[i] local swaps       = {}\n", swaps);
     }
 };
 
@@ -110,6 +124,11 @@ namespace detail
  * the shared inputs, 2^(2^k) for k inputs, which is cheap up to k = 4 (65536 functions) and prohibitive beyond.
  */
 inline constexpr uint32_t MAX_SHARED_NODE_INPUTS = 4u;
+/**
+ * Upper bound on the sweeps of the local re-sorting of one candidate. Every sweep that is not the last one removes at
+ * least one crossing, so the bound only guards against pathological inputs.
+ */
+inline constexpr uint32_t MAX_LOCAL_TRANSPOSE_SWEEPS = 64u;
 
 /**
  * A decomposition of two LUTs f1 and f2 into one shared node h and two new LUTs g1 and g2 such that
@@ -493,6 +512,7 @@ class crossing_decomposition_impl
             {
                 current           = std::move(improved->network);
                 current_crossings = improved->crossings;
+                pst.swaps += improved->swaps;
                 ++pst.decompositions;
 
                 if (!inserted_here)
@@ -519,6 +539,7 @@ class crossing_decomposition_impl
     {
         ranked_network network;
         uint64_t       crossings;
+        uint64_t       swaps;
     };
 
     /**
@@ -581,16 +602,183 @@ class crossing_decomposition_impl
 
                 auto candidate = materialize(cur, r, luts[i], luts[j], *dec, !below_is_inserted);
 
+                // the level of the pair in the candidate: one higher if a level was inserted below it
+                const auto pair_level = below_is_inserted ? r : r + 1;
+
+                const auto swaps = ps.local_transpose_levels > 0u ? transpose_locally(candidate, pair_level) : 0u;
+
                 const auto crossings = count_crossings(candidate);
 
                 if (crossings < bound)
                 {
-                    return improvement{std::move(candidate), crossings};
+                    return improvement{std::move(candidate), crossings, swaps};
                 }
             }
         }
 
         return std::nullopt;
+    }
+
+    /**
+     * Re-sorts the level of a decomposed pair and the `local_transpose_levels` levels below it by adjacent swaps. A
+     * sweep walks the window from the pair's level downwards and swaps two neighbours whenever that lowers the
+     * crossings of their edges with both neighbouring levels, or keeps them equal: an equal swap moves a crossing one
+     * level down, where the next level of the same sweep can remove it. A sweep that removes no crossing in total is
+     * undone, so the result never contains idle moves. Levels outside the window keep their order; the inputs keep
+     * theirs if the `mincross` parameters fix them.
+     *
+     * @param ranked Candidate to re-sort in place.
+     * @param pair_level Level of the decomposed pair in `ranked`.
+     * @return Number of swaps made.
+     */
+    [[nodiscard]] uint64_t transpose_locally(ranked_network& ranked, const uint32_t pair_level) const
+    {
+        const auto lowest  = pair_level > ps.local_transpose_levels ? pair_level - ps.local_transpose_levels : 0u;
+        const auto highest = pair_level;
+
+        // fanouts of the nodes in the window, collected from the fanins of the level above each one
+        std::unordered_map<node, std::vector<node>> fanouts{};
+
+        for (uint32_t l = lowest; l < std::min(highest + 1u, ranked.depth()); ++l)
+        {
+            ranked.foreach_node_in_rank(l + 1u,
+                                        [&ranked, &fanouts](const auto& n)
+                                        {
+                                            ranked.foreach_fanin(n,
+                                                                 [&ranked, &fanouts, &n](const auto& f)
+                                                                 {
+                                                                     if (const auto src = ranked.get_node(f);
+                                                                         !ranked.is_constant(src))
+                                                                     {
+                                                                         fanouts[src].push_back(n);
+                                                                     }
+                                                                 });
+                                        });
+        }
+
+        const auto positions_of = [&ranked](const std::vector<node>& nodes)
+        {
+            std::vector<uint32_t> positions{};
+            positions.reserve(nodes.size());
+
+            for (const auto& n : nodes)
+            {
+                positions.push_back(ranked.rank_position(n));
+            }
+
+            return positions;
+        };
+
+        const auto fanin_nodes = [&ranked](const node& n)
+        {
+            std::vector<node> nodes{};
+            nodes.reserve(ranked.fanin_size(n));
+
+            ranked.foreach_fanin(n,
+                                 [&ranked, &nodes](const auto& f)
+                                 {
+                                     if (const auto src = ranked.get_node(f); !ranked.is_constant(src))
+                                     {
+                                         nodes.push_back(src);
+                                     }
+                                 });
+
+            return nodes;
+        };
+
+        // crossings between two sets of edges that end at the given positions, the first set's nodes placed first
+        const auto count = [](const std::vector<uint32_t>& a, const std::vector<uint32_t>& b)
+        {
+            uint64_t crossings = 0;
+
+            for (const auto x : a)
+            {
+                for (const auto y : b)
+                {
+                    if (x > y)
+                    {
+                        ++crossings;
+                    }
+                }
+            }
+
+            return crossings;
+        };
+
+        // crossings between the edges of `left` and `right`, both in `level` with `left` placed first
+        const auto pair_crossings = [&ranked, &fanouts, &positions_of, &fanin_nodes,
+                                     &count](const node& left, const node& right, const uint32_t level)
+        {
+            uint64_t crossings = 0;
+
+            if (level > 0u)
+            {
+                crossings += count(positions_of(fanin_nodes(left)), positions_of(fanin_nodes(right)));
+            }
+            if (level < ranked.depth())
+            {
+                crossings += count(positions_of(fanouts[left]), positions_of(fanouts[right]));
+            }
+
+            return crossings;
+        };
+
+        uint64_t swaps = 0;
+
+        for (uint32_t sweep = 0; sweep < MAX_LOCAL_TRANSPOSE_SWEEPS; ++sweep)
+        {
+            // the window before the sweep, to undo a sweep that only moves crossings around
+            std::vector<std::vector<node>> before{};
+            before.reserve(highest - lowest + 1u);
+
+            for (uint32_t l = lowest; l <= highest; ++l)
+            {
+                before.push_back(ranked.get_ranks(l));
+            }
+
+            uint64_t removed     = 0;
+            uint64_t sweep_swaps = 0;
+
+            for (uint32_t l = highest + 1u; l-- > lowest;)
+            {
+                if (l == 0u && ps.mincross.fixed_pis)
+                {
+                    continue;
+                }
+
+                const auto width = ranked.rank_width(l);
+
+                for (uint32_t i = 0; i + 1u < width; ++i)
+                {
+                    const auto v = ranked.at_rank_position(l, i);
+                    const auto w = ranked.at_rank_position(l, i + 1u);
+
+                    const auto current = pair_crossings(v, w, l);
+                    const auto swapped = pair_crossings(w, v, l);
+
+                    if (swapped < current || (swapped == current && current > 0u))
+                    {
+                        ranked.swap(v, w);
+                        removed += current - swapped;
+                        ++sweep_swaps;
+                    }
+                }
+            }
+
+            if (removed == 0u)
+            {
+                for (uint32_t l = lowest; l <= highest; ++l)
+                {
+                    ranked.set_ranks(l, before[l - lowest]);
+                }
+
+                break;
+            }
+
+            swaps += sweep_swaps;
+        }
+
+        return swaps;
     }
 
     /**
