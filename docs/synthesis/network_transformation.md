@@ -249,7 +249,9 @@ one level down and takes their place, a fanout node whose consumers are all reac
 level up and takes theirs. Both moves keep the order of every level, because those buffers are consecutive in a
 planar drawing. On the planar results of the planarization pipeline the gain is small, since `planar_rebalancing`
 already inserts the minimum for the given gate levels and the gates sit as low as their fanins allow; the moves
-reach the buffer count of an unconstrained schedule of the same gates and fanout nodes.
+reach the buffer count of an unconstrained schedule of the same gates and fanout nodes. The experiment in
+`experiments/planar_cells/planar_cell_flow.cpp` runs both flows to a planar network on the same inputs, the existing
+one from the gate network and the new one through LUTs and cells, and reports their final node counts.
 
 ```{doxygenstruct} fiction::synthesis::planar_scheduling_params
 :members:
