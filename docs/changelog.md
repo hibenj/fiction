@@ -16,7 +16,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     admits the same shared function joins the pair's node (`group_shared_nodes`)
   - `synthesis::generate_planar_cells` enumerates planar cells, crossing-free structures of AND, OR, XOR and MAJ
     gates with inverting edges, for every negation class of functions of up to a given number of inputs, and
-    `synthesis::planar_cell_database` serves any concrete function with the cheapest cell of its class
+    `synthesis::planar_cell_database` serves any concrete function with the cheapest cell of its class;
+    `synthesis::io::write_planar_cell_database` and `read_planar_cell_database` store a database as JSON
   - `synthesis::planarization` turns a balanced, ranked network into a planar, balanced, fanout-substituted one and
     verifies that contract on its result
   - `synthesis::node_duplication_planarization` planarizes a balanced, ranked network by duplicating nodes, breaking

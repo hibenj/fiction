@@ -133,6 +133,8 @@ node instead of one node per pair.
 
 ::::
 
+(planar-cells)=
+
 ## Planar Cells
 
 A planar cell is a small gate structure, AND, OR, XOR and three-input majority with inverting edges, that computes
@@ -156,7 +158,10 @@ evaluated first, and a function whose class already has a cell with fewer gates 
 {AND, XOR, MAJ}, every function of up to three inputs has a cell, and 1070 of the 2191 negation classes of four-input
 functions that depend on all inputs; 34 of their 208 NPN classes have no cell for any input order. Four levels cover
 2190 of the 2191 classes in a few seconds, every NPN class for at least one input order and all but one for every
-order. OR adds no coverage over AND with inversions and only lowers the cost of some cells.
+order. The gate set is a parameter: with {AND, XOR} alone, four levels reach 1662 classes and four NPN classes have no
+cell for any input order; OR adds no coverage over AND with inversions but lowers the mean cost of the four-input
+cells from 10.3 to 7.7, and MAJ to 7.2. The experiment in `experiments/planar_cells` generates one database per gate
+set, writes it as JSON (`fiction/synthesis/io/planar_cell_database_json.hpp`) and reports the coverage.
 
 ::::{tab-set}
 :sync-group: language
