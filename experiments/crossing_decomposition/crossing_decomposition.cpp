@@ -97,6 +97,10 @@ constexpr std::string_view NODE_COST_OPTION = "--node-cost";
  */
 constexpr std::string_view PAIRS_ONLY_OPTION = "--pairs-only";
 /**
+ * Command-line option that names a directory of BLIF inputs that are already mapped to 4-LUTs (e.g., by ABC).
+ */
+constexpr std::string_view BLIF_DIR_OPTION = "--blif-dir";
+/**
  * Conflicts after which the SAT-based equivalence check gives way to random simulation.
  */
 constexpr uint32_t SAT_CONFLICT_LIMIT = 1000000;
@@ -173,6 +177,27 @@ aig_nt read_aig_file(const std::string& dir, const std::string& benchmark)
     const auto              path = fmt::format("{}/{}.aig", dir, file);
     std::ostringstream      os{};
     network_reader<aig_ptr> reader{path, os};
+
+    if (reader.get_networks().empty())
+    {
+        throw std::runtime_error{fmt::format("could not read {}: {}", path, os.str())};
+    }
+
+    return *reader.get_networks().front();
+}
+
+/**
+ * Reads a BLIF file `<dir>/<set>__<name>.blif` of a benchmark as an already mapped LUT network.
+ */
+technology_network read_blif_file(const std::string& dir, const std::string& benchmark)
+{
+    auto file = benchmark;
+    std::replace(file.begin(), file.end(), '/', '_');
+    file.insert(file.find('_'), "_");
+
+    const auto              path = fmt::format("{}/{}.blif", dir, file);
+    std::ostringstream      os{};
+    network_reader<tec_ptr> reader{path, os};
 
     if (reader.get_networks().empty())
     {
@@ -334,6 +359,7 @@ int main(const int argc, const char** argv)  // NOLINT
     // `--input-dir <dir>` reads AIGER files <dir>/<set>__<name>.aig (e.g., optimized AIGs) instead of the Verilog
     // `--level-cost <x>` and `--node-cost <x>` price inserted levels and added nodes in crossings
     std::string input_dir{};
+    std::string blif_dir{};
     double      level_cost = 0.0;
     double      node_cost  = 0.0;
     for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
@@ -342,6 +368,10 @@ int main(const int argc, const char** argv)  // NOLINT
         if (arg == INPUT_DIR_OPTION)
         {
             input_dir = all_args[i + 1];
+        }
+        else if (arg == BLIF_DIR_OPTION)
+        {
+            blif_dir = all_args[i + 1];
         }
         else if (arg == LEVEL_COST_OPTION)
         {
@@ -356,8 +386,9 @@ int main(const int argc, const char** argv)  // NOLINT
     experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
                             uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t,
                             double, bool, std::string>
-        decomposition_exp{fmt::format("crossing_decomposition{}{}{}{}{}", accept_all ? "_accept_all" : "",
-                                      private_chains ? "_private_chains" : "", pairs_only ? "_pairs_only" : "",
+        decomposition_exp{fmt::format("crossing_decomposition{}{}{}{}{}{}", blif_dir.empty() ? "" : "_blif",
+                                      accept_all ? "_accept_all" : "", private_chains ? "_private_chains" : "",
+                                      pairs_only ? "_pairs_only" : "",
                                       level_cost > 0.0 ? fmt::format("_level_cost_{}", level_cost) : "",
                                       node_cost > 0.0 ? fmt::format("_node_cost_{}", node_cost) : ""),
                           "benchmark",
@@ -395,7 +426,8 @@ int main(const int argc, const char** argv)  // NOLINT
         for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
         {
             const std::string_view arg{all_args[i]};
-            if (arg == INPUT_DIR_OPTION || arg == LEVEL_COST_OPTION || arg == NODE_COST_OPTION)
+            if (arg == INPUT_DIR_OPTION || arg == BLIF_DIR_OPTION || arg == LEVEL_COST_OPTION ||
+                arg == NODE_COST_OPTION)
             {
                 std::erase(benchmarks, std::string{arg});
                 std::erase(benchmarks, std::string{all_args[i + 1]});
@@ -415,14 +447,22 @@ int main(const int argc, const char** argv)  // NOLINT
 
         try
         {
-            const auto aig = mockturtle::cleanup_dangling(input_dir.empty() ? read_aig(benchmark) :
-                                                                              read_aig_file(input_dir, benchmark));
+            // a BLIF input is already mapped; an AIG is mapped here
+            const auto mapped = [&benchmark, &blif_dir, &input_dir]()
+            {
+                if (!blif_dir.empty())
+                {
+                    return read_blif_file(blif_dir, benchmark);
+                }
 
-            mockturtle::lut_map_params map_ps{};
-            map_ps.cut_enumeration_ps.cut_size = LUT_SIZE;
-            const auto klut                    = normalize(mockturtle::lut_map(aig, map_ps));
+                const auto aig = mockturtle::cleanup_dangling(input_dir.empty() ? read_aig(benchmark) :
+                                                                                  read_aig_file(input_dir, benchmark));
 
-            const auto mapped = convert_network<technology_network>(klut);
+                mockturtle::lut_map_params map_ps{};
+                map_ps.cut_enumeration_ps.cut_size = LUT_SIZE;
+
+                return convert_network<technology_network>(normalize(mockturtle::lut_map(aig, map_ps)));
+            }();
 
             // the paper's structure: one buffer chain per edge; the pipeline's: one chain per source
             const auto with_private_chains = network_balancing<technology_network>(mapped);
