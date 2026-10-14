@@ -79,6 +79,9 @@ struct crossing_gate_planarization_params
          */
         BEST
     };
+    /**
+     * The schedule in use.
+     */
     pass_schedule schedule = pass_schedule::GREEDY;
 };
 
