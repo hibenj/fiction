@@ -172,7 +172,8 @@ set, writes it as JSON (`fiction/synthesis/io/planar_cell_database_json.hpp`) an
 :::{tab-item} C++
 :sync: cpp
 
-**Header:** `fiction/synthesis/planar_cell_database.hpp`, `fiction/synthesis/planar_cell_insertion.hpp`
+**Header:** `fiction/synthesis/planar_cell_database.hpp`, `fiction/synthesis/planar_cell_insertion.hpp`,
+`fiction/synthesis/planar_cell_substitution.hpp`
 
 ```{doxygenenum} fiction::synthesis::planar_gate
 
@@ -220,6 +221,25 @@ instance lists the gate nodes per cell level, so that a caller can place them be
 ```
 
 ```{doxygenfunction} fiction::synthesis::planar_cell_network
+
+```
+
+`planar_cell_substitution` replaces every LUT of a ranked, balanced network by its cell. Every level of the input
+becomes a column of as many levels as its deepest cell needs; a cell is built from the LUT's fanins in the rank order
+of the level below, its inverted edges become inverter nodes on their own level, edges that span levels get buffers,
+and shallower cells, inverters and buffer chains of the input are lifted to the top of the column. The rank order of
+every result level follows the input's order and, inside a cell, the left-to-right order of the enumeration, so the
+result has exactly the crossings of the input. A LUT whose function has no cell in its fanin order is kept.
+
+```{doxygenstruct} fiction::synthesis::planar_cell_substitution_params
+:members:
+```
+
+```{doxygenstruct} fiction::synthesis::planar_cell_substitution_stats
+:members:
+```
+
+```{doxygenfunction} fiction::synthesis::planar_cell_substitution
 
 ```
 
