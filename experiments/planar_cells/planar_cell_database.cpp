@@ -16,7 +16,9 @@
  * the database as JSON to `--out`, and reports per support size the structures, evaluations, negation classes and
  * covered classes, plus, for the largest support size, how many NPN classes have a cell for every, for some or for
  * no input order and the cost range of the cells. `--gate-set <g,g,..>` may be given several times; without it the
- * sets {AND, XOR}, {AND, OR, XOR} and {AND, OR, XOR, MAJ} are run.
+ * sets {AND, XOR}, {AND, OR, XOR} and {AND, OR, XOR, MAJ} are run. With `--base <file>`, the enumeration only fills
+ * the gaps of that database (its cells are kept, a cell is added for every class without one, and the run stops
+ * once all classes are covered), which adds the few deep cells of a larger level bound to a shallow database.
  */
 
 #include "fiction_experiments.hpp"
@@ -53,6 +55,7 @@ constexpr std::string_view K_OPTION        = "--k";
 constexpr std::string_view LEVELS_OPTION   = "--levels";
 constexpr std::string_view GATE_SET_OPTION = "--gate-set";
 constexpr std::string_view OUT_OPTION      = "--out";
+constexpr std::string_view BASE_OPTION     = "--base";
 
 /**
  * Parses a comma-separated gate list such as `and,or,xor,maj`.
@@ -174,6 +177,7 @@ int main(const int argc, const char** argv)  // NOLINT
     uint32_t                              k      = 4;
     uint32_t                              levels = 4;
     std::string                           out    = ".";
+    std::string                           base{};
     std::vector<std::vector<planar_gate>> gate_sets{};
     for (std::size_t i = 1; i + 1 < args.size(); ++i)
     {
@@ -193,6 +197,10 @@ int main(const int argc, const char** argv)  // NOLINT
         else if (arg == OUT_OPTION)
         {
             out = args[i + 1];
+        }
+        else if (arg == BASE_OPTION)
+        {
+            base = args[i + 1];
         }
     }
     if (gate_sets.empty())
@@ -235,10 +243,21 @@ int main(const int argc, const char** argv)  // NOLINT
         fmt::print("[i] gate set {}\n", name);
 
         planar_cell_database_stats st{};
-        const auto                 db = generate_planar_cells(ps, &st);
+        const auto                 db = [&base, &ps, &st]()
+        {
+            if (base.empty())
+            {
+                return generate_planar_cells(ps, &st);
+            }
+            auto       filled = io::read_planar_cell_database(base);
+            const auto added  = extend_planar_cells(filled, ps, &st);
+            fmt::print("[i] {} cells added to {}\n", added, base);
+            return filled;
+        }();
         st.report();
 
-        const auto file = fmt::format("{}/planar_cells_{}_k{}_l{}.json", out, name, k, levels);
+        const auto file =
+            fmt::format("{}/planar_cells_{}_k{}_l{}{}.json", out, name, k, levels, base.empty() ? "" : "_fill");
         io::write_planar_cell_database(db, file, &ps);
 
         for (const auto& t : st.tables)

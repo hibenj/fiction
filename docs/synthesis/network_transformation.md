@@ -160,7 +160,8 @@ functions that depend on all inputs; 34 of their 208 NPN classes have no cell fo
 2190 of the 2191 classes in a few seconds, every NPN class for at least one input order and all but one for every
 order. The gate set is a parameter: with {AND, XOR} alone, four levels reach 1662 classes and four NPN classes have no
 cell for any input order; OR adds no coverage over AND with inversions but lowers the mean cost of the four-input
-cells from 10.3 to 7.7, and MAJ to 7.2. The experiment in `experiments/planar_cells` generates one database per gate
+cells from 10.3 to 7.7, and MAJ to 7.2. The last class needs five levels; `extend_planar_cells` adds its cell to the
+four-level database in seconds, keeping every shallow cell, instead of enumerating five levels for all classes. The experiment in `experiments/planar_cells` generates one database per gate
 set, writes it as JSON (`fiction/synthesis/io/planar_cell_database_json.hpp`) and reports the coverage.
 
 ::::{tab-set}
@@ -196,6 +197,10 @@ set, writes it as JSON (`fiction/synthesis/io/planar_cell_database_json.hpp`) an
 ```
 
 ```{doxygenfunction} fiction::synthesis::generate_planar_cells
+
+```
+
+```{doxygenfunction} fiction::synthesis::extend_planar_cells
 
 ```
 

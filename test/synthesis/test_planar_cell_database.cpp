@@ -323,3 +323,40 @@ TEST_CASE("Four-input cells at three levels", "[planar-cell-database]")
     kitty::create_from_hex_string(uncovered, "1668");
     CHECK(!db.lookup(uncovered).has_value());
 }
+
+TEST_CASE("Extending a database fills only its gaps", "[planar-cell-database]")
+{
+    // one level: only the majority cell of three inputs
+    planar_cell_database_params one_level{};
+    one_level.num_inputs = 3;
+    one_level.max_levels = 1;
+    auto db              = generate_planar_cells(one_level);
+    REQUIRE(db.num_cells(3) == 1);
+    const auto  before = db.num_cells();
+    uint64_t    maj_rep{0};
+    std::string maj_string{};
+    db.foreach_cell(3,
+                    [&maj_rep, &maj_string](const uint64_t rep, const planar_cell& cell)
+                    {
+                        maj_rep    = rep;
+                        maj_string = cell.to_string();
+                    });
+
+    // filling with three levels adds the other classes and keeps the majority cell although a cheaper cell exists
+    planar_cell_database_params three_levels{};
+    three_levels.num_inputs = 3;
+    three_levels.max_levels = 3;
+    planar_cell_database_stats st{};
+    const auto                 added = extend_planar_cells(db, three_levels, &st);
+    CHECK(added == db.num_cells() - before);
+    CHECK(st.tables[1].covered == st.tables[1].classes);
+    CHECK(db.num_cells(3) == st.tables[1].classes);
+    REQUIRE(db.cell_of(maj_rep, 3) != nullptr);
+    CHECK(db.cell_of(maj_rep, 3)->to_string() == maj_string);
+    check_all_functions(db, 3);
+
+    // a database that is complete already is left alone, and the run stops at once
+    planar_cell_database_stats again{};
+    CHECK(extend_planar_cells(db, three_levels, &again) == 0);
+    CHECK(again.tables[1].evaluations == 0);
+}

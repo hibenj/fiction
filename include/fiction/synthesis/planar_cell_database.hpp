@@ -818,12 +818,22 @@ namespace detail
 class planar_cell_enumerator
 {
   public:
+    /**
+     * @param num_inputs Support size to enumerate.
+     * @param p Parameters.
+     * @param database Database to fill.
+     * @param stats Statistics row of this support size.
+     * @param fill Whether classes that already have a cell are left as they are (`true`) or may be replaced by a
+     * cheaper cell (`false`). In fill mode the enumeration stops as soon as every class has a cell.
+     */
     planar_cell_enumerator(const uint32_t num_inputs, const planar_cell_database_params& p,
-                           planar_cell_database& database, planar_cell_database_stats::table_stats& stats) :
+                           planar_cell_database& database, planar_cell_database_stats::table_stats& stats,
+                           const bool fill = false) :
             k{num_inputs},
             ps{p},
             db{database},
-            st{stats}
+            st{stats},
+            fill_gaps{fill}
     {
         for (const auto g : ps.gate_set)
         {
@@ -865,15 +875,7 @@ class planar_cell_enumerator
             }
         }
 
-        utils::progress_reporter progress{ps.on_progress, "evaluating structures of " + std::to_string(k) + " inputs",
-                                          structures.size()};
-        for (const auto& s : structures)
-        {
-            evaluate(s);
-            progress.advance();
-        }
-
-        // the classes of this support size, for the coverage statistic
+        // the classes of this support size, for the coverage statistic and the early exit
         const auto full = tt_word::full(k);
         if (k <= 4)
         {
@@ -892,7 +894,28 @@ class planar_cell_enumerator
                 }
             }
         }
+
+        utils::progress_reporter progress{ps.on_progress, "evaluating structures of " + std::to_string(k) + " inputs",
+                                          structures.size()};
+        for (const auto& s : structures)
+        {
+            if (complete())
+            {
+                break;
+            }
+            evaluate(s);
+            progress.advance();
+        }
+
         st.covered = db.num_cells(k);
+    }
+
+    /**
+     * Whether, in fill mode, every class of this support size has a cell.
+     */
+    [[nodiscard]] bool complete() const noexcept
+    {
+        return fill_gaps && st.classes > 0 && db.num_cells(k) >= st.classes;
     }
 
   private:
@@ -1208,6 +1231,10 @@ class planar_cell_enumerator
 
         for (const auto c : choices[j])
         {
+            if (complete())
+            {
+                return;
+            }
             values[k + j] = value_of(c, in, full);
             chosen[j]     = c;
             if (j + 1 < skeleton.nodes.size())
@@ -1225,7 +1252,7 @@ class planar_cell_enumerator
             const auto rep =
                 representative.empty() ? canonize(f, k).representative : representative[static_cast<std::size_t>(f)];
             if (const auto* e = db.entry_of(rep, k);
-                e != nullptr && (skeleton.nodes.size() > e->cell.num_gates() ||
+                e != nullptr && (fill_gaps || skeleton.nodes.size() > e->cell.num_gates() ||
                                  static_cast<uint64_t>(e->members) * skeleton.nodes.size() >= e->class_cost))
             {
                 continue;
@@ -1328,7 +1355,11 @@ class planar_cell_enumerator
     planar_cell_database&                    db;
     planar_cell_database_stats::table_stats& st;
     std::array<bool, 4>                      allowed{false, false, false, false};
-    std::vector<planar_cell>                 structures{};
+    /**
+     * Whether existing cells are kept and the run stops once every class has one.
+     */
+    bool                     fill_gaps{false};
+    std::vector<planar_cell> structures{};
     /**
      * Class representative of every function, for supports of up to four inputs.
      */
@@ -1377,6 +1408,39 @@ class planar_cell_enumerator
         *pst = stats;
     }
     return db;
+}
+/**
+ * Fills the gaps of an existing database: runs the enumeration with the given parameters for every support size
+ * up to `ps.num_inputs`, keeps every cell the database already has, stores a cell only for classes without one,
+ * and stops a support size as soon as all its classes are covered. This adds, e.g., the few deep cells that a
+ * deeper level bound reaches to a database of shallow cells without replacing the shallow ones.
+ *
+ * @param db The database to extend; its `num_inputs` must be at least `ps.num_inputs`.
+ * @param ps Parameters of the enumeration that fills the gaps.
+ * @param pst Statistics.
+ * @return The number of cells added.
+ */
+inline std::size_t extend_planar_cells(planar_cell_database& db, const planar_cell_database_params& ps = {},
+                                       planar_cell_database_stats* pst = nullptr)
+{
+    assert(ps.num_inputs >= 2 && ps.num_inputs <= db.num_inputs());
+
+    const auto                 before = db.num_cells();
+    planar_cell_database_stats stats{};
+    {
+        const mockturtle::stopwatch stop{stats.time_total};
+        for (uint32_t n = 2; n <= ps.num_inputs; ++n)
+        {
+            stats.tables.emplace_back();
+            detail::planar_cell_enumerator e{n, ps, db, stats.tables.back(), true};
+            e.run();
+        }
+    }
+    if (pst != nullptr)
+    {
+        *pst = stats;
+    }
+    return db.num_cells() - before;
 }
 
 }  // namespace fiction::synthesis
