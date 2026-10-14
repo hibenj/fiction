@@ -173,7 +173,7 @@ set, writes it as JSON (`fiction/synthesis/io/planar_cell_database_json.hpp`) an
 :sync: cpp
 
 **Header:** `fiction/synthesis/planar_cell_database.hpp`, `fiction/synthesis/planar_cell_insertion.hpp`,
-`fiction/synthesis/planar_cell_substitution.hpp`
+`fiction/synthesis/planar_cell_substitution.hpp`, `fiction/synthesis/planar_scheduling.hpp`
 
 ```{doxygenenum} fiction::synthesis::planar_gate
 
@@ -240,6 +240,26 @@ result has exactly the crossings of the input. A LUT whose function has no cell 
 ```
 
 ```{doxygenfunction} fiction::synthesis::planar_cell_substitution
+
+```
+
+`planar_scheduling` removes buffers from a planar, balanced, fanout-substituted network by moving its gates and
+fanout nodes between levels while keeping the embedding: a gate whose fanins all arrive through chain buffers moves
+one level down and takes their place, a fanout node whose consumers are all reached through chain buffers moves one
+level up and takes theirs. Both moves keep the order of every level, because those buffers are consecutive in a
+planar drawing. On the planar results of the planarization pipeline the gain is small, since `planar_rebalancing`
+already inserts the minimum for the given gate levels and the gates sit as low as their fanins allow; the moves
+reach the buffer count of an unconstrained schedule of the same gates and fanout nodes.
+
+```{doxygenstruct} fiction::synthesis::planar_scheduling_params
+:members:
+```
+
+```{doxygenstruct} fiction::synthesis::planar_scheduling_stats
+:members:
+```
+
+```{doxygenfunction} fiction::synthesis::planar_scheduling
 
 ```
 
