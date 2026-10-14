@@ -384,9 +384,18 @@ struct tt_word
  */
 struct negation_class
 {
+    /**
+     * The smallest member of the class.
+     */
     uint64_t representative{0};
+    /**
+     * Inputs to negate to reach the representative.
+     */
     uint32_t input_mask{0};
-    bool     output_negated{false};
+    /**
+     * Whether the output is negated to reach the representative.
+     */
+    bool output_negated{false};
 };
 
 /**
@@ -843,6 +852,9 @@ class planar_cell_enumerator
         st.num_inputs = k;
     }
 
+    /**
+     * Grows the structures, evaluates them and fills the statistics.
+     */
     void run()
     {
         // the structures first, so that progress can be reported over them

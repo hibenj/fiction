@@ -93,9 +93,12 @@ struct planar_cell_substitution_stats
      */
     uint64_t chain_buffers{0};
     /**
-     * Levels of the input and of the result, inputs not counted.
+     * Levels of the input, inputs not counted.
      */
     uint32_t levels_before{0};
+    /**
+     * Levels of the result, inputs not counted.
+     */
     uint32_t levels_after{0};
     /**
      * Total runtime.
@@ -154,15 +157,40 @@ struct has_foreach_pi_unranked<
 template <typename Ntk>
 inline constexpr bool has_foreach_pi_unranked_v = has_foreach_pi_unranked<Ntk>::value;
 
+/**
+ * Implementation of the planar cell substitution.
+ *
+ * @tparam Ntk Ranked network type.
+ */
 template <typename Ntk>
 class planar_cell_substitution_impl
 {
   public:
-    using node   = mockturtle::node<Ntk>;
+    /**
+     * Node type of the input.
+     */
+    using node = mockturtle::node<Ntk>;
+    /**
+     * Type of the result network.
+     */
     using out_nt = networks::technology_network;
+    /**
+     * Signal type of the result network.
+     */
     using out_sg = out_nt::signal;
+    /**
+     * Node type of the result network.
+     */
     using out_nd = out_nt::node;
 
+    /**
+     * Creates the implementation.
+     *
+     * @param src Input network.
+     * @param database Cell database.
+     * @param p Parameters.
+     * @param st Statistics to fill.
+     */
     planar_cell_substitution_impl(const Ntk& src, const planar_cell_database& database,
                                   planar_cell_substitution_params p, planar_cell_substitution_stats& st) :
             ntk{src},
@@ -171,6 +199,11 @@ class planar_cell_substitution_impl
             pst{st}
     {}
 
+    /**
+     * Runs the substitution.
+     *
+     * @return The ranked result.
+     */
     [[nodiscard]] networks::views::mutable_rank_view<out_nt> run()
     {
         const mockturtle::stopwatch stop{pst.time_total};

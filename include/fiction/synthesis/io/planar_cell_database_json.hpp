@@ -46,6 +46,11 @@ namespace fiction::synthesis::io
 class planar_cell_database_parsing_error : public std::runtime_error
 {
   public:
+    /**
+     * Creates the exception.
+     *
+     * @param msg What went wrong.
+     */
     explicit planar_cell_database_parsing_error(const std::string& msg) : std::runtime_error(msg) {}
 };
 

@@ -61,20 +61,32 @@ struct planar_scheduling_params
 struct planar_scheduling_stats
 {
     /**
-     * Nodes (inputs not counted) before and after.
+     * Nodes of the input, inputs not counted.
      */
     uint64_t nodes_before{0};
+    /**
+     * Nodes of the result, inputs not counted.
+     */
     uint64_t nodes_after{0};
     /**
-     * Chain buffers (buffers with one consumer) before and after.
+     * Chain buffers (buffers with one consumer) of the input.
      */
     uint64_t buffers_before{0};
+    /**
+     * Chain buffers of the result.
+     */
     uint64_t buffers_after{0};
     /**
-     * Moves made: gates and inverters one level down, fanout nodes one level up.
+     * Gates moved one level down.
      */
     uint64_t gates_moved_down{0};
+    /**
+     * Inverters moved one level down.
+     */
     uint64_t inverters_moved_down{0};
+    /**
+     * Fanout nodes moved one level up.
+     */
     uint64_t fanouts_moved_up{0};
     /**
      * Passes run.
@@ -102,19 +114,42 @@ struct planar_scheduling_stats
 namespace detail
 {
 
+/**
+ * Implementation of the planar scheduling.
+ *
+ * @tparam Ntk Ranked network type.
+ */
 template <typename Ntk>
 class planar_scheduling_impl
 {
   public:
-    using node   = mockturtle::node<Ntk>;
+    /**
+     * Node type.
+     */
+    using node = mockturtle::node<Ntk>;
+    /**
+     * Signal type.
+     */
     using signal = mockturtle::signal<Ntk>;
 
+    /**
+     * Creates the implementation.
+     *
+     * @param src Input network.
+     * @param p Parameters.
+     * @param st Statistics to fill.
+     */
     planar_scheduling_impl(const Ntk& src, planar_scheduling_params p, planar_scheduling_stats& st) :
             ntk{src},
             ps{std::move(p)},
             pst{st}
     {}
 
+    /**
+     * Runs the scheduling.
+     *
+     * @return The scheduled network.
+     */
     [[nodiscard]] Ntk run()
     {
         const mockturtle::stopwatch stop{pst.time_total};
