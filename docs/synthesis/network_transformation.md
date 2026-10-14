@@ -99,6 +99,12 @@ chains do not count as sharing it. Balancing with shared chains (`network_balanc
 those chain edges and lets the pass see the sharing; the experiment uses it by default and reports the crossings of
 the private-chain structure next to it.
 
+Every shared node that cannot sit in an existing level inserts one, which buffers every other signal between the two
+levels and adds to the depth. `level_cost` and `node_cost` price an inserted level and every added node in
+crossings: a candidate is accepted only when its crossings plus these charges stay below the current count. With
+both at zero the pass minimizes crossings alone and may double the depth of deep networks; a node cost of one
+accepts a decomposition only when every buffer it adds removes at least one crossing.
+
 ::::{tab-set}
 :sync-group: language
 

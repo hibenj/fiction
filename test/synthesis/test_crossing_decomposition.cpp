@@ -42,6 +42,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <tuple>
 #include <vector>
 
 using namespace fiction;
@@ -403,6 +404,86 @@ TEST_CASE("Figure 7 drops from six crossings to one", "[crossing-decomposition]"
     CHECK(is_balanced(result));
     CHECK(result.check_validity());
     check_equivalent(tec, result);
+}
+
+TEST_CASE("Levels and nodes can be priced in crossings", "[crossing-decomposition]")
+{
+    // Figure 7 saves five crossings with one inserted level and two added nodes (the shared node and a buffer)
+    const auto balanced = network_balancing<technology_network>(figure_7_network());
+
+    SECTION("a level that saves exactly its cost is not worth it")
+    {
+        crossing_decomposition_params ps{};
+        ps.level_cost = 5.0;
+
+        crossing_decomposition_stats st{};
+        const auto                   result = crossing_decomposition(balanced, ps, &st);
+
+        CHECK(st.decompositions == 0);
+        CHECK(st.levels_inserted == 0);
+        CHECK(st.nodes_added == 0);
+        CHECK(st.crossings_after == 6);
+        CHECK(result.depth() == 1);
+    }
+    SECTION("a level that saves more than its cost is taken")
+    {
+        crossing_decomposition_params ps{};
+        ps.level_cost = 4.5;
+
+        crossing_decomposition_stats st{};
+        const auto                   result = crossing_decomposition(balanced, ps, &st);
+
+        CHECK(st.decompositions == 1);
+        CHECK(st.levels_inserted == 1);
+        CHECK(st.nodes_added == 2);
+        CHECK(st.crossings_after == 1);
+        CHECK(result.depth() == 2);
+    }
+    SECTION("nodes are priced the same way")
+    {
+        crossing_decomposition_params ps{};
+        ps.node_cost = 2.5;
+
+        crossing_decomposition_stats st{};
+        std::ignore = crossing_decomposition(balanced, ps, &st);
+
+        CHECK(st.decompositions == 0);
+
+        ps.node_cost = 2.0;
+        st           = {};
+        std::ignore  = crossing_decomposition(balanced, ps, &st);
+
+        CHECK(st.decompositions == 1);
+        CHECK(st.nodes_added == 2);
+    }
+    SECTION("both costs add up")
+    {
+        crossing_decomposition_params ps{};
+        ps.level_cost = 2.0;
+        ps.node_cost  = 1.0;
+
+        crossing_decomposition_stats st{};
+        std::ignore = crossing_decomposition(balanced, ps, &st);
+
+        CHECK(st.decompositions == 1);
+
+        ps.node_cost = 1.5;
+        st           = {};
+        std::ignore  = crossing_decomposition(balanced, ps, &st);
+
+        CHECK(st.decompositions == 0);
+    }
+    SECTION("without the improvement requirement the costs do not matter")
+    {
+        crossing_decomposition_params ps{};
+        ps.level_cost          = 100.0;
+        ps.require_improvement = false;
+
+        crossing_decomposition_stats st{};
+        std::ignore = crossing_decomposition(balanced, ps, &st);
+
+        CHECK(st.decompositions == 1);
+    }
 }
 
 TEST_CASE("Two pairs in one level share the inserted level", "[crossing-decomposition]")

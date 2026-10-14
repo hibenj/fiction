@@ -81,6 +81,20 @@ struct crossing_decomposition_params
      * decomposed, as in the original work, and the count is only reported.
      */
     bool require_improvement = true;
+    /**
+     * Crossings a candidate must save on top of its own count for every level it inserts. A shared node that cannot
+     * sit in an existing level needs a new level below its pair, which buffers every other signal between the two
+     * levels and adds one to the depth; with a cost of `0` (the default) such a level is free and the pass minimizes
+     * crossings alone. The candidate is accepted when `crossings + level_cost * levels + node_cost * nodes` is below
+     * the current crossing count, where `levels` is `1` if it inserts a level and `nodes` the number of nodes it adds.
+     */
+    double level_cost = 0.0;
+    /**
+     * Crossings a candidate must save for every node it adds: the shared node, the buffers of an inserted level, less
+     * the buffers it removes. A buffer is a gate in field-coupled technologies, so this prices the area of a
+     * decomposition in crossings; `0` (the default) makes nodes free. See `level_cost` for the acceptance rule.
+     */
+    double node_cost = 0.0;
 };
 
 /**
@@ -104,6 +118,10 @@ struct crossing_decomposition_stats
      * Number of levels inserted to hold shared nodes.
      */
     uint32_t levels_inserted = 0;
+    /**
+     * Nodes the accepted decompositions added, net: shared nodes and buffers of inserted levels, less removed buffers.
+     */
+    int64_t nodes_added = 0;
     /**
      * Number of adjacent swaps the local re-sorting made in accepted candidates.
      */
@@ -148,6 +166,7 @@ struct crossing_decomposition_stats
         out << fmt::format("[i] crossings after   = {}\n", crossings_after);
         out << fmt::format("[i] decompositions    = {}\n", decompositions);
         out << fmt::format("[i] levels inserted   = {}\n", levels_inserted);
+        out << fmt::format("[i] nodes added       = {}\n", nodes_added);
         out << fmt::format("[i] local swaps       = {}\n", swaps);
         out << fmt::format("[i] candidates        = {}\n", candidates);
     }
@@ -644,6 +663,7 @@ class crossing_decomposition_impl
                 current           = std::move(improved->network);
                 current_crossings = improved->crossings;
                 pst.swaps += improved->swaps;
+                pst.nodes_added += improved->nodes_added;
                 ++pst.decompositions;
 
                 if (!inserted_here)
@@ -675,6 +695,10 @@ class crossing_decomposition_impl
          * The decomposed pair in the network the candidate was built from.
          */
         std::pair<node, node> pair;
+        /**
+         * Nodes the candidate has more than the network it was built from.
+         */
+        int64_t nodes_added;
         /**
          * Maps every LUT of the pair's level in that network to its clone in the candidate.
          */
@@ -786,9 +810,15 @@ class crossing_decomposition_impl
                 const auto crossings =
                     mockturtle::call_with_stopwatch(pst.time_count, [&] { return count_crossings(candidate.network); });
 
-                if (crossings < bound || !ps.require_improvement)
+                // a new level and the nodes of the candidate are charged in crossings
+                const auto nodes_added =
+                    static_cast<int64_t>(candidate.network.num_gates()) - static_cast<int64_t>(cur.num_gates());
+                const auto cost = static_cast<double>(crossings) + (below_is_inserted ? 0.0 : ps.level_cost) +
+                                  (ps.node_cost * static_cast<double>(nodes_added));
+
+                if (cost < static_cast<double>(bound) || !ps.require_improvement)
                 {
-                    return improvement{std::move(candidate.network), crossings, swaps, pair,
+                    return improvement{std::move(candidate.network), crossings, swaps, pair, nodes_added,
                                        std::move(candidate.renamed)};
                 }
 

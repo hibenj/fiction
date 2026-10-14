@@ -11,7 +11,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Algorithms:
 
   - `synthesis::crossing_decomposition` decomposes LUT pairs with shared fanins into a shared node when that lowers
-    the `mincross` crossing count of a balanced network, re-sorting only the levels around the shared node
+    the `mincross` crossing count of a balanced network, re-sorting only the levels around the shared node;
+    `level_cost` and `node_cost` price inserted levels and added nodes in crossings
   - `synthesis::planarization` turns a balanced, ranked network into a planar, balanced, fanout-substituted one and
     verifies that contract on its result
   - `synthesis::node_duplication_planarization` planarizes a balanced, ranked network by duplicating nodes, breaking

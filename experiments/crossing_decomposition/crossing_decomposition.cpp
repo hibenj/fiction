@@ -85,6 +85,14 @@ constexpr std::string_view INPUT_DIR_OPTION = "--input-dir";
  */
 constexpr std::string_view PRIVATE_CHAINS_OPTION = "--private-chains";
 /**
+ * Command-line option that prices every inserted level in crossings.
+ */
+constexpr std::string_view LEVEL_COST_OPTION = "--level-cost";
+/**
+ * Command-line option that prices every added node in crossings.
+ */
+constexpr std::string_view NODE_COST_OPTION = "--node-cost";
+/**
  * Conflicts after which the SAT-based equivalence check gives way to random simulation.
  */
 constexpr uint32_t SAT_CONFLICT_LIMIT = 1000000;
@@ -317,20 +325,34 @@ int main(const int argc, const char** argv)  // NOLINT
         std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == PRIVATE_CHAINS_OPTION; });
 
     // `--input-dir <dir>` reads AIGER files <dir>/<set>__<name>.aig (e.g., optimized AIGs) instead of the Verilog
+    // `--level-cost <x>` and `--node-cost <x>` price inserted levels and added nodes in crossings
     std::string input_dir{};
+    double      level_cost = 0.0;
+    double      node_cost  = 0.0;
     for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
     {
-        if (std::string_view{all_args[i]} == INPUT_DIR_OPTION)
+        const std::string_view arg{all_args[i]};
+        if (arg == INPUT_DIR_OPTION)
         {
             input_dir = all_args[i + 1];
+        }
+        else if (arg == LEVEL_COST_OPTION)
+        {
+            level_cost = std::stod(all_args[i + 1]);
+        }
+        else if (arg == NODE_COST_OPTION)
+        {
+            node_cost = std::stod(all_args[i + 1]);
         }
     }
 
     experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
                             uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, uint32_t, uint64_t, uint64_t, double,
                             bool, std::string>
-        decomposition_exp{fmt::format("crossing_decomposition{}{}", accept_all ? "_accept_all" : "",
-                                      private_chains ? "_private_chains" : ""),
+        decomposition_exp{fmt::format("crossing_decomposition{}{}{}{}", accept_all ? "_accept_all" : "",
+                                      private_chains ? "_private_chains" : "",
+                                      level_cost > 0.0 ? fmt::format("_level_cost_{}", level_cost) : "",
+                                      node_cost > 0.0 ? fmt::format("_node_cost_{}", node_cost) : ""),
                           "benchmark",
                           "inputs",
                           "outputs",
@@ -360,10 +382,15 @@ int main(const int argc, const char** argv)  // NOLINT
         benchmarks.assign(std::next(args.begin()), args.end());
         std::erase(benchmarks, ACCEPT_ALL_OPTION);
         std::erase(benchmarks, PRIVATE_CHAINS_OPTION);
-        if (!input_dir.empty())
+        // drop the valued options and their values
+        for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
         {
-            std::erase(benchmarks, INPUT_DIR_OPTION);
-            std::erase(benchmarks, input_dir);
+            const std::string_view arg{all_args[i]};
+            if (arg == INPUT_DIR_OPTION || arg == LEVEL_COST_OPTION || arg == NODE_COST_OPTION)
+            {
+                std::erase(benchmarks, std::string{arg});
+                std::erase(benchmarks, std::string{all_args[i + 1]});
+            }
         }
     }
     if (benchmarks.empty())
@@ -401,6 +428,8 @@ int main(const int argc, const char** argv)  // NOLINT
 
             crossing_decomposition_params ps{};
             ps.require_improvement = !accept_all;
+            ps.level_cost          = level_cost;
+            ps.node_cost           = node_cost;
 
             crossing_decomposition_stats st{};
             const auto                   result = crossing_decomposition(balanced, ps, &st);
