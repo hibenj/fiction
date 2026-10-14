@@ -169,7 +169,7 @@ set, writes it as JSON (`fiction/synthesis/io/planar_cell_database_json.hpp`) an
 :::{tab-item} C++
 :sync: cpp
 
-**Header:** `fiction/synthesis/planar_cell_database.hpp`
+**Header:** `fiction/synthesis/planar_cell_database.hpp`, `fiction/synthesis/planar_cell_insertion.hpp`
 
 ```{doxygenenum} fiction::synthesis::planar_gate
 
@@ -196,6 +196,23 @@ set, writes it as JSON (`fiction/synthesis/io/planar_cell_database_json.hpp`) an
 ```
 
 ```{doxygenfunction} fiction::synthesis::generate_planar_cells
+
+```
+
+`insert_planar_cell` builds the cell of a concrete function in a network from the signals of the function's
+variables: the cheapest cell of the function's negation class with every inverted edge as a `create_not`, which is an
+inverter node in a `technology_network` and a complemented signal where the network carries complements. The returned
+instance lists the gate nodes per cell level, so that a caller can place them between ranks.
+
+```{doxygenstruct} fiction::synthesis::planar_cell_instance
+:members:
+```
+
+```{doxygenfunction} fiction::synthesis::insert_planar_cell
+
+```
+
+```{doxygenfunction} fiction::synthesis::planar_cell_network
 
 ```
 
