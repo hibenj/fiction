@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <deque>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 #include <unordered_map>
 #include <utility>
@@ -72,7 +73,11 @@ struct crossing_gate_planarization_params
     enum class pass_schedule : uint8_t
     {
         GREEDY,
-        ODD_EVEN
+        ODD_EVEN,
+        /**
+         * Per rank, whichever of the two needs fewer passes.
+         */
+        BEST
     };
     pass_schedule schedule = pass_schedule::GREEDY;
 };
@@ -118,7 +123,15 @@ namespace detail
 [[nodiscard]] inline uint64_t crossing_passes(const std::vector<std::size_t>&                         targets,
                                               const crossing_gate_planarization_params::pass_schedule schedule)
 {
-    if (schedule == crossing_gate_planarization_params::pass_schedule::ODD_EVEN)
+    using pass_schedule = crossing_gate_planarization_params::pass_schedule;
+
+    if (schedule == pass_schedule::BEST)
+    {
+        return std::min(crossing_passes(targets, pass_schedule::GREEDY),
+                        crossing_passes(targets, pass_schedule::ODD_EVEN));
+    }
+
+    if (schedule == pass_schedule::ODD_EVEN)
     {
         auto     order  = targets;
         uint64_t rounds = 0;
@@ -392,11 +405,18 @@ class crossing_gate_planarization_impl
         {
             stage rank_stage{};
 
-            if (ps.schedule == crossing_gate_planarization_params::pass_schedule::ODD_EVEN)
+            if (ps.schedule != crossing_gate_planarization_params::pass_schedule::GREEDY)
             {
                 detect_crossings_odd_even(r, rank_stage);
-                stages.push_back(std::move(rank_stage));
-                continue;
+                if (ps.schedule == crossing_gate_planarization_params::pass_schedule::ODD_EVEN)
+                {
+                    stages.push_back(std::move(rank_stage));
+                    continue;
+                }
+                // BEST: keep the odd-even stage unless the greedy one below needs fewer passes
+                best_candidate = std::move(rank_stage);
+                rank_stage     = stage{};
+                pst.num_crossings -= best_candidate->crossings.size();
             }
 
             // edges already swept, grouped by target position, with the level each one has reached
@@ -458,8 +478,32 @@ class crossing_gate_planarization_impl
 
             pst.num_crossings += rank_crossings;
 
+            if (best_candidate.has_value())
+            {
+                if (passes_of(*best_candidate) < passes_of(rank_stage))
+                {
+                    rank_stage = std::move(*best_candidate);
+                }
+                best_candidate.reset();
+            }
+
             stages.push_back(std::move(rank_stage));
         }
+    }
+    /**
+     * Passes a stage needs: one more than the highest crossing level.
+     *
+     * @param st Stage.
+     * @return Passes.
+     */
+    [[nodiscard]] static uint64_t passes_of(const stage& st) noexcept
+    {
+        uint64_t max_level = 0;
+        for (const auto& c : st.crossings)
+        {
+            max_level = std::max(max_level, c.level);
+        }
+        return st.crossings.empty() ? 0u : max_level + 1;
     }
     /**
      * Finds the crossings between rank `r` and the one above it with the odd-even schedule: the edges in sweep
@@ -703,6 +747,10 @@ class crossing_gate_planarization_impl
      * Current end of every edge in the destination network, once a gadget or buffer chain was placed on it.
      */
     std::unordered_map<edge, mockturtle::signal<Ntk>, edge_hash> edge_end{};
+    /**
+     * The odd-even stage of the rank being detected, while `BEST` compares it with the greedy one.
+     */
+    std::optional<stage> best_candidate{};
 };
 
 }  // namespace detail

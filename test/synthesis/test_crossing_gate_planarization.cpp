@@ -309,6 +309,9 @@ TEST_CASE("The pass count of a rank follows its schedule", "[crossing-gate-plana
     // two edges to the same target never cross; the odd-even rounds can also lose a pass to their parity
     CHECK(crossing_passes({2, 2, 0}, schedule::GREEDY) == 2);
     CHECK(crossing_passes({2, 2, 0}, schedule::ODD_EVEN) == 3);
+    // BEST takes the fewer of the two per rank
+    CHECK(crossing_passes({2, 2, 0}, schedule::BEST) == 2);
+    CHECK(crossing_passes({3, 2, 1, 0}, schedule::BEST) == 4);
 }
 
 TEST_CASE("The odd-even schedule keeps the contract and needs no more levels", "[crossing-gate-planarization]")
@@ -349,4 +352,12 @@ TEST_CASE("The odd-even schedule keeps the contract and needs no more levels", "
     // 4 passes of 4 levels against 5
     CHECK(odd_even_result.depth() == 1 + (4 * 4));
     CHECK(greedy_result.depth() == 1 + (5 * 4));
+
+    crossing_gate_planarization_params best{};
+    best.schedule = crossing_gate_planarization_params::pass_schedule::BEST;
+    crossing_gate_planarization_stats best_st{};
+    const auto                        best_result = crossing_gate_planarization(ranked, best, &best_st);
+    check_contract(tec, best_result);
+    CHECK(best_st.num_crossings == 6);
+    CHECK(best_result.depth() == odd_even_result.depth());
 }
