@@ -95,6 +95,13 @@ struct crossing_decomposition_params
      * decomposition in crossings; `0` (the default) makes nodes free. See `level_cost` for the acceptance rule.
      */
     double node_cost = 0.0;
+    /**
+     * Lets every other LUT of the level that reads the shared fanins and admits the same shared function join the
+     * pair, so that one shared node serves the whole group instead of one node per pair. For k LUTs over the same
+     * inputs this turns 2k edges into k + 2 on the two levels around the shared node; without it, a third LUT with
+     * the same inputs gets a second, identical shared node or none at all.
+     */
+    bool group_shared_nodes = true;
 };
 
 /**
@@ -122,6 +129,10 @@ struct crossing_decomposition_stats
      * Nodes the accepted decompositions added, net: shared nodes and buffers of inserted levels, less removed buffers.
      */
     int64_t nodes_added = 0;
+    /**
+     * LUTs beyond the pair that joined an accepted shared node (`group_shared_nodes`).
+     */
+    uint32_t group_members = 0;
     /**
      * Number of adjacent swaps the local re-sorting made in accepted candidates.
      */
@@ -167,6 +178,7 @@ struct crossing_decomposition_stats
         out << fmt::format("[i] decompositions    = {}\n", decompositions);
         out << fmt::format("[i] levels inserted   = {}\n", levels_inserted);
         out << fmt::format("[i] nodes added       = {}\n", nodes_added);
+        out << fmt::format("[i] group members     = {}\n", group_members);
         out << fmt::format("[i] local swaps       = {}\n", swaps);
         out << fmt::format("[i] candidates        = {}\n", candidates);
     }
@@ -219,6 +231,28 @@ struct shared_decomposition
      * Function of the new LUT that replaces f2 over `g2_fanins` plus the shared node as its last variable.
      */
     kitty::dynamic_truth_table g2{};
+    /**
+     * A further LUT that reads the shared fanins and admits the same shared function.
+     */
+    struct member
+    {
+        /**
+         * The LUT.
+         */
+        Node n{};
+        /**
+         * Fanins of the new LUT that replaces it, without the shared node (see `g1_fanins`).
+         */
+        std::vector<Node> g_fanins{};
+        /**
+         * Function of the new LUT over `g_fanins` plus the shared node as its last variable.
+         */
+        kitty::dynamic_truth_table g{};
+    };
+    /**
+     * LUTs beyond the pair that share the node.
+     */
+    std::vector<member> members{};
 };
 
 /**
@@ -664,6 +698,7 @@ class crossing_decomposition_impl
                 current_crossings = improved->crossings;
                 pst.swaps += improved->swaps;
                 pst.nodes_added += improved->nodes_added;
+                pst.group_members += improved->members;
                 ++pst.decompositions;
 
                 if (!inserted_here)
@@ -699,6 +734,10 @@ class crossing_decomposition_impl
          * Nodes the candidate has more than the network it was built from.
          */
         int64_t nodes_added;
+        /**
+         * LUTs beyond the pair that share the node.
+         */
+        uint32_t members;
         /**
          * Maps every LUT of the pair's level in that network to its clone in the candidate.
          */
@@ -779,7 +818,7 @@ class crossing_decomposition_impl
                     continue;
                 }
 
-                const auto dec = mockturtle::call_with_stopwatch(
+                auto dec = mockturtle::call_with_stopwatch(
                     pst.time_search,
                     [&]
                     {
@@ -793,6 +832,53 @@ class crossing_decomposition_impl
                     // from the shareable set
                     rejected.insert(pair);
                     continue;
+                }
+
+                if (ps.group_shared_nodes)
+                {
+                    // every other LUT of the level that reads all of Y and admits the same h joins the pair
+                    for (std::size_t k = 0; k < luts.size(); ++k)
+                    {
+                        if (k == i || k == j)
+                        {
+                            continue;
+                        }
+
+                        std::vector<uint32_t> ys{};
+                        ys.reserve(dec->h_fanins.size());
+                        for (const auto& y : dec->h_fanins)
+                        {
+                            const auto it = std::find(fanins[k].cbegin(), fanins[k].cend(), y);
+                            if (it == fanins[k].cend())
+                            {
+                                break;
+                            }
+                            ys.push_back(static_cast<uint32_t>(std::distance(fanins[k].cbegin(), it)));
+                        }
+                        if (ys.size() != dec->h_fanins.size())
+                        {
+                            continue;
+                        }
+
+                        const auto g = mockturtle::call_with_stopwatch(
+                            pst.time_search,
+                            [&] { return outer_function(lut_function(cur, luts[k], fanins[k]), ys, dec->h); });
+                        if (!g.has_value())
+                        {
+                            continue;
+                        }
+
+                        std::vector<node> g_fanins{};
+                        g_fanins.reserve(fanins[k].size() - ys.size());
+                        for (uint32_t v = 0; v < fanins[k].size(); ++v)
+                        {
+                            if (std::find(ys.cbegin(), ys.cend(), v) == ys.cend())
+                            {
+                                g_fanins.push_back(fanins[k][v]);
+                            }
+                        }
+                        dec->members.push_back({luts[k], std::move(g_fanins), *g});
+                    }
                 }
 
                 auto candidate = mockturtle::call_with_stopwatch(
@@ -818,7 +904,12 @@ class crossing_decomposition_impl
 
                 if (cost < static_cast<double>(bound) || !ps.require_improvement)
                 {
-                    return improvement{std::move(candidate.network), crossings, swaps, pair, nodes_added,
+                    return improvement{std::move(candidate.network),
+                                       crossings,
+                                       swaps,
+                                       pair,
+                                       nodes_added,
+                                       static_cast<uint32_t>(dec->members.size()),
                                        std::move(candidate.renamed)};
                 }
 
@@ -1094,17 +1185,23 @@ class crossing_decomposition_impl
         const auto is_y = [&dec](const node& n)
         { return std::find(dec.h_fanins.cbegin(), dec.h_fanins.cend(), n) != dec.h_fanins.cend(); };
 
-        // nodes of level r - 1 that keep a fanout into level r once the Y edges into n1 and n2 are gone
+        // the LUTs that read the shared node: the pair and the group members
+        const auto is_member = [&n1, &n2, &dec](const node& m)
+        {
+            return m == n1 || m == n2 ||
+                   std::ranges::any_of(dec.members, [&m](const auto& member) { return member.n == m; });
+        };
+
+        // nodes of level r - 1 that keep a fanout into level r once the Y edges into the members are gone
         std::unordered_set<node> keeps_fanout{};
         cur.foreach_node_in_rank(r,
-                                 [&cur, &n1, &n2, &is_y, &keeps_fanout](const auto& m)
+                                 [&cur, &is_member, &is_y, &keeps_fanout](const auto& m)
                                  {
                                      cur.foreach_fanin(m,
-                                                       [&cur, &n1, &n2, &m, &is_y, &keeps_fanout](const auto& f)
+                                                       [&cur, &is_member, &m, &is_y, &keeps_fanout](const auto& f)
                                                        {
                                                            const auto fn = cur.get_node(f);
-                                                           if (!cur.is_constant(fn) &&
-                                                               !((m == n1 || m == n2) && is_y(fn)))
+                                                           if (!cur.is_constant(fn) && !(is_member(m) && is_y(fn)))
                                                            {
                                                                keeps_fanout.insert(fn);
                                                            }
@@ -1193,7 +1290,8 @@ class crossing_decomposition_impl
             new_ranks.push_back(std::move(level_nodes));
         }
 
-        // level r: the pair becomes g1 and g2 over the shared node, every other node is copied over the replacements
+        // level r: the pair and the members become their outer functions over the shared node, every other node is
+        // copied over the replacements
         const auto new_lut =
             [&dest, &replaced_by, &h](const std::vector<node>& own_fanins, const kitty::dynamic_truth_table& g)
         {
@@ -1216,6 +1314,12 @@ class crossing_decomposition_impl
             else if (m == n2)
             {
                 old2new[m] = new_lut(dec.g2_fanins, dec.g2);
+            }
+            else if (const auto member =
+                         std::ranges::find_if(dec.members, [&m](const auto& mem) { return mem.n == m; });
+                     member != dec.members.cend())
+            {
+                old2new[m] = new_lut(member->g_fanins, member->g);
             }
             else
             {

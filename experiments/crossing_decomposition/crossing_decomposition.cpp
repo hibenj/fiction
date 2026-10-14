@@ -93,6 +93,10 @@ constexpr std::string_view LEVEL_COST_OPTION = "--level-cost";
  */
 constexpr std::string_view NODE_COST_OPTION = "--node-cost";
 /**
+ * Command-line option that keeps shared nodes to pairs instead of groups.
+ */
+constexpr std::string_view PAIRS_ONLY_OPTION = "--pairs-only";
+/**
  * Conflicts after which the SAT-based equivalence check gives way to random simulation.
  */
 constexpr uint32_t SAT_CONFLICT_LIMIT = 1000000;
@@ -323,6 +327,9 @@ int main(const int argc, const char** argv)  // NOLINT
     // source shared by all its fanouts
     const bool private_chains =
         std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == PRIVATE_CHAINS_OPTION; });
+    // `--pairs-only` gives every pair its own shared node instead of letting the level's other readers join
+    const bool pairs_only =
+        std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == PAIRS_ONLY_OPTION; });
 
     // `--input-dir <dir>` reads AIGER files <dir>/<set>__<name>.aig (e.g., optimized AIGs) instead of the Verilog
     // `--level-cost <x>` and `--node-cost <x>` price inserted levels and added nodes in crossings
@@ -347,10 +354,10 @@ int main(const int argc, const char** argv)  // NOLINT
     }
 
     experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
-                            uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, uint32_t, uint64_t, uint64_t, double,
-                            bool, std::string>
-        decomposition_exp{fmt::format("crossing_decomposition{}{}{}{}", accept_all ? "_accept_all" : "",
-                                      private_chains ? "_private_chains" : "",
+                            uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t,
+                            double, bool, std::string>
+        decomposition_exp{fmt::format("crossing_decomposition{}{}{}{}{}", accept_all ? "_accept_all" : "",
+                                      private_chains ? "_private_chains" : "", pairs_only ? "_pairs_only" : "",
                                       level_cost > 0.0 ? fmt::format("_level_cost_{}", level_cost) : "",
                                       node_cost > 0.0 ? fmt::format("_node_cost_{}", node_cost) : ""),
                           "benchmark",
@@ -367,6 +374,7 @@ int main(const int argc, const char** argv)  // NOLINT
                           "crossings",
                           "crossings after",
                           "shared nodes",
+                          "group members",
                           "levels inserted",
                           "swaps",
                           "candidates",
@@ -382,6 +390,7 @@ int main(const int argc, const char** argv)  // NOLINT
         benchmarks.assign(std::next(args.begin()), args.end());
         std::erase(benchmarks, ACCEPT_ALL_OPTION);
         std::erase(benchmarks, PRIVATE_CHAINS_OPTION);
+        std::erase(benchmarks, PAIRS_ONLY_OPTION);
         // drop the valued options and their values
         for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
         {
@@ -430,6 +439,7 @@ int main(const int argc, const char** argv)  // NOLINT
             ps.require_improvement = !accept_all;
             ps.level_cost          = level_cost;
             ps.node_cost           = node_cost;
+            ps.group_shared_nodes  = !pairs_only;
 
             crossing_decomposition_stats st{};
             const auto                   result = crossing_decomposition(balanced, ps, &st);
@@ -448,7 +458,7 @@ int main(const int argc, const char** argv)  // NOLINT
             decomposition_exp(benchmark, balanced.num_pis(), balanced.num_pos(), num_luts(balanced), num_luts(result),
                               num_buffers(balanced), num_buffers(result), mutable_rank_view{balanced}.depth(),
                               result.depth(), unordered, crossings_private, st.crossings_before, st.crossings_after,
-                              st.decompositions, st.levels_inserted, st.swaps, st.candidates,
+                              st.decompositions, st.group_members, st.levels_inserted, st.swaps, st.candidates,
                               mockturtle::to_seconds(st.time_total), equivalent.equivalent, equivalent.method);
 
             decomposition_exp.save();

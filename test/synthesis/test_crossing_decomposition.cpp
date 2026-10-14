@@ -486,6 +486,106 @@ TEST_CASE("Levels and nodes can be priced in crossings", "[crossing-decompositio
     }
 }
 
+TEST_CASE("A group of LUTs shares one node", "[crossing-decomposition]")
+{
+    // three LUTs read a AND b: (a b) | c, (a b) ^ d, (a b) e; a fourth reads a OR b, which admits a different h only
+    technology_network ntk{};
+    const auto         a = ntk.create_pi();
+    const auto         b = ntk.create_pi();
+    const auto         c = ntk.create_pi();
+    const auto         d = ntk.create_pi();
+    const auto         e = ntk.create_pi();
+    const auto         f = ntk.create_pi();
+
+    kitty::dynamic_truth_table and_or{3};
+    kitty::create_from_binary_string(and_or, "11111000");  // (x0 x1) | x2
+    kitty::dynamic_truth_table and_xor{3};
+    kitty::create_from_binary_string(and_xor, "01111000");  // (x0 x1) ^ x2
+    kitty::dynamic_truth_table and_and{3};
+    kitty::create_from_binary_string(and_and, "10000000");  // x0 x1 x2
+    kitty::dynamic_truth_table or_and{3};
+    kitty::create_from_binary_string(or_and, "11100000");  // (x0 | x1) x2
+
+    ntk.create_po(ntk.create_node({a, b, c}, and_or));
+    ntk.create_po(ntk.create_node({a, b, d}, and_xor));
+    ntk.create_po(ntk.create_node({a, b, e}, and_and));
+    ntk.create_po(ntk.create_node({a, b, f}, or_and));
+
+    const auto balanced = network_balancing<technology_network>(ntk);
+
+    SECTION("with grouping, one shared node serves the three AND readers")
+    {
+        crossing_decomposition_params ps{};
+        ps.require_improvement = false;
+
+        crossing_decomposition_stats st{};
+        const auto                   result = crossing_decomposition(balanced, ps, &st);
+
+        CHECK(st.decompositions == 1);
+        CHECK(st.group_members == 1);
+        CHECK(st.levels_inserted == 1);
+
+        // the inserted level: the shared node with three fanouts and buffers of c, d, e, f, a, b (a and b still feed
+        // the OR reader)
+        const mockturtle::fanout_view fanouts{static_cast<const technology_network&>(result)};
+        uint32_t                      shared_nodes = 0;
+        result.foreach_node_in_rank(1,
+                                    [&result, &fanouts, &shared_nodes](const auto& n)
+                                    {
+                                        if (!result.is_buf(n))
+                                        {
+                                            ++shared_nodes;
+                                            CHECK(result.fanin_size(n) == 2);
+                                            CHECK(fanouts.fanout_size(n) == 3);
+                                        }
+                                    });
+        CHECK(shared_nodes == 1);
+
+        // the readers became 2-input LUTs, the OR reader keeps its three inputs
+        uint32_t two_input   = 0;
+        uint32_t three_input = 0;
+        result.foreach_node_in_rank(2,
+                                    [&result, &two_input, &three_input](const auto& n)
+                                    {
+                                        if (result.fanin_size(n) == 2)
+                                        {
+                                            ++two_input;
+                                        }
+                                        else if (result.fanin_size(n) == 3)
+                                        {
+                                            ++three_input;
+                                        }
+                                    });
+        CHECK(two_input == 3);
+        CHECK(three_input == 1);
+
+        CHECK(is_balanced(result));
+        check_equivalent(ntk, result);
+    }
+    SECTION("without grouping, the third reader gets no node of its own")
+    {
+        crossing_decomposition_params ps{};
+        ps.require_improvement = false;
+        ps.group_shared_nodes  = false;
+
+        crossing_decomposition_stats st{};
+        const auto                   result = crossing_decomposition(balanced, ps, &st);
+
+        // the first pair takes a AND b; the third AND reader and the OR reader share no function
+        CHECK(st.decompositions == 1);
+        CHECK(st.group_members == 0);
+        check_equivalent(ntk, result);
+    }
+    SECTION("with the improvement requirement the group is still equivalent")
+    {
+        crossing_decomposition_stats st{};
+        const auto                   result = crossing_decomposition(balanced, {}, &st);
+
+        CHECK(st.crossings_after <= st.crossings_before);
+        check_equivalent(ntk, result);
+    }
+}
+
 TEST_CASE("Two pairs in one level share the inserted level", "[crossing-decomposition]")
 {
     const auto tec = two_figure_7_pairs_network();

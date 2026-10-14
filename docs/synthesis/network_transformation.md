@@ -105,6 +105,10 @@ crossings: a candidate is accepted only when its crossings plus these charges st
 both at zero the pass minimizes crossings alone and may double the depth of deep networks; a node cost of one
 accepts a decomposition only when every buffer it adds removes at least one crossing.
 
+A shared node is found for a pair, but it serves a group: every other LUT of the level that reads the same inputs
+and admits the same inner function joins the pair (`group_shared_nodes`), so k readers of one function share one
+node instead of one node per pair.
+
 ::::{tab-set}
 :sync-group: language
 
