@@ -149,8 +149,13 @@ negations that need the fewest inverters. Per class the database keeps the cell 
 with gates and inversions counted alike, because both are nodes in field-coupled nanotechnologies. One table per
 support size lets a function of fewer inputs use the smaller cell.
 
-With three levels and {AND, XOR, MAJ}, every function of up to three inputs has a cell, and 1070 of the 2191 negation
-classes of four-input functions that depend on all inputs; 34 of their 208 NPN classes have no cell for any input
+The enumeration evaluates node types rather than gates and edges: a node is a conjunction with some fanins negated, an
+exclusive disjunction, or a majority with at most one fanin negated, and the phase of its output is left to its
+consumers, so every assignment of gates and inversions is covered with a few choices per node. Small structures are
+evaluated first, and a function whose class already has a cell with fewer gates is skipped. With three levels and
+{AND, XOR, MAJ}, every function of up to three inputs has a cell, and 1070 of the 2191 negation classes of four-input
+functions that depend on all inputs; 34 of their 208 NPN classes have no cell for any input order. Four levels cover
+2190 of the 2191 classes in a few seconds, every NPN class for at least one input order and all but one for every
 order. OR adds no coverage over AND with inversions and only lowers the cost of some cells.
 
 ::::{tab-set}

@@ -457,9 +457,9 @@ inline void apply_negations(planar_cell& cell, const uint32_t mask, const bool o
  * the distinct functions of the class, of the gates plus the inversions of the cell instantiated for that function
  * with the cheapest choice of input and output negations. A cell with an input read twice pays twice for negating
  * it, so this prefers cells whose members need few inverted edges on average, not cells that happen to be cheap for
- * the representative alone.
+ * the representative alone. Returns the cost and the number of distinct members.
  */
-[[nodiscard]] inline uint64_t class_cost(const planar_cell& cell) noexcept
+[[nodiscard]] inline std::pair<uint64_t, uint32_t> class_cost(const planar_cell& cell) noexcept
 {
     const auto k         = static_cast<uint32_t>(cell.num_inputs);
     const auto full      = tt_word::full(k);
@@ -498,7 +498,7 @@ inline void apply_negations(planar_cell& cell, const uint32_t mask, const bool o
     {
         cost += num_gates + inv;
     }
-    return cost;
+    return {cost, static_cast<uint32_t>(members.size())};
 }
 
 }  // namespace detail
@@ -592,6 +592,10 @@ class planar_cell_database
          * Sum of the instantiated costs over the members of the class.
          */
         uint64_t class_cost{0};
+        /**
+         * Number of distinct functions in the class.
+         */
+        uint32_t members{0};
     };
     /**
      * Creates an empty database with tables for support sizes `2` to `num_inputs`.
@@ -638,18 +642,34 @@ class planar_cell_database
         auto& table = tables[n];
         if (const auto it = table.find(cls.representative); it != table.end())
         {
-            const auto cost = detail::class_cost(cell);
+            const auto [cost, members] = detail::class_cost(cell);
             if (std::make_tuple(cost, cell.depth(), cell.num_edges()) >=
                 std::make_tuple(it->second.class_cost, it->second.cell.depth(), it->second.cell.num_edges()))
             {
                 return false;
             }
-            it->second = {std::move(cell), cost};
+            it->second = {std::move(cell), cost, members};
             return true;
         }
-        const auto cost = detail::class_cost(cell);
-        table.emplace(cls.representative, entry{std::move(cell), cost});
+        const auto [cost, members] = detail::class_cost(cell);
+        table.emplace(cls.representative, entry{std::move(cell), cost, members});
         return true;
+    }
+    /**
+     * The stored entry of a class representative.
+     *
+     * @param representative Representative word (see `detail::canonize`) over `num_inputs` variables.
+     * @param num_inputs Support size.
+     * @return The entry, or `nullptr` if the class has none.
+     */
+    [[nodiscard]] const entry* entry_of(const uint64_t representative, const uint32_t num_inputs) const noexcept
+    {
+        if (num_inputs >= tables.size())
+        {
+            return nullptr;
+        }
+        const auto it = tables[num_inputs].find(representative);
+        return it == tables[num_inputs].end() ? nullptr : &it->second;
     }
     /**
      * Number of stored cells, that is covered negation classes, of one support size.
@@ -828,6 +848,22 @@ class planar_cell_enumerator
         grow(skeleton, front, fanout, 0);
 
         st.structures = structures.size();
+
+        // small structures first, so that the cost bound skips most assignments of the large ones
+        std::stable_sort(
+            structures.begin(), structures.end(), [](const auto& a, const auto& b)
+            { return std::make_pair(a.nodes.size(), a.num_edges()) < std::make_pair(b.nodes.size(), b.num_edges()); });
+
+        // the class of every function, tabulated for small supports
+        if (k <= 4)
+        {
+            const auto full = tt_word::full(k);
+            representative.resize(static_cast<std::size_t>(full) + 1);
+            for (uint64_t f = 0; f <= full; ++f)
+            {
+                representative[static_cast<std::size_t>(f)] = canonize(f, k).representative;
+            }
+        }
 
         utils::progress_reporter progress{ps.on_progress, "evaluating structures of " + std::to_string(k) + " inputs",
                                           structures.size()};
@@ -1060,45 +1096,87 @@ class planar_cell_enumerator
     }
 
     /**
-     * Assigns every allowed gate to every node and every inversion to the edges that canonization cannot absorb:
-     * edges between nodes, and the second edge of an input read twice. Inversions on the other input edges and on
-     * the output are reached by the negation class.
+     * The function a node may compute up to the phase of its output: a conjunction of its fanins with some of them
+     * negated (`AND_TYPE`, four masks, realized by AND or by OR with the negations complemented), an exclusive
+     * disjunction (`XOR_TYPE`), or a majority with at most one fanin negated (`MAJ_TYPE`, four masks; negating two
+     * fanins equals negating the third and the output). Negating a node's output is absorbed by its consumers'
+     * choices and, at the root, by the negation class, so these choices cover every gate and inversion assignment.
+     */
+    enum class node_type : uint8_t
+    {
+        AND_TYPE,
+        XOR_TYPE,
+        MAJ_TYPE
+    };
+    /**
+     * One node's choice: its type and the fanins it negates.
+     */
+    struct choice
+    {
+        node_type type{node_type::AND_TYPE};
+        uint8_t   mask{0};
+    };
+
+    [[nodiscard]] static uint64_t value_of(const choice c, const std::array<uint64_t, 3>& in,
+                                           const uint64_t full) noexcept
+    {
+        const auto x = [&in, &c, full](const std::size_t i)
+        { return ((c.mask >> i) & 1u) != 0u ? (~in.at(i) & full) : in.at(i); };
+        switch (c.type)
+        {
+            case node_type::AND_TYPE:
+            {
+                return x(0) & x(1);
+            }
+            case node_type::XOR_TYPE:
+            {
+                return in[0] ^ in[1];
+            }
+            case node_type::MAJ_TYPE:
+            {
+                return (x(0) & x(1)) | (x(0) & x(2)) | (x(1) & x(2));
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Enumerates the node types and masks of every node of a structure and offers the reachable functions to the
+     * database. A function whose class already has a cell with fewer gates is skipped before any concrete cell is
+     * built (structures are evaluated smallest first, so the stored cell has the fewest gates of any cell of its
+     * class; a cell with more gates and fewer inversions is not looked for); otherwise the cheapest realization with
+     * concrete gates and edge inversions is found by trying every assignment of output phases to the nodes.
      */
     void evaluate(const planar_cell& skeleton)
     {
-        // the inversion bits to enumerate, as (node, fanin) pairs
-        std::vector<std::pair<std::size_t, std::size_t>> free_edges{};
-        std::vector<uint8_t>                             input_seen(k, 0);
-        for (std::size_t j = 0; j < skeleton.nodes.size(); ++j)
-        {
-            const auto& n = skeleton.nodes[j];
-            for (std::size_t i = 0; i < n.fanins.size(); ++i)
-            {
-                if (n.fanins[i] >= k)
-                {
-                    free_edges.emplace_back(j, i);
-                }
-                else if (input_seen[n.fanins[i]]++ > 0)
-                {
-                    free_edges.emplace_back(j, i);
-                }
-            }
-        }
+        const auto n = skeleton.nodes.size();
 
-        // the gate choices per node
-        std::vector<std::vector<planar_gate>> choices(skeleton.nodes.size());
-        for (std::size_t j = 0; j < skeleton.nodes.size(); ++j)
+        std::vector<std::vector<choice>> choices(n);
+        for (std::size_t j = 0; j < n; ++j)
         {
             if (skeleton.nodes[j].fanins.size() == 3)
             {
-                choices[j] = {planar_gate::MAJ};
-                continue;
-            }
-            for (const auto g : {planar_gate::AND, planar_gate::OR, planar_gate::XOR})
-            {
-                if (allowed[static_cast<std::size_t>(g)])
+                if (allowed[static_cast<std::size_t>(planar_gate::MAJ)])
                 {
-                    choices[j].push_back(g);
+                    choices[j] = {{node_type::MAJ_TYPE, 0},
+                                  {node_type::MAJ_TYPE, 1},
+                                  {node_type::MAJ_TYPE, 2},
+                                  {node_type::MAJ_TYPE, 4}};
+                }
+            }
+            else
+            {
+                if (allowed[static_cast<std::size_t>(planar_gate::AND)] ||
+                    allowed[static_cast<std::size_t>(planar_gate::OR)])
+                {
+                    choices[j] = {{node_type::AND_TYPE, 0},
+                                  {node_type::AND_TYPE, 1},
+                                  {node_type::AND_TYPE, 2},
+                                  {node_type::AND_TYPE, 3}};
+                }
+                if (allowed[static_cast<std::size_t>(planar_gate::XOR)])
+                {
+                    choices[j].push_back({node_type::XOR_TYPE, 0});
                 }
             }
             if (choices[j].empty())
@@ -1107,43 +1185,141 @@ class planar_cell_enumerator
             }
         }
 
-        auto                     cell = skeleton;
-        std::vector<std::size_t> pick(skeleton.nodes.size(), 0);
-        while (true)
+        std::vector<uint64_t> values(k + n, 0);
+        for (uint32_t i = 0; i < k; ++i)
         {
-            for (std::size_t j = 0; j < cell.nodes.size(); ++j)
+            values[i] = tt_word::var(i, k);
+        }
+        std::vector<choice> chosen(n);
+        assign(skeleton, choices, 0, values, chosen);
+    }
+
+    void assign(const planar_cell& skeleton, const std::vector<std::vector<choice>>& choices, const std::size_t j,
+                std::vector<uint64_t>& values, std::vector<choice>& chosen)
+    {
+        const auto  full = tt_word::full(k);
+        const auto& node = skeleton.nodes[j];
+
+        std::array<uint64_t, 3> in{0, 0, 0};
+        for (std::size_t i = 0; i < node.fanins.size(); ++i)
+        {
+            in.at(i) = values[node.fanins[i]];
+        }
+
+        for (const auto c : choices[j])
+        {
+            values[k + j] = value_of(c, in, full);
+            chosen[j]     = c;
+            if (j + 1 < skeleton.nodes.size())
             {
-                cell.nodes[j].gate = choices[j][pick[j]];
-            }
-            for (uint64_t inv = 0; inv < (1ull << free_edges.size()); ++inv)
-            {
-                for (auto& n : cell.nodes)
-                {
-                    n.inverted_fanins = 0;
-                }
-                for (std::size_t e = 0; e < free_edges.size(); ++e)
-                {
-                    if (((inv >> e) & 1ull) != 0ull)
-                    {
-                        cell.nodes[free_edges[e].first].inverted_fanins |=
-                            static_cast<uint8_t>(1u << free_edges[e].second);
-                    }
-                }
-                ++st.evaluations;
-                db.insert(cell);
+                assign(skeleton, choices, j + 1, values, chosen);
+                continue;
             }
 
-            // next gate assignment
-            std::size_t j = 0;
-            while (j < pick.size() && ++pick[j] == choices[j].size())
+            ++st.evaluations;
+            const auto f = values[k + j];
+            if (!tt_word::has_full_support(f, k))
             {
-                pick[j] = 0;
-                ++j;
+                continue;
             }
-            if (j == pick.size())
+            const auto rep =
+                representative.empty() ? canonize(f, k).representative : representative[static_cast<std::size_t>(f)];
+            if (const auto* e = db.entry_of(rep, k);
+                e != nullptr && (skeleton.nodes.size() > e->cell.num_gates() ||
+                                 static_cast<uint64_t>(e->members) * skeleton.nodes.size() >= e->class_cost))
             {
-                break;
+                continue;
             }
+            realize(skeleton, chosen, f);
+        }
+    }
+
+    /**
+     * Builds the cheapest concrete cell of an assignment: every node either keeps the phase of its type's function
+     * or outputs the complement, which its consumers and, at the root, the output inversion absorb; the edge
+     * inversions follow from the phases and the masks, and a conjunction output in the complemented phase needs OR.
+     * The phases with the fewest inversions for the representative are kept and offered to the database, which
+     * compares candidates by the cost of serving the whole class.
+     */
+    void realize(const planar_cell& skeleton, const std::vector<choice>& chosen, const uint64_t f)
+    {
+        const auto n   = skeleton.nodes.size();
+        const auto cls = canonize(f, k);
+
+        std::optional<planar_cell> best{};
+        uint64_t                   best_cost = 0;
+
+        for (uint64_t phases = 0; phases < (1ull << n); ++phases)
+        {
+            const auto phase_of = [this, &cls, phases](const uint8_t signal)
+            {
+                return signal < k ? ((cls.input_mask >> signal) & 1u) != 0u : ((phases >> (signal - k)) & 1ull) != 0ull;
+            };
+
+            planar_cell cell{};
+            cell.num_inputs = static_cast<uint8_t>(k);
+            cell.nodes      = skeleton.nodes;
+            bool feasible   = true;
+            for (std::size_t j = 0; j < n && feasible; ++j)
+            {
+                auto&      node = cell.nodes[j];
+                const auto c    = chosen[j];
+                const bool out  = phase_of(static_cast<uint8_t>(k + j));
+                uint8_t    bits = 0;
+                for (std::size_t i = 0; i < node.fanins.size(); ++i)
+                {
+                    const bool bit = (((c.mask >> i) & 1u) != 0u) != phase_of(node.fanins[i]);
+                    bits |= static_cast<uint8_t>((bit ? 1u : 0u) << i);
+                }
+                switch (c.type)
+                {
+                    case node_type::AND_TYPE:
+                    {
+                        // the complemented phase is OR of the complemented inputs
+                        const auto gate = out ? planar_gate::OR : planar_gate::AND;
+                        if (!allowed[static_cast<std::size_t>(gate)])
+                        {
+                            feasible = false;
+                            break;
+                        }
+                        node.gate = gate;
+                        bits      = out ? static_cast<uint8_t>(bits ^ 0b11u) : bits;
+                        break;
+                    }
+                    case node_type::XOR_TYPE:
+                    {
+                        // the parity of the inversions decides the phase, one inverted edge at most
+                        node.gate         = planar_gate::XOR;
+                        const bool parity = (std::popcount(bits) % 2 == 1) != out;
+                        bits              = parity ? 1u : 0u;
+                        break;
+                    }
+                    case node_type::MAJ_TYPE:
+                    {
+                        node.gate = planar_gate::MAJ;
+                        bits      = out ? static_cast<uint8_t>(bits ^ 0b111u) : bits;
+                        break;
+                    }
+                }
+                node.inverted_fanins = bits;
+            }
+            if (!feasible)
+            {
+                continue;
+            }
+            cell.output_inverted = phase_of(static_cast<uint8_t>(k + n - 1)) != cls.output_negated;
+            assert(cell.function() == cls.representative);
+
+            if (const auto cost = cell.cost(); !best.has_value() || cost < best_cost)
+            {
+                best      = std::move(cell);
+                best_cost = cost;
+            }
+        }
+
+        if (best.has_value())
+        {
+            db.insert(std::move(*best));
         }
     }
 
@@ -1153,6 +1329,10 @@ class planar_cell_enumerator
     planar_cell_database_stats::table_stats& st;
     std::array<bool, 4>                      allowed{false, false, false, false};
     std::vector<planar_cell>                 structures{};
+    /**
+     * Class representative of every function, for supports of up to four inputs.
+     */
+    std::vector<uint64_t> representative{};
 };
 
 }  // namespace detail
@@ -1165,9 +1345,12 @@ class planar_cell_enumerator
  * reads two or three signals that neighbour each other on the frontier of unconsumed signals (signals in between are
  * allowed if they have exactly one consumer, which the new node's edges then enclose), at least one of them from the
  * newest level; a signal is read by at most two nodes; the last level joins every signal still without consumer. The
- * structure is complete when exactly one signal has no consumer. For every structure, every allowed gate per node
- * and every inversion on the edges between nodes is evaluated; inversions on input edges and on the output are
- * covered by the negation classes, so they need not be enumerated.
+ * structure is complete when exactly one signal has no consumer. For every structure, every node type and fanin
+ * negation up to the phase of the node's output is evaluated (conjunction, exclusive disjunction or majority with
+ * negated fanins); output phases, inversions on input edges and the output inversion are absorbed by consumers and
+ * by the negation classes. Small structures come first, and a function whose class already has a cell that no
+ * cell with as many gates can beat is skipped, so only improving assignments are turned into concrete gates and
+ * edge inversions.
  *
  * @param ps Parameters.
  * @param pst Statistics.

@@ -23,6 +23,7 @@
 #include <kitty/dynamic_truth_table.hpp>
 #include <kitty/operations.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <sstream>
@@ -273,4 +274,52 @@ TEST_CASE("The level bound limits the structures", "[planar-cell-database]")
     const auto                 db2 = generate_planar_cells(two_levels, &st2);
     CHECK(st2.tables[1].structures > st.tables[1].structures);
     CHECK(st2.tables[1].covered >= st.tables[1].covered);
+}
+
+TEST_CASE("Four-input cells at three levels", "[planar-cell-database]")
+{
+    // the 2024 enumeration's result: 1070 of the 2191 negation classes of functions that depend on all four inputs
+    planar_cell_database_params ps{};
+    ps.num_inputs = 4;
+    ps.max_levels = 3;
+    ps.gate_set   = {planar_gate::AND, planar_gate::XOR, planar_gate::MAJ};
+
+    planar_cell_database_stats st{};
+    const auto                 db = generate_planar_cells(ps, &st);
+    REQUIRE(st.tables.size() == 3);
+    CHECK(st.tables[2].num_inputs == 4);
+    CHECK(st.tables[2].structures == 208);
+    CHECK(st.tables[2].classes == 2191);
+    CHECK(st.tables[2].covered == 1070);
+    CHECK(db.num_cells(4) == 1070);
+
+    // every stored cell computes its representative with at most three levels and at most two readers per signal
+    db.foreach_cell(4,
+                    [](const uint64_t rep, const planar_cell& cell)
+                    {
+                        CHECK(cell.function() == rep);
+                        CHECK(cell.depth() <= 3);
+                        std::vector<uint32_t> readers(4 + cell.nodes.size(), 0);
+                        for (const auto& n : cell.nodes)
+                        {
+                            for (const auto f : n.fanins)
+                            {
+                                ++readers[f];
+                            }
+                        }
+                        CHECK(std::all_of(readers.begin(), readers.end(), [](const auto r) { return r <= 2; }));
+                    });
+
+    // a function with a cell instantiates, one without reports it
+    kitty::dynamic_truth_table xor4{4};
+    kitty::create_from_hex_string(xor4, "6996");
+    const auto parity = db.lookup(xor4);
+    REQUIRE(parity.has_value());
+    CHECK(expand(*parity, 4) == xor4);
+    CHECK(parity->cell.num_gates() == 3);
+    CHECK(parity->cell.num_inversions() == 0);
+
+    kitty::dynamic_truth_table uncovered{4};
+    kitty::create_from_hex_string(uncovered, "1668");
+    CHECK(!db.lookup(uncovered).has_value());
 }
