@@ -133,6 +133,66 @@ node instead of one node per pair.
 
 ::::
 
+## Planar Cells
+
+A planar cell is a small gate structure, AND, OR, XOR and three-input majority with inverting edges, that computes
+one Boolean function of a few inputs and can be drawn level by level without any crossing wire. Replacing every LUT
+of a ranked network by its cell turns the LUT network into a gate network whose only crossings are the ones between
+cells. `generate_planar_cells` enumerates such cells: structures are grown from the inputs one level at a time, a new
+node reads two or three signals that neighbour each other on the frontier of unconsumed signals (signals in between
+are enclosed if they have exactly one consumer already), every signal feeds at most two nodes, and the last level
+joins what is still unconsumed. For every structure, every allowed gate per node and every inversion on the edges
+between nodes is evaluated. Inversions on input edges and on the output need no enumeration: the database is keyed by
+negation classes, functions that differ only by negating inputs or the output, and `planar_cell_database::lookup`
+serves a concrete function with the cell of its class and the negations folded into the cell's edges, choosing the
+negations that need the fewest inverters. Per class the database keeps the cell that serves the whole class cheapest,
+with gates and inversions counted alike, because both are nodes in field-coupled nanotechnologies. One table per
+support size lets a function of fewer inputs use the smaller cell.
+
+With three levels and {AND, XOR, MAJ}, every function of up to three inputs has a cell, and 1070 of the 2191 negation
+classes of four-input functions that depend on all inputs; 34 of their 208 NPN classes have no cell for any input
+order. OR adds no coverage over AND with inversions and only lowers the cost of some cells.
+
+::::{tab-set}
+:sync-group: language
+
+:::{tab-item} C++
+:sync: cpp
+
+**Header:** `fiction/synthesis/planar_cell_database.hpp`
+
+```{doxygenenum} fiction::synthesis::planar_gate
+
+```
+
+```{doxygenstruct} fiction::synthesis::planar_cell_database_params
+:members:
+```
+
+```{doxygenstruct} fiction::synthesis::planar_cell_database_stats
+:members:
+```
+
+```{doxygenstruct} fiction::synthesis::planar_cell_node
+:members:
+```
+
+```{doxygenstruct} fiction::synthesis::planar_cell
+:members:
+```
+
+```{doxygenclass} fiction::synthesis::planar_cell_database
+:members:
+```
+
+```{doxygenfunction} fiction::synthesis::generate_planar_cells
+
+```
+
+:::
+
+::::
+
 ## Technology Mapping
 
 ::::{tab-set}
