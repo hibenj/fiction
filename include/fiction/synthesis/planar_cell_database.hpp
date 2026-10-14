@@ -619,7 +619,8 @@ class planar_cell_database
      * Offers a cell. Its function is canonized; if the function does not depend on all inputs of the cell, the cell
      * is dropped (the smaller support has its own table). Otherwise the cell, normalized to compute the class
      * representative, is stored if its class had no cell yet or the cell serves the class cheaper than the stored
-     * one (`detail::class_cost`, ties broken by depth, then by edges).
+     * one: fewer levels first, because every level of a cell is a rank of the layout, then the smaller
+     * `detail::class_cost`, then fewer edges.
      *
      * @param cell Cell to offer. Its `num_inputs` selects the table.
      * @return `true` iff the cell was stored.
@@ -643,8 +644,8 @@ class planar_cell_database
         if (const auto it = table.find(cls.representative); it != table.end())
         {
             const auto [cost, members] = detail::class_cost(cell);
-            if (std::make_tuple(cost, cell.depth(), cell.num_edges()) >=
-                std::make_tuple(it->second.class_cost, it->second.cell.depth(), it->second.cell.num_edges()))
+            if (std::make_tuple(cell.depth(), cost, cell.num_edges()) >=
+                std::make_tuple(it->second.cell.depth(), it->second.class_cost, it->second.cell.num_edges()))
             {
                 return false;
             }
@@ -859,10 +860,13 @@ class planar_cell_enumerator
 
         st.structures = structures.size();
 
-        // small structures first, so that the cost bound skips most assignments of the large ones
-        std::stable_sort(
-            structures.begin(), structures.end(), [](const auto& a, const auto& b)
-            { return std::make_pair(a.nodes.size(), a.num_edges()) < std::make_pair(b.nodes.size(), b.num_edges()); });
+        // shallow and small structures first, so that the bound skips most assignments of the deep and large ones
+        std::stable_sort(structures.begin(), structures.end(),
+                         [](const auto& a, const auto& b)
+                         {
+                             return std::make_tuple(a.depth(), a.nodes.size(), a.num_edges()) <
+                                    std::make_tuple(b.depth(), b.nodes.size(), b.num_edges());
+                         });
 
         // the class of every function, tabulated for small supports
         if (k <= 4)
@@ -1165,10 +1169,11 @@ class planar_cell_enumerator
 
     /**
      * Enumerates the node types and masks of every node of a structure and offers the reachable functions to the
-     * database. A function whose class already has a cell with fewer gates is skipped before any concrete cell is
-     * built (structures are evaluated smallest first, so the stored cell has the fewest gates of any cell of its
-     * class; a cell with more gates and fewer inversions is not looked for); otherwise the cheapest realization with
-     * concrete gates and edge inversions is found by trying every assignment of output phases to the nodes.
+     * database. A function whose class already has a cell with fewer levels, or as many levels and fewer gates, is
+     * skipped before any concrete cell is built (structures are evaluated shallowest and smallest first, so the
+     * stored cell has the fewest levels and, among those, the fewest gates of any cell of its class; a cell with
+     * more gates and fewer inversions is not looked for); otherwise the cheapest realization with concrete gates
+     * and edge inversions is found by trying every assignment of output phases to the nodes.
      */
     void evaluate(const planar_cell& skeleton)
     {
@@ -1252,8 +1257,10 @@ class planar_cell_enumerator
             const auto rep =
                 representative.empty() ? canonize(f, k).representative : representative[static_cast<std::size_t>(f)];
             if (const auto* e = db.entry_of(rep, k);
-                e != nullptr && (fill_gaps || skeleton.nodes.size() > e->cell.num_gates() ||
-                                 static_cast<uint64_t>(e->members) * skeleton.nodes.size() >= e->class_cost))
+                e != nullptr && (fill_gaps || skeleton.depth() > e->cell.depth() ||
+                                 (skeleton.depth() == e->cell.depth() &&
+                                  (skeleton.nodes.size() > e->cell.num_gates() ||
+                                   static_cast<uint64_t>(e->members) * skeleton.nodes.size() >= e->class_cost))))
             {
                 continue;
             }
@@ -1379,9 +1386,10 @@ class planar_cell_enumerator
  * structure is complete when exactly one signal has no consumer. For every structure, every node type and fanin
  * negation up to the phase of the node's output is evaluated (conjunction, exclusive disjunction or majority with
  * negated fanins); output phases, inversions on input edges and the output inversion are absorbed by consumers and
- * by the negation classes. Small structures come first, and a function whose class already has a cell that no
- * cell with as many gates can beat is skipped, so only improving assignments are turned into concrete gates and
- * edge inversions.
+ * by the negation classes. Shallow and small structures come first, and a function whose class already has a cell
+ * with fewer levels or with as many levels and fewer gates is skipped, so only improving assignments are turned
+ * into concrete gates and edge inversions. Per class the cell with the fewest levels is kept, then the one that
+ * serves the class cheapest.
  *
  * @param ps Parameters.
  * @param pst Statistics.
