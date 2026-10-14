@@ -19,12 +19,12 @@
  * (`planar_cell_substitution`) and then planarizes and schedules the cell network with the same two steps. Every
  * result is checked planar, balanced with unified outputs, fanout-substituted and equivalent to the AIG.
  *
- * Options: `--input-dir <dir>` reads AIGER files `<dir>/<set>__<name>.aig` (e.g. the optimized AIGs) instead of the
- * benchmark sets; `--cells <file>` loads a cell database instead of generating the default one ({AND, OR, XOR,
- * MAJ}, four levels, the one five-level class filled in); `--max-nodes <n>` skips the planarization of networks
- * with more nodes (default 14000); `--private-chains` balances the control with one chain per edge, as the
- * planarization experiment does, instead of shared chains; `--no-schedule` leaves the scheduler out; benchmark
- * names restrict the run.
+ * Options: `--input-dir <dir>` reads AIGER files `<dir>/<set>/<name>.aig` or `<dir>/<set>__<name>.aig` instead of
+ * the shipped optimized AIGs (`benchmarks/optimized`, which replace the Verilog benchmarks where they exist); `--cells
+ * <file>` loads a cell database instead of generating the default one ({AND, OR, XOR, MAJ}, four levels, the one
+ * five-level class filled in); `--max-nodes <n>` skips the planarization of networks with more nodes (default 14000);
+ * `--private-chains` balances the control with one chain per edge, as the planarization experiment does, instead of
+ * shared chains; `--no-schedule` leaves the scheduler out; benchmark names restrict the run.
  */
 
 #include "fiction_experiments.hpp"
@@ -62,6 +62,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <iterator>
 #include <span>
 #include <sstream>
@@ -110,18 +111,43 @@ aig_nt read_aig(const std::string& name)
 
 aig_nt read_aig_file(const std::string& dir, const std::string& benchmark)
 {
-    auto file = benchmark;
-    std::replace(file.begin(), file.end(), '/', '_');
-    file.insert(file.find('_'), "_");
+    // `<dir>/<set>/<name>.aig` as in `benchmarks/optimized`, or the flat `<dir>/<set>__<name>.aig`
+    auto flat = benchmark;
+    std::replace(flat.begin(), flat.end(), '/', '_');
+    flat.insert(flat.find('_'), "_");
 
-    const auto              path = fmt::format("{}/{}.aig", dir, file);
-    std::ostringstream      os{};
-    network_reader<aig_ptr> reader{path, os};
-    if (reader.get_networks().empty())
+    for (const auto& path : {fmt::format("{}/{}.aig", dir, benchmark), fmt::format("{}/{}.aig", dir, flat)})
     {
-        throw std::runtime_error{fmt::format("could not read {}: {}", path, os.str())};
+        if (!std::filesystem::is_regular_file(path))
+        {
+            continue;
+        }
+        std::ostringstream      os{};
+        network_reader<aig_ptr> reader{path, os};
+        if (reader.get_networks().empty())
+        {
+            throw std::runtime_error{fmt::format("could not read {}: {}", path, os.str())};
+        }
+        return *reader.get_networks().front();
     }
-    return *reader.get_networks().front();
+
+    throw std::runtime_error{fmt::format("no AIG of {} in {}", benchmark, dir)};
+}
+
+/**
+ * The benchmark's AIG: from `dir` if given, else the shipped optimized AIG, else the Verilog benchmark.
+ */
+aig_nt read_benchmark_aig(const std::string& dir, const std::string& benchmark)
+{
+    if (!dir.empty())
+    {
+        return read_aig_file(dir, benchmark);
+    }
+    if (fiction_experiments::has_optimized_benchmark(benchmark))
+    {
+        return read_aig_file(fmt::format("{}../benchmarks/optimized", EXPERIMENTS_PATH), benchmark);
+    }
+    return read_aig(benchmark);
 }
 
 /**
@@ -422,8 +448,7 @@ int main(const int argc, const char** argv)  // NOLINT
 
         try
         {
-            const auto aig = mockturtle::cleanup_dangling(input_dir.empty() ? read_aig(benchmark) :
-                                                                              read_aig_file(input_dir, benchmark));
+            const auto aig = mockturtle::cleanup_dangling(read_benchmark_aig(input_dir, benchmark));
 
             network_balancing_params bps{};
             bps.unify_outputs           = true;

@@ -12,7 +12,10 @@
  * @file
  * @brief Maps benchmark networks to 4-LUTs, balances them, and decomposes LUT pairs with shared fanins into shared
  * nodes where that lowers the crossing count; every result is checked by SAT or, where SAT gives up, by random
- * simulation. `--accept-all` decomposes every pair with a shared function, as in the original work.
+ * simulation. The inputs are the optimized AIGs of `benchmarks/optimized` where they exist, the Verilog benchmarks
+ * otherwise, or the AIGs of `--input-dir`. The decomposition runs with shared buffer chains and node cost 1, the
+ * pipeline's settings; `--private-chains`, `--node-cost` and `--level-cost` change them. `--accept-all` decomposes
+ * every pair with a shared function, as in the original work.
  * @author Benjamin Hien (hibenj)
  */
 
@@ -43,6 +46,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <exception>
+#include <filesystem>
 #include <iterator>
 #include <span>
 #include <sstream>
@@ -170,20 +174,43 @@ mockturtle::klut_network normalize(const mockturtle::klut_network& klut)
  */
 aig_nt read_aig_file(const std::string& dir, const std::string& benchmark)
 {
-    auto file = benchmark;
-    std::replace(file.begin(), file.end(), '/', '_');
-    file.insert(file.find('_'), "_");
+    // `<dir>/<set>/<name>.aig` as in `benchmarks/optimized`, or the flat `<dir>/<set>__<name>.aig`
+    auto flat = benchmark;
+    std::replace(flat.begin(), flat.end(), '/', '_');
+    flat.insert(flat.find('_'), "_");
 
-    const auto              path = fmt::format("{}/{}.aig", dir, file);
-    std::ostringstream      os{};
-    network_reader<aig_ptr> reader{path, os};
-
-    if (reader.get_networks().empty())
+    for (const auto& path : {fmt::format("{}/{}.aig", dir, benchmark), fmt::format("{}/{}.aig", dir, flat)})
     {
-        throw std::runtime_error{fmt::format("could not read {}: {}", path, os.str())};
+        if (!std::filesystem::is_regular_file(path))
+        {
+            continue;
+        }
+        std::ostringstream      os{};
+        network_reader<aig_ptr> reader{path, os};
+        if (reader.get_networks().empty())
+        {
+            throw std::runtime_error{fmt::format("could not read {}: {}", path, os.str())};
+        }
+        return *reader.get_networks().front();
     }
 
-    return *reader.get_networks().front();
+    throw std::runtime_error{fmt::format("no AIG of {} in {}", benchmark, dir)};
+}
+
+/**
+ * The benchmark's AIG: from `dir` if given, else the shipped optimized AIG, else the Verilog benchmark.
+ */
+aig_nt read_benchmark_aig(const std::string& dir, const std::string& benchmark)
+{
+    if (!dir.empty())
+    {
+        return read_aig_file(dir, benchmark);
+    }
+    if (fiction_experiments::has_optimized_benchmark(benchmark))
+    {
+        return read_aig_file(fmt::format("{}../benchmarks/optimized", EXPERIMENTS_PATH), benchmark);
+    }
+    return read_aig(benchmark);
 }
 
 /**
@@ -356,12 +383,14 @@ int main(const int argc, const char** argv)  // NOLINT
     const bool pairs_only =
         std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == PAIRS_ONLY_OPTION; });
 
-    // `--input-dir <dir>` reads AIGER files <dir>/<set>__<name>.aig (e.g., optimized AIGs) instead of the Verilog
-    // `--level-cost <x>` and `--node-cost <x>` price inserted levels and added nodes in crossings
+    // `--input-dir <dir>` reads AIGER files <dir>/<set>/<name>.aig or <dir>/<set>__<name>.aig instead of the
+    // shipped optimized AIGs (`benchmarks/optimized`), which in turn replace the Verilog benchmarks where they exist
+    // `--level-cost <x>` and `--node-cost <x>` price inserted levels and added nodes in crossings; the pipeline's
+    // node cost is 1
     std::string input_dir{};
     std::string blif_dir{};
     double      level_cost = 0.0;
-    double      node_cost  = 0.0;
+    double      node_cost  = 1.0;
     for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
     {
         const std::string_view arg{all_args[i]};
@@ -390,7 +419,7 @@ int main(const int argc, const char** argv)  // NOLINT
                                       accept_all ? "_accept_all" : "", private_chains ? "_private_chains" : "",
                                       pairs_only ? "_pairs_only" : "",
                                       level_cost > 0.0 ? fmt::format("_level_cost_{}", level_cost) : "",
-                                      node_cost > 0.0 ? fmt::format("_node_cost_{}", node_cost) : ""),
+                                      node_cost != 1.0 ? fmt::format("_node_cost_{}", node_cost) : ""),
                           "benchmark",
                           "inputs",
                           "outputs",
@@ -455,8 +484,7 @@ int main(const int argc, const char** argv)  // NOLINT
                     return read_blif_file(blif_dir, benchmark);
                 }
 
-                const auto aig = mockturtle::cleanup_dangling(input_dir.empty() ? read_aig(benchmark) :
-                                                                                  read_aig_file(input_dir, benchmark));
+                const auto aig = mockturtle::cleanup_dangling(read_benchmark_aig(input_dir, benchmark));
 
                 mockturtle::lut_map_params map_ps{};
                 map_ps.cut_enumeration_ps.cut_size = LUT_SIZE;

@@ -199,6 +199,28 @@ inline std::string benchmark_path(const std::string& benchmark_name,
 }
 
 /**
+ * Path of the optimized AIG of a benchmark, `benchmarks/optimized/<set>/<name>.aig`.
+ *
+ * @param benchmark_name Benchmark name in the form `<set>/<name>`.
+ * @return The path, whether or not the file exists.
+ */
+inline std::string optimized_benchmark_path(const std::string& benchmark_name)
+{
+    return fmt::format("{}../benchmarks/optimized/{}.aig", EXPERIMENTS_PATH, benchmark_name);
+}
+
+/**
+ * Whether the optimized AIG of a benchmark is shipped.
+ *
+ * @param benchmark_name Benchmark name in the form `<set>/<name>`.
+ * @return `true` iff `optimized_benchmark_path(benchmark_name)` exists.
+ */
+inline bool has_optimized_benchmark(const std::string& benchmark_name)
+{
+    return std::filesystem::is_regular_file(optimized_benchmark_path(benchmark_name));
+}
+
+/**
  * Lists the IWLS93 benchmarks shipped in `benchmarks/IWLS93`, sorted by name.
  *
  * @return Benchmark names in the form `IWLS93/<name>`, empty if the directory is missing.
