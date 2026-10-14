@@ -26,7 +26,7 @@
  * `--private-chains` balances the control with one chain per edge, as the planarization experiment does, instead of
  * shared chains; `--no-schedule` leaves the scheduler out; `--exact-padding` lets the hybrid strategy charge a
  * crossing level by the passes its gadgets need and `--odd-even` schedules the gadgets by odd-even transposition
- * rounds; benchmark names restrict the run.
+ * rounds, `--best-schedule` the fewer passes of both per rank; benchmark names restrict the run.
  */
 
 #include "fiction_experiments.hpp"
@@ -100,6 +100,7 @@ constexpr std::string_view PRIVATE_CHAINS_OPTION = "--private-chains";
 constexpr std::string_view NO_SCHEDULE_OPTION    = "--no-schedule";
 constexpr std::string_view EXACT_PADDING_OPTION  = "--exact-padding";
 constexpr std::string_view ODD_EVEN_OPTION       = "--odd-even";
+constexpr std::string_view BEST_OPTION           = "--best-schedule";
 
 aig_nt read_aig(const std::string& name)
 {
@@ -297,6 +298,7 @@ struct planarization_options
 {
     bool exact_padding{false};
     bool odd_even{false};
+    bool best{false};
 };
 
 template <typename Ntk>
@@ -318,9 +320,10 @@ flow_result finish(const aig_nt& aig, const Ntk& ranked, const uint64_t max_node
 
         planarization_params pps{};
         pps.duplication.duplication_cost.pad_by_passes = options.exact_padding;
-        pps.duplication.crossing_schedule = options.odd_even ?
-                                                crossing_gate_planarization_params::pass_schedule::ODD_EVEN :
-                                                crossing_gate_planarization_params::pass_schedule::GREEDY;
+        using pass_schedule                            = crossing_gate_planarization_params::pass_schedule;
+        pps.duplication.crossing_schedule              = options.best     ? pass_schedule::BEST :
+                                                         options.odd_even ? pass_schedule::ODD_EVEN :
+                                                                            pass_schedule::GREEDY;
         planarization_stats pst{};
         const auto          planar = planarization(ranked, pps, &pst);
         r.planar_nodes             = planar.num_gates();
@@ -368,6 +371,7 @@ int main(const int argc, const char** argv)  // NOLINT
         std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == EXACT_PADDING_OPTION; });
     options.odd_even =
         std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == ODD_EVEN_OPTION; });
+    options.best = std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == BEST_OPTION; });
     for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
     {
         const std::string_view arg{all_args[i]};
@@ -394,6 +398,7 @@ int main(const int argc, const char** argv)  // NOLINT
         std::erase(benchmarks, NO_SCHEDULE_OPTION);
         std::erase(benchmarks, EXACT_PADDING_OPTION);
         std::erase(benchmarks, ODD_EVEN_OPTION);
+        std::erase(benchmarks, BEST_OPTION);
         for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
         {
             const std::string_view arg{all_args[i]};
@@ -433,7 +438,7 @@ int main(const int argc, const char** argv)  // NOLINT
                             uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, double, bool, std::string>
         exp{fmt::format("planar_cell_flow{}{}{}{}", private_chains ? "_private_chains" : "",
                         schedule ? "" : "_no_schedule", options.exact_padding ? "_exact_padding" : "",
-                        options.odd_even ? "_odd_even" : ""),
+                        options.best ? "_best_schedule" : (options.odd_even ? "_odd_even" : "")),
             "benchmark",
             "inputs",
             "outputs",
