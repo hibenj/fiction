@@ -48,6 +48,15 @@ struct network_balancing_params
      * do not place constants set this to `false`: such outputs then stay unbuffered, and `is_balanced` ignores them.
      */
     bool buffer_constant_outputs = true;
+    /**
+     * Whether the buffers of one source are shared by all its fanouts. By default, every fanin edge that spans levels
+     * receives its own buffer chain, so a node with `k` consumers above it carries `k` parallel chains and the fanout
+     * stays at the node. With this flag, one buffer per source and level is created and read by every consumer on
+     * the level above it, so the chains form a tree whose branches sit right below the consumers. This never needs
+     * more buffers, and it removes the parallel chain edges that make up most of the crossings of wide networks.
+     * Complemented primary outputs keep their own chain when outputs are unified.
+     */
+    bool share_buffers = false;
     /** @brief Reports completed work in each bounded phase. */
     utils::progress_callback on_progress{};
 };
@@ -97,28 +106,56 @@ class network_balancing_impl
         auto& balanced = init.first;
         auto& old2new  = init.second;
 
+        // the shared chain of every source: entry `i` is the buffer `i + 1` levels above the source
+        mockturtle::node_map<std::vector<typename NtkDest::signal>, mockturtle::topo_view<NtkDest>> shared_chains{
+            ntk_topo};
+
+        // the signal of source `fn` lifted by `num` levels: a private chain, or the shared chain extended as needed
+        const auto lifted =
+            [this, &balanced, &old2new, &insert_buf_chain, &shared_chains](const auto& fn, const auto& num)
+        {
+            auto child = old2new[fn];
+
+            if (!ps.share_buffers)
+            {
+                insert_buf_chain(balanced, num, child);
+                return child;
+            }
+
+            auto& chain = shared_chains[fn];
+            if (!chain.empty())
+            {
+                child = chain.back();
+            }
+            while (chain.size() < num)
+            {
+                child = balanced.create_buf(child);
+                chain.push_back(child);
+            }
+
+            return num == 0 ? old2new[fn] : chain[num - 1];
+        };
+
         utils::progress_reporter progress{ps.on_progress, "balancing gates", ntk_topo.num_gates()};
         ntk_topo.foreach_gate(
-            [this, &balanced, &old2new, &insert_buf_chain, &progress](const auto& n)
+            [this, &balanced, &old2new, &lifted, &progress](const auto& n)
             {
                 // gather children, but substitute fanins by buf where applicable
                 std::vector<typename mockturtle::topo_view<NtkDest>::signal> children{};
 
                 ntk_topo.foreach_fanin(n,
-                                       [this, &n, &balanced, &old2new, &children, &insert_buf_chain](const auto& f)
+                                       [this, &n, &old2new, &children, &lifted](const auto& f)
                                        {
                                            const auto fn = ntk_topo.get_node(f);
 
-                                           auto child = old2new[fn];
-
                                            // do not balance constants
-                                           if (!ntk_topo.is_constant(fn))
+                                           if (ntk_topo.is_constant(fn))
                                            {
-                                               const auto level_diff = ntk_depth.level(n) - ntk_depth.level(fn) - 1;
-                                               insert_buf_chain(balanced, level_diff, child);
+                                               children.push_back(old2new[fn]);
+                                               return;
                                            }
 
-                                           children.push_back(child);
+                                           children.push_back(lifted(fn, ntk_depth.level(n) - ntk_depth.level(fn) - 1));
                                        });
 
                 // clone the node with new children according to its depth
@@ -132,15 +169,26 @@ class network_balancing_impl
 
         // add primary outputs to finalize the network
         ntk_topo.foreach_po(
-            [this, &old2new, &balanced, &po_levels, &max_po_level, &insert_buf_chain](const auto& po, auto i)
+            [this, &old2new, &balanced, &po_levels, &max_po_level, &insert_buf_chain, &lifted](const auto& po, auto i)
             {
-                const auto tgt_signal = old2new[ntk_topo.get_node(po)];
+                const auto po_node    = ntk_topo.get_node(po);
+                const auto tgt_signal = old2new[po_node];
 
                 auto tgt_po = ntk_topo.is_complemented(po) ? balanced.create_not(tgt_signal) : tgt_signal;
 
-                if (ps.unify_outputs && (ps.buffer_constant_outputs || !ntk_topo.is_constant(ntk_topo.get_node(po))))
+                if (ps.unify_outputs && (ps.buffer_constant_outputs || !ntk_topo.is_constant(po_node)))
                 {
-                    insert_buf_chain(balanced, max_po_level - po_levels[i], tgt_po);
+                    const auto num = max_po_level - po_levels[i];
+
+                    // an uncomplemented output of a non-constant node can share the node's chain
+                    if (ntk_topo.is_complemented(po) || ntk_topo.is_constant(po_node))
+                    {
+                        insert_buf_chain(balanced, num, tgt_po);
+                    }
+                    else
+                    {
+                        tgt_po = lifted(po_node, num);
+                    }
                 }
 
                 balanced.create_po(tgt_po);
@@ -239,7 +287,9 @@ class is_balanced_impl
  * utilized. Therefore, `NtkDest` should support identity nodes. If it does not, no new nodes will in fact be created.
  * In either case, the returned network will be logically equivalent to the input one.
  *
- * The process is rather naive and is not combined with fanout substitution.
+ * The process is not combined with fanout substitution. By default, every edge that spans levels receives its own
+ * buffer chain; with `network_balancing_params::share_buffers`, the chains of one source are shared level by level,
+ * which needs no more buffers and leaves one chain edge per source and level instead of one per consumer.
  *
  * The returned network is newly created from scratch because its type `NtkDest` may differ from `NtkSrc`.
  *

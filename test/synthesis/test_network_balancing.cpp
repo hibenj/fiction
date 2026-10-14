@@ -26,6 +26,8 @@
 #include <mockturtle/networks/aig.hpp>
 #include <mockturtle/networks/mig.hpp>
 #include <mockturtle/networks/xag.hpp>
+#include <mockturtle/views/depth_view.hpp>
+#include <mockturtle/views/fanout_view.hpp>
 
 #include <cstdint>
 
@@ -147,4 +149,98 @@ TEST_CASE("Constant primary outputs are not buffered when unifying outputs", "[n
     CHECK(balanced.size() == ntk.size() + 1);
 
     check_eq(ntk, balanced);
+}
+
+TEST_CASE("Shared buffer chains", "[network-balancing]")
+{
+    // x1 feeds a1 on level 1, a2 on level 2, and a3 on level 3: three consumers on three levels
+    technology_network ntk{};
+
+    const auto x1 = ntk.create_pi();
+    const auto x2 = ntk.create_pi();
+    const auto a1 = ntk.create_and(x1, x2);
+    const auto a2 = ntk.create_and(a1, x1);
+    const auto a3 = ntk.create_and(a2, x1);
+    ntk.create_po(a3);
+    ntk.create_po(a1);
+
+    SECTION("private chains: one chain per edge")
+    {
+        const auto balanced = network_balancing<technology_network>(ntk);
+
+        // a2 needs one buffer for x1, a3 needs two
+        CHECK(balanced.size() == ntk.size() + 3);
+        CHECK(is_balanced(balanced));
+        check_eq(ntk, balanced);
+    }
+    SECTION("shared chains: one buffer per source and level")
+    {
+        const auto balanced = network_balancing<technology_network>(ntk, {.share_buffers = true});
+
+        // the buffer that a2 reads is extended by one buffer for a3
+        CHECK(balanced.size() == ntk.size() + 2);
+        CHECK(is_balanced(balanced));
+        check_eq(ntk, balanced);
+
+        // the first buffer has two fanouts (a2 and the second buffer); the branch sits right below a2
+        const mockturtle::fanout_view fanouts{balanced};
+        const mockturtle::depth_view  depth{balanced};
+        uint32_t                      buffers           = 0;
+        uint32_t                      branching_buffers = 0;
+        balanced.foreach_gate(
+            [&balanced, &fanouts, &depth, &buffers, &branching_buffers](const auto& n)
+            {
+                if (balanced.is_buf(n))
+                {
+                    ++buffers;
+                    if (fanouts.fanout_size(n) == 2)
+                    {
+                        ++branching_buffers;
+                        CHECK(depth.level(n) == 1);
+                    }
+                }
+            });
+        CHECK(buffers == 2);
+        CHECK(branching_buffers == 1);
+    }
+    SECTION("shared chains with unified outputs")
+    {
+        const auto balanced =
+            network_balancing<technology_network>(ntk, {.unify_outputs = true, .share_buffers = true});
+
+        // the output of a1 on level 3 shares the chain x1 does not need: a1 has no other consumer above level 2, so
+        // its output chain is its own, two buffers long; x1's chain stays at two buffers
+        CHECK(is_balanced(balanced, {.unify_outputs = true}));
+        CHECK(balanced.size() == ntk.size() + 2 + 2);
+        check_eq(ntk, balanced);
+    }
+    SECTION("shared chains with a unified complemented output")
+    {
+        mockturtle::aig_network aig{};
+        const auto              b1 = aig.create_pi();
+        const auto              b2 = aig.create_pi();
+        const auto              n1 = aig.create_and(b1, b2);
+        const auto              n2 = aig.create_and(n1, b1);
+        aig.create_po(n2);
+        aig.create_po(!n1);
+
+        const auto balanced =
+            network_balancing<technology_network>(aig, {.unify_outputs = true, .share_buffers = true});
+
+        CHECK(is_balanced(balanced, {.unify_outputs = true}));
+        check_eq(aig, balanced);
+    }
+}
+
+TEST_CASE("Shared buffer chains never need more buffers", "[network-balancing]")
+{
+    const auto tec = blueprints::maj4_network<technology_network>();
+
+    const auto private_chains = network_balancing<technology_network>(tec);
+    const auto shared_chains  = network_balancing<technology_network>(tec, {.share_buffers = true});
+
+    CHECK(is_balanced(shared_chains));
+    CHECK(shared_chains.size() <= private_chains.size());
+    CHECK(mockturtle::depth_view{shared_chains}.depth() == mockturtle::depth_view{private_chains}.depth());
+    check_eq(tec, shared_chains);
 }

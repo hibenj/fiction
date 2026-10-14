@@ -21,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     AND-OR-NOT gadgets
   - `synthesis::network_balancing_params::buffer_constant_outputs` lets a flow that does not place constants keep
     constant outputs unbuffered when unifying outputs; `is_balanced` then ignores them
+  - `synthesis::network_balancing_params::share_buffers` balances with one buffer per source and level, shared by
+    all fanouts of the source, instead of one chain per edge
   - `synthesis::planar_fanout_substitution` and `synthesis::planar_rebalancing` substitute fanouts and minimize
     buffers while keeping ranks and planarity
   - `fcn::area` computes the bounding-box area of a `sidb::layout`, including defects

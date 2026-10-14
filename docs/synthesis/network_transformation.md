@@ -93,6 +93,12 @@ if the crossing count drops. The rest of the order is left as `mincross` produce
 whole network again. The experiment in `experiments/crossing_decomposition` runs the pass on the benchmark sets of
 the paper and checks every result for equivalence.
 
+The structure of the balanced network matters more than the pass: with one private buffer chain per edge, most of
+the crossings of a wide network are between chain edges, and two LUTs that read the same signal through different
+chains do not count as sharing it. Balancing with shared chains (`network_balancing_params::share_buffers`) removes
+those chain edges and lets the pass see the sharing; the experiment uses it by default and reports the crossings of
+the private-chain structure next to it.
+
 ::::{tab-set}
 :sync-group: language
 

@@ -81,6 +81,10 @@ constexpr std::string_view ACCEPT_ALL_OPTION = "--accept-all";
  */
 constexpr std::string_view INPUT_DIR_OPTION = "--input-dir";
 /**
+ * Command-line option that balances with one private buffer chain per edge instead of shared chains.
+ */
+constexpr std::string_view PRIVATE_CHAINS_OPTION = "--private-chains";
+/**
  * Conflicts after which the SAT-based equivalence check gives way to random simulation.
  */
 constexpr uint32_t SAT_CONFLICT_LIMIT = 1000000;
@@ -187,6 +191,26 @@ uint32_t num_luts(const Ntk& ntk)
 }
 
 /**
+ * Counts the buffers of a network.
+ */
+template <typename Ntk>
+uint32_t num_buffers(const Ntk& ntk)
+{
+    uint32_t count = 0;
+
+    ntk.foreach_gate(
+        [&ntk, &count](const auto& n)
+        {
+            if (ntk.is_buf(n))
+            {
+                ++count;
+            }
+        });
+
+    return count;
+}
+
+/**
  * Result of an equivalence check.
  */
 struct equivalence_result
@@ -235,6 +259,22 @@ uint64_t count_crossings(const Ntk& ntk)
 }
 
 /**
+ * Orders a ranked network with `mincross` (default parameters) and returns its crossing count.
+ *
+ * @param ntk The ranked network.
+ * @return Crossings after ordering.
+ */
+template <typename Ntk>
+uint64_t ordered_crossings(Ntk&& ntk)
+{
+    utils::graph::mincross_stats st{};
+
+    utils::graph::mincross(ntk, {}, &st);
+
+    return st.num_crossings;
+}
+
+/**
  * Checks equivalence of the decomposed network against the balanced one: by SAT on the `virtual_miter` up to
  * `SAT_CONFLICT_LIMIT` conflicts, by random simulation if SAT gives up.
  */
@@ -271,6 +311,10 @@ int main(const int argc, const char** argv)  // NOLINT
     const std::span<const char*> all_args{argv, static_cast<std::size_t>(argc)};
     const bool                   accept_all =
         std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == ACCEPT_ALL_OPTION; });
+    // `--private-chains` balances with one buffer chain per edge (the paper's structure) instead of one chain per
+    // source shared by all its fanouts
+    const bool private_chains =
+        std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == PRIVATE_CHAINS_OPTION; });
 
     // `--input-dir <dir>` reads AIGER files <dir>/<set>__<name>.aig (e.g., optimized AIGs) instead of the Verilog
     std::string input_dir{};
@@ -282,17 +326,22 @@ int main(const int argc, const char** argv)  // NOLINT
         }
     }
 
-    experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint64_t, uint64_t,
-                            uint64_t, uint32_t, uint32_t, uint64_t, uint64_t, double, bool, std::string>
-        decomposition_exp{accept_all ? "crossing_decomposition_accept_all" : "crossing_decomposition",
+    experiments::experiment<std::string, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t,
+                            uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, uint32_t, uint64_t, uint64_t, double,
+                            bool, std::string>
+        decomposition_exp{fmt::format("crossing_decomposition{}{}", accept_all ? "_accept_all" : "",
+                                      private_chains ? "_private_chains" : ""),
                           "benchmark",
                           "inputs",
                           "outputs",
                           "LUTs",
                           "LUTs after",
+                          "buffers",
+                          "buffers after",
                           "depth",
                           "depth after",
                           "crossings unordered",
+                          "crossings private chains",
                           "crossings",
                           "crossings after",
                           "shared nodes",
@@ -310,6 +359,7 @@ int main(const int argc, const char** argv)  // NOLINT
         const std::span<const char*> args{argv, static_cast<std::size_t>(argc)};
         benchmarks.assign(std::next(args.begin()), args.end());
         std::erase(benchmarks, ACCEPT_ALL_OPTION);
+        std::erase(benchmarks, PRIVATE_CHAINS_OPTION);
         if (!input_dir.empty())
         {
             std::erase(benchmarks, INPUT_DIR_OPTION);
@@ -336,12 +386,18 @@ int main(const int argc, const char** argv)  // NOLINT
             map_ps.cut_enumeration_ps.cut_size = LUT_SIZE;
             const auto klut                    = normalize(mockturtle::lut_map(aig, map_ps));
 
-            const auto mapped   = convert_network<technology_network>(klut);
-            const auto balanced = network_balancing<technology_network>(mapped);
+            const auto mapped = convert_network<technology_network>(klut);
+
+            // the paper's structure: one buffer chain per edge; the pipeline's: one chain per source
+            const auto with_private_chains = network_balancing<technology_network>(mapped);
+            const auto balanced            = private_chains ?
+                                                 with_private_chains :
+                                                 network_balancing<technology_network>(mapped, {.share_buffers = true});
 
             fmt::print("[i]   decomposing {} LUTs in {} balanced nodes\n", num_luts(balanced), balanced.num_gates());
 
-            const auto unordered = count_crossings(mutable_rank_view{balanced});
+            const auto unordered         = count_crossings(mutable_rank_view{balanced});
+            const auto crossings_private = ordered_crossings(mutable_rank_view{with_private_chains});
 
             crossing_decomposition_params ps{};
             ps.require_improvement = !accept_all;
@@ -361,8 +417,9 @@ int main(const int argc, const char** argv)  // NOLINT
             }
 
             decomposition_exp(benchmark, balanced.num_pis(), balanced.num_pos(), num_luts(balanced), num_luts(result),
-                              mutable_rank_view{balanced}.depth(), result.depth(), unordered, st.crossings_before,
-                              st.crossings_after, st.decompositions, st.levels_inserted, st.swaps, st.candidates,
+                              num_buffers(balanced), num_buffers(result), mutable_rank_view{balanced}.depth(),
+                              result.depth(), unordered, crossings_private, st.crossings_before, st.crossings_after,
+                              st.decompositions, st.levels_inserted, st.swaps, st.candidates,
                               mockturtle::to_seconds(st.time_total), equivalent.equivalent, equivalent.method);
 
             decomposition_exp.save();
