@@ -149,6 +149,7 @@ template <typename Ntk>
             cg_ps.on_progress            = progress;
             cg_ps.xor_gates              = ps.duplication.xor_gates;
             cg_ps.max_crossings_per_rank = ps.duplication.max_crossings_per_rank;
+            cg_ps.schedule               = ps.duplication.crossing_schedule;
 
             planar = crossing_gate_planarization(planar, cg_ps, &st.crossing_gates);
         }

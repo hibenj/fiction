@@ -572,3 +572,22 @@ TEST_CASE("Networks with virtual primary inputs are rejected", "[planarization]"
 
     CHECK_THROWS_AS(planarization(planar), std::invalid_argument);
 }
+
+TEST_CASE("The pass-based cost and the odd-even schedule keep the contract", "[planarization]")
+{
+    for (const auto& ntk : {blueprints::full_adder_network<technology_network>(),
+                            blueprints::parity_network<technology_network>(), blueprints::clpl<technology_network>()})
+    {
+        const auto ranked = rank(ntk);
+
+        planarization_params ps{};
+        ps.duplication.duplication_cost.pad_by_passes = true;
+        ps.duplication.crossing_schedule              = crossing_gate_planarization_params::pass_schedule::ODD_EVEN;
+
+        planarization_stats st{};
+        const auto          result = planarization(ranked, ps, &st);
+
+        check_contract(ntk, result);
+        CHECK(st.num_nodes == result.size());
+    }
+}

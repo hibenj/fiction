@@ -122,7 +122,19 @@ struct node_duplication_planarization_params
          * Growth of the duplication cost per level on which the duplication happens.
          */
         double depth_growth = 1.02;
+        /**
+         * Charge the padding of a crossing level by the passes the crossing gates need (see
+         * `crossing_gate_planarization_params::pass_schedule`) instead of by the crossings on the most crossed
+         * edge, which is only a lower bound on the passes.
+         */
+        bool pad_by_passes = false;
     };
+    /**
+     * Schedule the crossing gates will use on the levels that keep their crossings; the cost model charges the
+     * padding accordingly when `duplication_cost.pad_by_passes` is set.
+     */
+    crossing_gate_planarization_params::pass_schedule crossing_schedule =
+        crossing_gate_planarization_params::pass_schedule::GREEDY;
     /**
      * Receives completed work and the phase total.
      */
@@ -1353,7 +1365,8 @@ class node_duplication_planarization_impl
     /**
      * Costs keeping the crossings between the upper level and a level in its original order: the level is reordered
      * to minimize crossings, then every crossing is charged one gadget and every edge the buffers that pad it to the
-     * number of gadgets on the most crossed edge.
+     * number of gadgets on the most crossed edge, or to the passes of the crossing gates' schedule with
+     * `pad_by_passes`.
      *
      * @param upper Nodes of the upper level, duplicates as copy ids.
      * @param lower Nodes of the lower level in source order; reordered.
@@ -1378,10 +1391,12 @@ class node_duplication_planarization_impl
         std::size_t              max_pos       = 0;
         uint64_t                 num_crossings = 0;
         uint64_t                 max_per_edge  = 0;
+        std::vector<std::size_t> sweep_targets{};  // target positions in sweep order, for the pass count
 
         for (const auto& n : upper)
         {
             const auto targets = fanin_positions(n, pos);
+            sweep_targets.insert(sweep_targets.end(), targets.begin(), targets.end());
 
             // every edge swept so far that ends right of this edge's target crosses it
             for (const auto p : targets)
@@ -1420,9 +1435,12 @@ class node_duplication_planarization_impl
 
         if (num_crossings > 0)
         {
+            const auto passes = ps.duplication_cost.pad_by_passes ?
+                                    detail::crossing_passes(sweep_targets, ps.crossing_schedule) :
+                                    max_per_edge;
             for (const auto& [key, count] : per_edge)
             {
-                cost += (max_per_edge - count) * gadget_depth();
+                cost += (passes - count) * gadget_depth();
             }
         }
 

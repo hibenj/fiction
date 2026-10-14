@@ -293,3 +293,60 @@ TEST_CASE("Progress is reported", "[crossing-gate-planarization]")
     CHECK(done.back() == total);
     // the reporter may throttle intermediate values; only the total and the final count are promised
 }
+
+TEST_CASE("The pass count of a rank follows its schedule", "[crossing-gate-planarization]")
+{
+    using schedule = crossing_gate_planarization_params::pass_schedule;
+    using fiction::synthesis::detail::crossing_passes;
+
+    CHECK(crossing_passes({0, 1, 2, 3}, schedule::GREEDY) == 0);
+    CHECK(crossing_passes({0, 1, 2, 3}, schedule::ODD_EVEN) == 0);
+    CHECK(crossing_passes({1, 0}, schedule::GREEDY) == 1);
+    CHECK(crossing_passes({1, 0}, schedule::ODD_EVEN) == 1);
+    // four reversed edges: the greedy schedule chains the crossings of the last edge behind the earlier ones
+    CHECK(crossing_passes({3, 2, 1, 0}, schedule::GREEDY) == 5);
+    CHECK(crossing_passes({3, 2, 1, 0}, schedule::ODD_EVEN) == 4);
+    // two edges to the same target never cross; the odd-even rounds can also lose a pass to their parity
+    CHECK(crossing_passes({2, 2, 0}, schedule::GREEDY) == 2);
+    CHECK(crossing_passes({2, 2, 0}, schedule::ODD_EVEN) == 3);
+}
+
+TEST_CASE("The odd-even schedule keeps the contract and needs no more levels", "[crossing-gate-planarization]")
+{
+    // four inputs read in reverse order by four gates: six crossings on one rank
+    technology_network tec{};
+    const auto         a  = tec.create_pi();
+    const auto         b  = tec.create_pi();
+    const auto         c  = tec.create_pi();
+    const auto         d  = tec.create_pi();
+    const auto         g1 = tec.create_not(d);
+    const auto         g2 = tec.create_buf(c);
+    const auto         g3 = tec.create_not(b);
+    const auto         g4 = tec.create_buf(a);
+    tec.create_po(g1);
+    tec.create_po(g2);
+    tec.create_po(g3);
+    tec.create_po(g4);
+
+    const mutable_rank_view ranked{network_balancing<technology_network>(tec, {.unify_outputs = true})};
+    REQUIRE(count_crossings(ranked) == 6);
+
+    crossing_gate_planarization_params greedy{};
+    crossing_gate_planarization_stats  greedy_st{};
+    const auto                         greedy_result = crossing_gate_planarization(ranked, greedy, &greedy_st);
+    check_contract(tec, greedy_result);
+
+    crossing_gate_planarization_params odd_even{};
+    odd_even.schedule = crossing_gate_planarization_params::pass_schedule::ODD_EVEN;
+    crossing_gate_planarization_stats odd_even_st{};
+    const auto                        odd_even_result = crossing_gate_planarization(ranked, odd_even, &odd_even_st);
+    check_contract(tec, odd_even_result);
+
+    CHECK(greedy_st.num_crossings == 6);
+    CHECK(odd_even_st.num_crossings == 6);
+    CHECK(odd_even_result.depth() <= greedy_result.depth());
+    CHECK(odd_even_result.num_gates() <= greedy_result.num_gates());
+    // 4 passes of 4 levels against 5
+    CHECK(odd_even_result.depth() == 1 + (4 * 4));
+    CHECK(greedy_result.depth() == 1 + (5 * 4));
+}

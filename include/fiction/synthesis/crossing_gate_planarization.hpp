@@ -61,6 +61,20 @@ struct crossing_gate_planarization_params
      * limit bounds the gadgets of a rank, not the buffers that every pass adds along the other edges of the rank.
      */
     uint32_t max_crossings_per_rank = 1000u;
+    /**
+     * How the crossings of a rank are assigned to passes. `GREEDY` resolves every crossing in the first pass after
+     * both of its edges are free, in the order the edges are swept. `ODD_EVEN` runs an odd-even transposition sort
+     * of the edges towards their target order, one pass per round, which reaches the lower bound, the most
+     * crossings on one edge, on many ranks where the greedy schedule chains crossings behind each other, but can
+     * also lose a pass to the parity of its rounds. Every pass adds the gadget depth to every edge of the rank, so
+     * fewer passes mean fewer buffers.
+     */
+    enum class pass_schedule : uint8_t
+    {
+        GREEDY,
+        ODD_EVEN
+    };
+    pass_schedule schedule = pass_schedule::GREEDY;
 };
 
 /**
@@ -90,6 +104,65 @@ struct crossing_gate_planarization_stats
 
 namespace detail
 {
+
+/**
+ * The passes the crossing gate planarization needs for one rank: the edges in sweep order (sources in rank order,
+ * targets in rank order per source) are given by the rank positions of their targets, and a crossing is an
+ * inversion of that sequence. The greedy schedule assigns every crossing the first pass after the passes both of
+ * its edges have reached; the odd-even schedule counts the rounds of an odd-even transposition sort.
+ *
+ * @param targets Target positions of the edges in sweep order.
+ * @param schedule Schedule.
+ * @return Number of passes, 0 if there is no crossing.
+ */
+[[nodiscard]] inline uint64_t crossing_passes(const std::vector<std::size_t>&                         targets,
+                                              const crossing_gate_planarization_params::pass_schedule schedule)
+{
+    if (schedule == crossing_gate_planarization_params::pass_schedule::ODD_EVEN)
+    {
+        auto     order  = targets;
+        uint64_t rounds = 0;
+        while (!std::is_sorted(order.begin(), order.end()))
+        {
+            for (std::size_t i = rounds % 2; i + 1 < order.size(); i += 2)
+            {
+                if (order[i] > order[i + 1])
+                {
+                    std::swap(order[i], order[i + 1]);
+                }
+            }
+            ++rounds;
+        }
+        return rounds;
+    }
+
+    // greedy: the level every swept edge has reached, grouped by target position
+    std::size_t max_pos = 0;
+    for (const auto p : targets)
+    {
+        max_pos = std::max(max_pos, p);
+    }
+    std::vector<std::vector<uint64_t>> swept(max_pos + 1);
+    uint64_t                           max_level = 0;
+    bool                               any       = false;
+    for (const auto pos : targets)
+    {
+        uint64_t local_lvl = 0;
+        for (auto k = max_pos; k > pos; --k)
+        {
+            for (auto& prev_lvl : swept[k])
+            {
+                const auto level = std::max(local_lvl, prev_lvl);
+                max_level        = std::max(max_level, level);
+                any              = true;
+                local_lvl        = std::max(local_lvl, prev_lvl) + 1;
+                ++prev_lvl;
+            }
+        }
+        swept[pos].insert(swept[pos].begin(), local_lvl);
+    }
+    return any ? max_level + 1 : 0;
+}
 
 /**
  * Number of nodes of one XOR crossing gadget, buffers included.
@@ -319,6 +392,13 @@ class crossing_gate_planarization_impl
         {
             stage rank_stage{};
 
+            if (ps.schedule == crossing_gate_planarization_params::pass_schedule::ODD_EVEN)
+            {
+                detect_crossings_odd_even(r, rank_stage);
+                stages.push_back(std::move(rank_stage));
+                continue;
+            }
+
             // edges already swept, grouped by target position, with the level each one has reached
             std::vector<std::deque<std::pair<edge, uint64_t>>> swept(ntk.rank_width(r + 1) + 1);
 
@@ -380,6 +460,59 @@ class crossing_gate_planarization_impl
 
             stages.push_back(std::move(rank_stage));
         }
+    }
+    /**
+     * Finds the crossings between rank `r` and the one above it with the odd-even schedule: the edges in sweep
+     * order are sorted towards their target order by rounds of disjoint adjacent swaps, and every swap is a
+     * crossing of the round's level, pushed in left-to-right order so that the passes place them in that order.
+     *
+     * @param r Lower rank.
+     * @param rank_stage Stage to fill.
+     * @throws std::runtime_error If the rank has more crossings than `max_crossings_per_rank`.
+     */
+    void detect_crossings_odd_even(const uint32_t r, stage& rank_stage)
+    {
+        std::vector<std::size_t> targets{};
+        ntk.foreach_node_in_rank(r,
+                                 [this, &rank_stage, &targets](const auto& n)
+                                 {
+                                     std::vector<edge> out{};
+                                     out.reserve(fanout_ntk.fanout_size(n));
+                                     fanout_ntk.foreach_fanout(n,
+                                                               [&out, &n](const auto& fo) { out.push_back({n, fo}); });
+                                     std::sort(out.begin(), out.end(), [this](const edge& a, const edge& b)
+                                               { return ntk.rank_position(a.target) < ntk.rank_position(b.target); });
+                                     for (const auto& e : out)
+                                     {
+                                         targets.push_back(ntk.rank_position(e.target));
+                                         rank_stage.edges.push_back(e);
+                                     }
+                                 });
+
+        auto     order          = rank_stage.edges;
+        auto     pos            = targets;
+        uint64_t round          = 0;
+        uint64_t rank_crossings = 0;
+        while (!std::is_sorted(pos.begin(), pos.end()))
+        {
+            for (std::size_t i = round % 2; i + 1 < order.size(); i += 2)
+            {
+                if (pos[i] > pos[i + 1])
+                {
+                    rank_stage.crossings.push_back({order[i], order[i + 1], round});
+                    if (++rank_crossings > ps.max_crossings_per_rank)
+                    {
+                        throw std::runtime_error(fmt::format("Rank {} has more than the {} crossings allowed", r,
+                                                             ps.max_crossings_per_rank));
+                    }
+                    std::swap(order[i], order[i + 1]);
+                    std::swap(pos[i], pos[i + 1]);
+                }
+            }
+            ++round;
+        }
+
+        pst.num_crossings += rank_crossings;
     }
     /**
      * Resolves the crossings of one stage in order of their levels. Each pass over the edges places one gadget per

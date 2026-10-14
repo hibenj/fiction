@@ -24,7 +24,9 @@
  * <file>` loads a cell database instead of generating the default one ({AND, OR, XOR, MAJ}, four levels, the one
  * five-level class filled in); `--max-nodes <n>` skips the planarization of networks with more nodes (default 14000);
  * `--private-chains` balances the control with one chain per edge, as the planarization experiment does, instead of
- * shared chains; `--no-schedule` leaves the scheduler out; benchmark names restrict the run.
+ * shared chains; `--no-schedule` leaves the scheduler out; `--exact-padding` lets the hybrid strategy charge a
+ * crossing level by the passes its gadgets need and `--odd-even` schedules the gadgets by odd-even transposition
+ * rounds; benchmark names restrict the run.
  */
 
 #include "fiction_experiments.hpp"
@@ -96,6 +98,8 @@ constexpr std::string_view CELLS_OPTION          = "--cells";
 constexpr std::string_view MAX_NODES_OPTION      = "--max-nodes";
 constexpr std::string_view PRIVATE_CHAINS_OPTION = "--private-chains";
 constexpr std::string_view NO_SCHEDULE_OPTION    = "--no-schedule";
+constexpr std::string_view EXACT_PADDING_OPTION  = "--exact-padding";
+constexpr std::string_view ODD_EVEN_OPTION       = "--odd-even";
 
 aig_nt read_aig(const std::string& name)
 {
@@ -285,8 +289,19 @@ struct flow_result
 /**
  * Planarizes and schedules a ranked, balanced network with unified outputs, and checks the result.
  */
+/**
+ * Options of the planarization: `pad_by_passes` of the hybrid cost model and the odd-even schedule of the crossing
+ * gates.
+ */
+struct planarization_options
+{
+    bool exact_padding{false};
+    bool odd_even{false};
+};
+
 template <typename Ntk>
-flow_result finish(const aig_nt& aig, const Ntk& ranked, const uint64_t max_nodes, const bool schedule)
+flow_result finish(const aig_nt& aig, const Ntk& ranked, const uint64_t max_nodes, const bool schedule,
+                   const planarization_options& options)
 {
     flow_result r{};
     r.nodes_before = ranked.num_gates();
@@ -301,8 +316,13 @@ flow_result finish(const aig_nt& aig, const Ntk& ranked, const uint64_t max_node
     {
         const mockturtle::stopwatch stop{t};
 
+        planarization_params pps{};
+        pps.duplication.duplication_cost.pad_by_passes = options.exact_padding;
+        pps.duplication.crossing_schedule = options.odd_even ?
+                                                crossing_gate_planarization_params::pass_schedule::ODD_EVEN :
+                                                crossing_gate_planarization_params::pass_schedule::GREEDY;
         planarization_stats pst{};
-        const auto          planar = planarization(ranked, {}, &pst);
+        const auto          planar = planarization(ranked, pps, &pst);
         r.planar_nodes             = planar.num_gates();
         r.duplications             = pst.duplication.num_duplications;
         r.kept_crossings           = pst.duplication.num_crossings;
@@ -343,6 +363,11 @@ int main(const int argc, const char** argv)  // NOLINT
         std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == PRIVATE_CHAINS_OPTION; });
     const bool schedule =
         !std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == NO_SCHEDULE_OPTION; });
+    planarization_options options{};
+    options.exact_padding =
+        std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == EXACT_PADDING_OPTION; });
+    options.odd_even =
+        std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == ODD_EVEN_OPTION; });
     for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
     {
         const std::string_view arg{all_args[i]};
@@ -367,6 +392,8 @@ int main(const int argc, const char** argv)  // NOLINT
         benchmarks.assign(std::next(all_args.begin()), all_args.end());
         std::erase(benchmarks, PRIVATE_CHAINS_OPTION);
         std::erase(benchmarks, NO_SCHEDULE_OPTION);
+        std::erase(benchmarks, EXACT_PADDING_OPTION);
+        std::erase(benchmarks, ODD_EVEN_OPTION);
         for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
         {
             const std::string_view arg{all_args[i]};
@@ -404,8 +431,9 @@ int main(const int argc, const char** argv)  // NOLINT
                             uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, double, bool, std::string,
                             uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t,
                             uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, double, bool, std::string>
-        exp{fmt::format("planar_cell_flow{}{}", private_chains ? "_private_chains" : "",
-                        schedule ? "" : "_no_schedule"),
+        exp{fmt::format("planar_cell_flow{}{}{}{}", private_chains ? "_private_chains" : "",
+                        schedule ? "" : "_no_schedule", options.exact_padding ? "_exact_padding" : "",
+                        options.odd_even ? "_odd_even" : ""),
             "benchmark",
             "inputs",
             "outputs",
@@ -461,7 +489,7 @@ int main(const int argc, const char** argv)  // NOLINT
             const auto        cbal  = network_balancing<technology_network>(gates, bps);
             mutable_rank_view cranked{cbal};
             const auto        cordered = utils::graph::mincross(cranked, {});
-            const auto        control  = finish(aig, cordered, max_nodes, schedule);
+            const auto        control  = finish(aig, cordered, max_nodes, schedule, options);
 
             // the new flow: LUTs, shared chains, ordered, decomposed, cells, planarized
             fmt::print("[i]   cell flow\n");
@@ -476,7 +504,7 @@ int main(const int argc, const char** argv)  // NOLINT
             const auto                     decomposed = crossing_decomposition(lbal, dps);
             planar_cell_substitution_stats sst{};
             const auto                     cell_network = planar_cell_substitution(decomposed, db, {}, &sst);
-            const auto                     cell         = finish(aig, cell_network, max_nodes, schedule);
+            const auto                     cell         = finish(aig, cell_network, max_nodes, schedule, options);
 
             exp(benchmark, aig.num_pis(), aig.num_pos(), control.nodes_before, control.crossings, control.depth_before,
                 control.planar_nodes, control.duplications, control.kept_crossings, control.scheduled_nodes,
