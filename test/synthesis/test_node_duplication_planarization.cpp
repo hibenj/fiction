@@ -471,6 +471,65 @@ TEST_CASE("Hybrid strategy with a prohibitive duplication cost keeps crossings",
     CHECK(os.str().find("crossing levels") != std::string::npos);
 }
 
+TEST_CASE("The crossing cost scale moves the hybrid decision", "[node-duplication-planarization]")
+{
+    const auto ntk    = blueprints::parity_network<technology_network>();
+    const auto ranked = rank_without_substitution(ntk);
+
+    node_duplication_planarization_stats dup_st{};
+    const auto                           duplicated = node_duplication_planarization(ranked, {}, &dup_st);
+
+    node_duplication_planarization_params ps{};
+    ps.strategy = node_duplication_planarization_params::planarization_strategy::HYBRID;
+
+    node_duplication_planarization_stats default_st{};
+    const auto                           by_default = node_duplication_planarization(ranked, ps, &default_st);
+    check_equivalent(ntk, by_default);
+
+    // a prohibitive crossing cost duplicates everything, like an infinite one
+    ps.crossing_cost_scale = 1e12;
+    node_duplication_planarization_stats expensive_st{};
+    const auto                           expensive = node_duplication_planarization(ranked, ps, &expensive_st);
+    check_planar_and_equivalent(ntk, expensive);
+    CHECK(expensive_st.num_crossing_levels == 0);
+    CHECK(expensive.size() == duplicated.size());
+
+    // free crossings are kept on every level that has them, like a prohibitive duplication cost
+    ps.crossing_cost_scale = 0.0;
+    node_duplication_planarization_stats free_st{};
+    const auto                           free = node_duplication_planarization(ranked, ps, &free_st);
+    check_equivalent(ntk, free);
+    CHECK(free_st.num_crossing_levels >= default_st.num_crossing_levels);
+
+    ps.criterion = node_duplication_planarization_params::decision_criterion::WEIGHTED_CONE;
+    node_duplication_planarization_stats free_cone_st{};
+    const auto                           free_cone = node_duplication_planarization(ranked, ps, &free_cone_st);
+    check_equivalent(ntk, free_cone);
+
+    ps.crossing_cost_scale          = 1.0;
+    ps.duplication_cost.node_weight = 1e6;
+    node_duplication_planarization_stats prohibitive_st{};
+    const auto                           prohibitive = node_duplication_planarization(ranked, ps, &prohibitive_st);
+    CHECK(free_cone_st.num_crossing_levels == prohibitive_st.num_crossing_levels);
+    CHECK(free_cone_st.num_crossings == prohibitive_st.num_crossings);
+    CHECK(free_cone.size() == prohibitive.size());
+
+    // every scale keeps the contract through the crossing gates
+    for (const double scale : {0.25, 0.5, 2.0, 4.0})
+    {
+        node_duplication_planarization_params scaled_ps{};
+        scaled_ps.strategy            = node_duplication_planarization_params::planarization_strategy::HYBRID;
+        scaled_ps.crossing_cost_scale = scale;
+
+        node_duplication_planarization_stats scaled_st{};
+        const auto                           hybrid = node_duplication_planarization(ranked, scaled_ps, &scaled_st);
+        CHECK((count_crossings(hybrid) == 0) == (scaled_st.num_crossing_levels == 0));
+
+        const auto planar = crossing_gate_planarization(hybrid, {});
+        check_planar_and_equivalent(ntk, planar);
+    }
+}
+
 TEST_CASE("The duplication limit aborts the planarization", "[node-duplication-planarization]")
 {
     const auto ntk    = blueprints::parity_network<technology_network>();
@@ -528,6 +587,17 @@ TEST_CASE("Invalid parameters are rejected", "[node-duplication-planarization]")
         ps.duplication_cost.depth_growth = 0.0;
 
         CHECK_THROWS_AS(node_duplication_planarization(ranked, ps), std::invalid_argument);
+    }
+    SECTION("negative, infinite, or undefined crossing cost scale")
+    {
+        for (const double scale :
+             {-1.0, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()})
+        {
+            node_duplication_planarization_params ps{};
+            ps.crossing_cost_scale = scale;
+
+            CHECK_THROWS_AS(node_duplication_planarization(ranked, ps), std::invalid_argument);
+        }
     }
 }
 

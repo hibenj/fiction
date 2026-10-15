@@ -370,6 +370,8 @@ after both of its edges are free, in the order the edges are swept, which chains
 needs more passes on most levels; `BEST` takes the fewer passes of the two per level. The hybrid strategy's cost
 model pads such a level by the crossings on its most crossed edge, which is a lower bound on the passes;
 `duplication_cost.pad_by_passes`, off by default, charges the passes of the chosen schedule instead.
+`crossing_cost_scale` multiplies the cost of keeping a level's crossings in the hybrid decision, under both
+criteria: below `1.0` the pipeline keeps more crossings, above it duplicates more.
 
 ::::{tab-set}
 :sync-group: language

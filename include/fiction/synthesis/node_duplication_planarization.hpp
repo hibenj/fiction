@@ -136,6 +136,12 @@ struct node_duplication_planarization_params
     crossing_gate_planarization_params::pass_schedule crossing_schedule =
         crossing_gate_planarization_params::pass_schedule::ODD_EVEN;
     /**
+     * Factor on the cost of keeping the crossings of a level (the gadget nodes and their padding) in the hybrid
+     * strategy's decision, under both criteria. Values below `1.0` keep more crossings, values above it duplicate
+     * more. Must be finite and non-negative.
+     */
+    double crossing_cost_scale = 1.0;
+    /**
      * Receives completed work and the phase total.
      */
     utils::progress_callback on_progress{};
@@ -440,7 +446,8 @@ class node_duplication_planarization_impl
         auto       original_rank = ntk.get_ranks(lvl);
         const auto cross_cost    = crossing_cost(levels.back(), original_rank);
 
-        if (!crossings_are_cheaper(cross_cost.cost, next_level, original_rank, lvl, copies_on_level))
+        if (!crossings_are_cheaper(scaled_crossing_cost(cross_cost.cost), next_level, original_rank, lvl,
+                                   copies_on_level))
         {
             return false;
         }
@@ -947,6 +954,26 @@ class node_duplication_planarization_impl
                           });
 
         return children;
+    }
+    /**
+     * Applies `crossing_cost_scale` to the cost of keeping a level's crossings. The sentinel of a level that cannot
+     * keep its crossings stays, and a scaled cost beyond the sentinel becomes it.
+     *
+     * @param cost Cost of the crossing gadgets and their padding.
+     * @return Scaled cost.
+     */
+    [[nodiscard]] uint64_t scaled_crossing_cost(const uint64_t cost) const noexcept
+    {
+        constexpr auto sentinel = std::numeric_limits<uint64_t>::max();
+
+        if (cost == sentinel || ps.crossing_cost_scale == 1.0)
+        {
+            return cost;
+        }
+
+        const auto scaled = std::ceil(static_cast<double>(cost) * ps.crossing_cost_scale);
+
+        return scaled >= static_cast<double>(sentinel) ? sentinel : static_cast<uint64_t>(scaled);
     }
     /**
      * Decides whether keeping the crossings of a level beats duplicating it, according to the decision criterion.
@@ -1557,6 +1584,11 @@ node_duplication_planarization(const Ntk& ntk, const node_duplication_planarizat
     {
         throw std::invalid_argument(
             "The duplication cost model needs finite, non-negative weights and a finite, positive depth growth");
+    }
+
+    if (!std::isfinite(ps.crossing_cost_scale) || ps.crossing_cost_scale < 0.0)
+    {
+        throw std::invalid_argument("The crossing cost scale must be finite and non-negative");
     }
 
     node_duplication_planarization_stats st{};

@@ -26,8 +26,8 @@
  * `--private-chains` balances the control with one chain per edge, as the planarization experiment does, instead of
  * shared chains; `--no-schedule` leaves the scheduler out; `--exact-padding` lets the hybrid strategy charge a
  * crossing level by the passes its gadgets need, `--greedy` schedules the gadgets greedily instead of by odd-even
- * transposition rounds and `--best-schedule` takes the fewer passes of both per rank; benchmark names restrict the
- * run.
+ * transposition rounds, `--best-schedule` takes the fewer passes of both per rank and `--crossing-cost-scale <x>`
+ * scales the cost of keeping a level's crossings in the hybrid decision; benchmark names restrict the run.
  */
 
 #include "fiction_experiments.hpp"
@@ -102,6 +102,7 @@ constexpr std::string_view NO_SCHEDULE_OPTION    = "--no-schedule";
 constexpr std::string_view EXACT_PADDING_OPTION  = "--exact-padding";
 constexpr std::string_view GREEDY_OPTION         = "--greedy";
 constexpr std::string_view BEST_OPTION           = "--best-schedule";
+constexpr std::string_view COST_SCALE_OPTION     = "--crossing-cost-scale";
 
 aig_nt read_aig(const std::string& name)
 {
@@ -296,9 +297,10 @@ struct flow_result
  */
 struct planarization_options
 {
-    bool exact_padding{false};
-    bool greedy{false};
-    bool best{false};
+    bool   exact_padding{false};
+    bool   greedy{false};
+    bool   best{false};
+    double crossing_cost_scale{1.0};
 };
 
 template <typename Ntk>
@@ -320,6 +322,7 @@ flow_result finish(const aig_nt& aig, const Ntk& ranked, const uint64_t max_node
 
         planarization_params pps{};
         pps.duplication.duplication_cost.pad_by_passes = options.exact_padding;
+        pps.duplication.crossing_cost_scale            = options.crossing_cost_scale;
         using pass_schedule                            = crossing_gate_planarization_params::pass_schedule;
         pps.duplication.crossing_schedule              = options.best   ? pass_schedule::BEST :
                                                          options.greedy ? pass_schedule::GREEDY :
@@ -387,6 +390,10 @@ int main(const int argc, const char** argv)  // NOLINT
         {
             max_nodes = std::stoull(all_args[i + 1]);
         }
+        else if (arg == COST_SCALE_OPTION)
+        {
+            options.crossing_cost_scale = std::stod(all_args[i + 1]);
+        }
     }
 
     // benchmark names on the command line restrict the run
@@ -402,7 +409,7 @@ int main(const int argc, const char** argv)  // NOLINT
         for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
         {
             const std::string_view arg{all_args[i]};
-            if (arg == INPUT_DIR_OPTION || arg == CELLS_OPTION || arg == MAX_NODES_OPTION)
+            if (arg == INPUT_DIR_OPTION || arg == CELLS_OPTION || arg == MAX_NODES_OPTION || arg == COST_SCALE_OPTION)
             {
                 std::erase(benchmarks, std::string{arg});
                 std::erase(benchmarks, std::string{all_args[i + 1]});
@@ -436,9 +443,12 @@ int main(const int argc, const char** argv)  // NOLINT
                             uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, double, bool, std::string,
                             uint64_t, uint64_t, uint64_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
                             uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, double, bool, std::string>
-        exp{fmt::format("planar_cell_flow{}{}{}{}", private_chains ? "_private_chains" : "",
+        exp{fmt::format("planar_cell_flow{}{}{}{}{}", private_chains ? "_private_chains" : "",
                         schedule ? "" : "_no_schedule", options.exact_padding ? "_exact_padding" : "",
-                        options.best ? "_best_schedule" : (options.greedy ? "_greedy" : "")),
+                        options.best ? "_best_schedule" : (options.greedy ? "_greedy" : ""),
+                        options.crossing_cost_scale == 1.0 ?
+                            "" :
+                            fmt::format("_crossing_cost_scale_{:g}", options.crossing_cost_scale)),
             "benchmark",
             "inputs",
             "outputs",
