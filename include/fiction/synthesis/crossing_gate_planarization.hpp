@@ -63,12 +63,12 @@ struct crossing_gate_planarization_params
      */
     uint32_t max_crossings_per_rank = 1000u;
     /**
-     * How the crossings of a rank are assigned to passes. `GREEDY` resolves every crossing in the first pass after
-     * both of its edges are free, in the order the edges are swept. `ODD_EVEN` runs an odd-even transposition sort
-     * of the edges towards their target order, one pass per round, which reaches the lower bound, the most
-     * crossings on one edge, on many ranks where the greedy schedule chains crossings behind each other, but can
-     * also lose a pass to the parity of its rounds. Every pass adds the gadget depth to every edge of the rank, so
-     * fewer passes mean fewer buffers.
+     * How the crossings of a rank are assigned to passes. `ODD_EVEN`, the default, runs an odd-even transposition
+     * sort of the edges towards their target order, one pass per round, which reaches the lower bound, the most
+     * crossings on one edge, on many ranks but can also lose a pass to the parity of its rounds. `GREEDY` resolves
+     * every crossing in the first pass after both of its edges are free, in the order the edges are swept, which
+     * chains crossings behind each other. Every pass adds the gadget depth to every edge of the rank, so fewer
+     * passes mean fewer buffers.
      */
     enum class pass_schedule : uint8_t
     {
@@ -82,7 +82,7 @@ struct crossing_gate_planarization_params
     /**
      * The schedule in use.
      */
-    pass_schedule schedule = pass_schedule::GREEDY;
+    pass_schedule schedule = pass_schedule::ODD_EVEN;
 };
 
 /**

@@ -335,8 +335,9 @@ TEST_CASE("The odd-even schedule keeps the contract and needs no more levels", "
     REQUIRE(count_crossings(ranked) == 6);
 
     crossing_gate_planarization_params greedy{};
-    crossing_gate_planarization_stats  greedy_st{};
-    const auto                         greedy_result = crossing_gate_planarization(ranked, greedy, &greedy_st);
+    greedy.schedule = crossing_gate_planarization_params::pass_schedule::GREEDY;
+    crossing_gate_planarization_stats greedy_st{};
+    const auto                        greedy_result = crossing_gate_planarization(ranked, greedy, &greedy_st);
     check_contract(tec, greedy_result);
 
     crossing_gate_planarization_params odd_even{};

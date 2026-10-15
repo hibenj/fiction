@@ -362,13 +362,14 @@ hybrid strategy left crossed, planar fanout substitution, and planar rebalancing
 strategy with the lookahead criterion and XOR crossing gates; the planarization experiment in `experiments/` runs
 this default configuration on the benchmark sets and checks every result for equivalence.
 
-Two options, off by default, concern the levels that keep their crossings. The hybrid strategy's cost model pads
-such a level by the crossings on its most crossed edge, which is a lower bound on the passes the crossing gates
-need; `duplication_cost.pad_by_passes` charges the passes of the schedule the gates will use. The crossing gates
-assign crossings to passes greedily in the order the edges are swept, which chains crossings behind each other;
-`crossing_schedule` set to `ODD_EVEN` sorts the edges towards their target order by odd-even transposition rounds,
-one pass per round. Every pass adds the gadget depth to every edge of the level, so the passes decide how many
-buffers a crossing level costs.
+Two options concern the levels that keep their crossings. The crossing gates resolve the crossings of a level in
+passes, and every pass adds the gadget depth to every edge of the level, so the passes decide how many buffers a
+crossing level costs. `crossing_schedule` picks the schedule: `ODD_EVEN`, the default, sorts the edges towards their
+target order by odd-even transposition rounds, one pass per round; `GREEDY` assigns every crossing to the first pass
+after both of its edges are free, in the order the edges are swept, which chains crossings behind each other and
+needs more passes on most levels; `BEST` takes the fewer passes of the two per level. The hybrid strategy's cost
+model pads such a level by the crossings on its most crossed edge, which is a lower bound on the passes;
+`duplication_cost.pad_by_passes`, off by default, charges the passes of the chosen schedule instead.
 
 ::::{tab-set}
 :sync-group: language

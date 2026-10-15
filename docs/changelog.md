@@ -24,9 +24,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     the ranks and the crossings; `synthesis::planar_scheduling` moves gates and fanout nodes of a planar, balanced
     network between levels to remove buffers while keeping the embedding; the experiment `planar_cell_flow`
     compares the flow through cells with the planarization of the gate network
-  - `synthesis::node_duplication_planarization_params::duplication_cost::pad_by_passes` charges a crossing level by
-    the passes its crossing gates need, and `synthesis::crossing_gate_planarization_params::schedule` can assign
-    the crossings of a level to passes by odd-even transposition rounds (`ODD_EVEN`) instead of greedily
+  - `synthesis::crossing_gate_planarization_params::schedule` assigns the crossings of a level to passes by
+    odd-even transposition rounds (`ODD_EVEN`, the default), greedily (`GREEDY`) or by the fewer passes of the two
+    per level (`BEST`), and `synthesis::node_duplication_planarization_params::duplication_cost::pad_by_passes`
+    charges a crossing level by the passes its crossing gates need
   - `synthesis::planarization` turns a balanced, ranked network into a planar, balanced, fanout-substituted one and
     verifies that contract on its result
   - `synthesis::node_duplication_planarization` planarizes a balanced, ranked network by duplicating nodes, breaking

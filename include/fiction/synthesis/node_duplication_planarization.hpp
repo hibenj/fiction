@@ -134,7 +134,7 @@ struct node_duplication_planarization_params
      * padding accordingly when `duplication_cost.pad_by_passes` is set.
      */
     crossing_gate_planarization_params::pass_schedule crossing_schedule =
-        crossing_gate_planarization_params::pass_schedule::GREEDY;
+        crossing_gate_planarization_params::pass_schedule::ODD_EVEN;
     /**
      * Receives completed work and the phase total.
      */
