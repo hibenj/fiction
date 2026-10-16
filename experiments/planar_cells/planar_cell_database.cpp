@@ -19,6 +19,8 @@
  * sets {AND, XOR}, {AND, OR, XOR} and {AND, OR, XOR, MAJ} are run. With `--base <file>`, the enumeration only fills
  * the gaps of that database (its cells are kept, a cell is added for every class without one, and the run stops
  * once all classes are covered), which adds the few deep cells of a larger level bound to a shallow database.
+ * `--free-inversions` enumerates for a gate library that reads inverted signals in its gates: cells are compared by
+ * gates alone (`planar_cell_database_params::free_inversions`), and the file name carries the suffix.
  */
 
 #include "fiction_experiments.hpp"
@@ -56,6 +58,7 @@ constexpr std::string_view LEVELS_OPTION   = "--levels";
 constexpr std::string_view GATE_SET_OPTION = "--gate-set";
 constexpr std::string_view OUT_OPTION      = "--out";
 constexpr std::string_view BASE_OPTION     = "--base";
+constexpr std::string_view FREE_OPTION     = "--free-inversions";
 
 /**
  * Parses a comma-separated gate list such as `and,or,xor,maj`.
@@ -179,6 +182,8 @@ int main(const int argc, const char** argv)  // NOLINT
     std::string                           out    = ".";
     std::string                           base{};
     std::vector<std::vector<planar_gate>> gate_sets{};
+    const bool                            free_inversions =
+        std::ranges::any_of(args, [](const char* arg) { return std::string_view{arg} == FREE_OPTION; });
     for (std::size_t i = 1; i + 1 < args.size(); ++i)
     {
         const std::string_view arg{args[i]};
@@ -214,7 +219,7 @@ int main(const int argc, const char** argv)  // NOLINT
 
     experiments::experiment<std::string, uint32_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, uint32_t,
                             uint32_t, uint32_t, uint32_t, uint32_t, double, double, std::string>
-        exp{fmt::format("planar_cell_database_k{}_l{}", k, levels),
+        exp{fmt::format("planar_cell_database_k{}_l{}{}", k, levels, free_inversions ? "_free_inversions" : ""),
             "gate set",
             "inputs",
             "levels",
@@ -235,12 +240,13 @@ int main(const int argc, const char** argv)  // NOLINT
     for (const auto& gates : gate_sets)
     {
         planar_cell_database_params ps{};
-        ps.num_inputs = k;
-        ps.max_levels = levels;
-        ps.gate_set   = gates;
+        ps.num_inputs      = k;
+        ps.max_levels      = levels;
+        ps.gate_set        = gates;
+        ps.free_inversions = free_inversions;
 
         const auto name = gate_set_name(gates);
-        fmt::print("[i] gate set {}\n", name);
+        fmt::print("[i] gate set {}{}\n", name, free_inversions ? ", free inversions" : "");
 
         planar_cell_database_stats st{};
         const auto                 db = [&base, &ps, &st]()
@@ -256,8 +262,8 @@ int main(const int argc, const char** argv)  // NOLINT
         }();
         st.report();
 
-        const auto file =
-            fmt::format("{}/planar_cells_{}_k{}_l{}{}.json", out, name, k, levels, base.empty() ? "" : "_fill");
+        const auto file = fmt::format("{}/planar_cells_{}_k{}_l{}{}{}.json", out, name, k, levels,
+                                      base.empty() ? "" : "_fill", free_inversions ? "_free_inversions" : "");
         io::write_planar_cell_database(db, file, &ps);
 
         for (const auto& t : st.tables)

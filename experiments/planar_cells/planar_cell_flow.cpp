@@ -27,7 +27,9 @@
  * shared chains; `--no-schedule` leaves the scheduler out; `--exact-padding` lets the hybrid strategy charge a
  * crossing level by the passes its gadgets need, `--greedy` schedules the gadgets greedily instead of by odd-even
  * transposition rounds, `--best-schedule` takes the fewer passes of both per rank and `--crossing-cost-scale <x>`
- * scales the cost of keeping a level's crossings in the hybrid decision; benchmark names restrict the run.
+ * scales the cost of keeping a level's crossings in the hybrid decision; `--absorb-inversions` folds the inverted
+ * edges of the cells into the gates that read them (the Bestagon skeleton library's two-input functions) instead of
+ * inverter nodes, and `--cells-only` skips the control flow (its columns stay zero); benchmark names restrict the run.
  */
 
 #include "fiction_experiments.hpp"
@@ -103,6 +105,8 @@ constexpr std::string_view EXACT_PADDING_OPTION  = "--exact-padding";
 constexpr std::string_view GREEDY_OPTION         = "--greedy";
 constexpr std::string_view BEST_OPTION           = "--best-schedule";
 constexpr std::string_view COST_SCALE_OPTION     = "--crossing-cost-scale";
+constexpr std::string_view ABSORB_OPTION         = "--absorb-inversions";
+constexpr std::string_view CELLS_ONLY_OPTION     = "--cells-only";
 
 aig_nt read_aig(const std::string& name)
 {
@@ -375,6 +379,10 @@ int main(const int argc, const char** argv)  // NOLINT
     options.greedy =
         std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == GREEDY_OPTION; });
     options.best = std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == BEST_OPTION; });
+    const bool absorb_inversions =
+        std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == ABSORB_OPTION; });
+    const bool cells_only =
+        std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == CELLS_ONLY_OPTION; });
     for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
     {
         const std::string_view arg{all_args[i]};
@@ -406,6 +414,8 @@ int main(const int argc, const char** argv)  // NOLINT
         std::erase(benchmarks, EXACT_PADDING_OPTION);
         std::erase(benchmarks, GREEDY_OPTION);
         std::erase(benchmarks, BEST_OPTION);
+        std::erase(benchmarks, ABSORB_OPTION);
+        std::erase(benchmarks, CELLS_ONLY_OPTION);
         for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
         {
             const std::string_view arg{all_args[i]};
@@ -443,12 +453,13 @@ int main(const int argc, const char** argv)  // NOLINT
                             uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, double, bool, std::string,
                             uint64_t, uint64_t, uint64_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
                             uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, double, bool, std::string>
-        exp{fmt::format("planar_cell_flow{}{}{}{}{}", private_chains ? "_private_chains" : "",
+        exp{fmt::format("planar_cell_flow{}{}{}{}{}{}{}", private_chains ? "_private_chains" : "",
                         schedule ? "" : "_no_schedule", options.exact_padding ? "_exact_padding" : "",
                         options.best ? "_best_schedule" : (options.greedy ? "_greedy" : ""),
                         options.crossing_cost_scale == 1.0 ?
                             "" :
-                            fmt::format("_crossing_cost_scale_{:g}", options.crossing_cost_scale)),
+                            fmt::format("_crossing_cost_scale_{:g}", options.crossing_cost_scale),
+                        absorb_inversions ? "_absorb_inversions" : "", cells_only ? "_cells_only" : ""),
             "benchmark",
             "inputs",
             "outputs",
@@ -499,12 +510,20 @@ int main(const int argc, const char** argv)  // NOLINT
             bps.share_buffers           = !private_chains;
 
             // the control flow: gates and inverters, balanced, ordered, planarized
-            fmt::print("[i]   control flow\n");
-            const auto        gates = convert_network<technology_network>(aig);
-            const auto        cbal  = network_balancing<technology_network>(gates, bps);
-            mutable_rank_view cranked{cbal};
-            const auto        cordered = utils::graph::mincross(cranked, {});
-            const auto        control  = finish(aig, cordered, max_nodes, schedule, options);
+            const auto control = [&aig, &bps, max_nodes, schedule, &options, cells_only]()
+            {
+                if (cells_only)
+                {
+                    fmt::print("[i]   control flow skipped\n");
+                    return flow_result{};
+                }
+                fmt::print("[i]   control flow\n");
+                const auto        gates = convert_network<technology_network>(aig);
+                const auto        cbal  = network_balancing<technology_network>(gates, bps);
+                mutable_rank_view cranked{cbal};
+                const auto        cordered = utils::graph::mincross(cranked, {});
+                return finish(aig, cordered, max_nodes, schedule, options);
+            }();
 
             // the new flow: LUTs, shared chains, ordered, decomposed, cells, planarized
             fmt::print("[i]   cell flow\n");
@@ -515,11 +534,17 @@ int main(const int argc, const char** argv)  // NOLINT
             lps.share_buffers                  = true;
             const auto                    lbal = network_balancing<technology_network>(mapped, lps);
             crossing_decomposition_params dps{};
-            dps.node_cost                             = 1.0;
-            const auto                     decomposed = crossing_decomposition(lbal, dps);
+            dps.node_cost                              = 1.0;
+            const auto                      decomposed = crossing_decomposition(lbal, dps);
+            planar_cell_substitution_params sps{};
+            sps.absorb_inversions = absorb_inversions;
             planar_cell_substitution_stats sst{};
-            const auto                     cell_network = planar_cell_substitution(decomposed, db, {}, &sst);
-            const auto                     cell         = finish(aig, cell_network, max_nodes, schedule, options);
+            const auto                     cell_network = planar_cell_substitution(decomposed, db, sps, &sst);
+            fmt::print("[i]   cells: {} LUTs ({} kept), {} gates, {} inverters ({} absorbed, {} of the input), "
+                       "levels {} -> {}\n",
+                       sst.luts, sst.luts_kept, sst.gates, sst.inverters, sst.inversions_absorbed, sst.input_inverters,
+                       sst.levels_before, sst.levels_after);
+            const auto cell = finish(aig, cell_network, max_nodes, schedule, options);
 
             exp(benchmark, aig.num_pis(), aig.num_pos(), control.nodes_before, control.crossings, control.depth_before,
                 control.planar_nodes, control.duplications, control.kept_crossings, control.scheduled_nodes,
