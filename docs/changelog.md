@@ -24,6 +24,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     the ranks and the crossings; `synthesis::planar_scheduling` moves gates and fanout nodes of a planar, balanced
     network between levels to remove buffers while keeping the embedding; the experiment `planar_cell_flow`
     compares the flow through cells with the planarization of the gate network
+  - `synthesis::planar_cell_database_params::free_inversions` enumerates planar cells for a gate library that
+    realizes every two-input function as one gate (the Bestagon skeleton library), comparing cells by gates alone,
+    and `synthesis::planar_cell_insertion_params::absorb_inversions` and
+    `synthesis::planar_cell_substitution_params::absorb_inversions` fold the inverted edges of a cell into the
+    functions of the gates that read them instead of creating inverter nodes
   - `synthesis::crossing_gate_planarization_params::schedule` assigns the crossings of a level to passes by
     odd-even transposition rounds (`ODD_EVEN`, the default), greedily (`GREEDY`) or by the fewer passes of the two
     per level (`BEST`), and `synthesis::node_duplication_planarization_params::duplication_cost::pad_by_passes`

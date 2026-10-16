@@ -166,6 +166,18 @@ cells from 10.3 to 7.7, and MAJ to 7.2. The last class needs five levels; `exten
 four-level database in seconds, keeping every shallow cell, instead of enumerating five levels for all classes. The experiment in `experiments/planar_cells` generates one database per gate
 set, writes it as JSON (`fiction/synthesis/io/planar_cell_database_json.hpp`) and reports the coverage.
 
+A gate library that realizes every two-input function as one gate, as the Bestagon skeleton library does with NAND,
+NOR, XNOR, LT, GT, LE and GE next to AND, OR and XOR, reads an inverted signal in the gate itself, so an inverted edge
+costs nothing there. `planar_cell_database_params::free_inversions` enumerates for such a target: cells are compared
+by their gates alone, so the database keeps the structure with the fewest gates where it would otherwise keep one with
+fewer inversions; the flag is recorded in the database and its JSON. On the network side,
+`planar_cell_insertion_params::absorb_inversions` and `planar_cell_substitution_params::absorb_inversions` create
+every gate with the function that includes its negations (`detail::planar_cell_node_function`) instead of inverter
+nodes, the output inversion of a cell goes into its last gate, and in the substitution a cell then occupies exactly its
+own levels. Only the NOT of a single variable and the inverters of the input network stay inverter nodes. The three
+flags are independent and default to the previous behaviour; the gate set of the enumeration must match the
+technology, because a majority with inverted fanins is absorbed into a three-input node of that function.
+
 ::::{tab-set}
 :sync-group: language
 
@@ -209,8 +221,13 @@ set, writes it as JSON (`fiction/synthesis/io/planar_cell_database_json.hpp`) an
 
 `insert_planar_cell` builds the cell of a concrete function in a network from the signals of the function's
 variables: the cheapest cell of the function's negation class with every inverted edge as a `create_not`, which is an
-inverter node in a `technology_network` and a complemented signal where the network carries complements. The returned
-instance lists the gate nodes per cell level, so that a caller can place them between ranks.
+inverter node in a `technology_network` and a complemented signal where the network carries complements, or folded
+into the reading gate with `absorb_inversions`. The returned instance lists the gate nodes per cell level, so that a
+caller can place them between ranks.
+
+```{doxygenstruct} fiction::synthesis::planar_cell_insertion_params
+:members:
+```
 
 ```{doxygenstruct} fiction::synthesis::planar_cell_instance
 :members:
@@ -226,7 +243,8 @@ instance lists the gate nodes per cell level, so that a caller can place them be
 
 `planar_cell_substitution` replaces every LUT of a ranked, balanced network by its cell. Every level of the input
 becomes a column of as many levels as its deepest cell needs; a cell is built from the LUT's fanins in the rank order
-of the level below, its inverted edges become inverter nodes on their own level, edges that span levels get buffers,
+of the level below, its inverted edges become inverter nodes on their own level (or are absorbed into the gates, see
+above), edges that span levels get buffers,
 and shallower cells, inverters and buffer chains of the input are lifted to the top of the column. The rank order of
 every result level follows the input's order and, inside a cell, the left-to-right order of the enumeration, so the
 result has exactly the crossings of the input. A LUT whose function has no cell in its fanin order is kept.

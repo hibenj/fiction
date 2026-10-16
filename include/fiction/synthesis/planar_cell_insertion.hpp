@@ -30,6 +30,24 @@ namespace fiction::synthesis
 {
 
 /**
+ * Parameters of the planar cell insertion.
+ */
+struct planar_cell_insertion_params
+{
+    /**
+     * Whether an inverted edge is folded into the gate that reads it instead of becoming a `create_not`. The gate is
+     * then created with the function that includes its negations (`detail::planar_cell_node_function`), which in a
+     * `technology_network` is one of NAND, NOR, XNOR, LT, GT, LE and GE next to AND, OR and XOR: the gates of the
+     * Bestagon skeleton library, which reads inverted signals in the gates themselves. The output inversion of a
+     * cell is folded into its last gate the same way, and a majority with inverted fanins becomes a three-input
+     * node of that function. Only a cell without gates, the NOT of one variable, still creates an inverter. Needs
+     * `create_node` on the network; a network that carries complements on its signals ignores the flag, because its
+     * inversions are free anyway.
+     */
+    bool absorb_inversions = false;
+};
+
+/**
  * The nodes a planar cell contributed to a network.
  *
  * @tparam Ntk Network type.
@@ -64,20 +82,23 @@ struct planar_cell_instance
  * that does not depend on all variables uses the cell of its support; a constant yields the constant signal and a
  * single variable the fanin itself, inverted if needed. Every inverted edge becomes a `create_not`, which is an
  * inverter node in a `technology_network` and a complemented signal in networks that carry complements on their
- * signals. The fragment is planar in a network that has every gate of the cell natively; a network that builds XOR
- * or majority from other gates loses the property.
+ * signals, or, with `ps.absorb_inversions`, is folded into the function of the gate that reads it. The fragment is
+ * planar in a network that has every gate of the cell natively; a network that builds XOR or majority from other
+ * gates loses the property.
  *
- * @tparam Ntk Network type with `create_and`, `create_or`, `create_xor`, `create_maj` and `create_not`.
+ * @tparam Ntk Network type with `create_and`, `create_or`, `create_xor`, `create_maj` and `create_not`, and
+ * `create_node` to absorb inversions.
  * @param ntk The network to insert into.
  * @param db The cell database.
  * @param f The function, over at most `db.num_inputs()` effective variables.
  * @param fanins The signal of every variable of `f`, `f.num_vars()` of them in variable order.
+ * @param ps Parameters.
  * @return The inserted cell, or `std::nullopt` if the database has no cell for the function's class.
  */
 template <typename Ntk>
 [[nodiscard]] std::optional<planar_cell_instance<Ntk>>
 insert_planar_cell(Ntk& ntk, const planar_cell_database& db, const kitty::dynamic_truth_table& f,
-                   const std::vector<mockturtle::signal<Ntk>>& fanins)
+                   const std::vector<mockturtle::signal<Ntk>>& fanins, const planar_cell_insertion_params& ps = {})
 {
     static_assert(mockturtle::is_network_type_v<Ntk>, "Ntk is not a network type");
     static_assert(mockturtle::has_create_and_v<Ntk>, "Ntk does not implement the create_and function");
@@ -125,10 +146,15 @@ insert_planar_cell(Ntk& ntk, const planar_cell_database& db, const kitty::dynami
         return inst;
     }
 
-    const auto read = [&ntk, &inst, &signals](const planar_cell_node& n, const std::size_t i)
+    // whether the negations are folded into the gates: only a network with arbitrary node functions can do that; a
+    // network that carries complements on its signals has free inversions anyway
+    constexpr bool can_absorb = mockturtle::has_create_node_v<Ntk>;
+    const bool     absorb     = ps.absorb_inversions && can_absorb;
+
+    const auto read = [&ntk, &inst, &signals, absorb](const planar_cell_node& n, const std::size_t i)
     {
         const auto s = signals[n.fanins[i]];
-        if (((static_cast<uint32_t>(n.inverted_fanins) >> i) & 1u) == 0u)
+        if (absorb || ((static_cast<uint32_t>(n.inverted_fanins) >> i) & 1u) == 0u)
         {
             return s;
         }
@@ -141,30 +167,50 @@ insert_planar_cell(Ntk& ntk, const planar_cell_database& db, const kitty::dynami
     };
 
     inst.gates.resize(inst.cell.depth());
-    for (const auto& n : inst.cell.nodes)
+    for (std::size_t j = 0; j < inst.cell.nodes.size(); ++j)
     {
+        const auto&             n = inst.cell.nodes[j];
         mockturtle::signal<Ntk> s{};
-        switch (n.gate)
+        if (absorb)
         {
-            case planar_gate::AND:
+            if constexpr (can_absorb)
             {
-                s = ntk.create_and(read(n, 0), read(n, 1));
-                break;
+                std::vector<mockturtle::signal<Ntk>> gate_fanins{};
+                gate_fanins.reserve(n.fanins.size());
+                for (std::size_t i = 0; i < n.fanins.size(); ++i)
+                {
+                    gate_fanins.push_back(read(n, i));
+                }
+                const bool last = j + 1 == inst.cell.nodes.size();
+                s = ntk.create_node(gate_fanins, detail::planar_cell_node_function(
+                                                     n.gate, static_cast<uint32_t>(n.fanins.size()), n.inverted_fanins,
+                                                     last && inst.cell.output_inverted));
             }
-            case planar_gate::OR:
+        }
+        else
+        {
+            switch (n.gate)
             {
-                s = ntk.create_or(read(n, 0), read(n, 1));
-                break;
-            }
-            case planar_gate::XOR:
-            {
-                s = ntk.create_xor(read(n, 0), read(n, 1));
-                break;
-            }
-            case planar_gate::MAJ:
-            {
-                s = ntk.create_maj(read(n, 0), read(n, 1), read(n, 2));
-                break;
+                case planar_gate::AND:
+                {
+                    s = ntk.create_and(read(n, 0), read(n, 1));
+                    break;
+                }
+                case planar_gate::OR:
+                {
+                    s = ntk.create_or(read(n, 0), read(n, 1));
+                    break;
+                }
+                case planar_gate::XOR:
+                {
+                    s = ntk.create_xor(read(n, 0), read(n, 1));
+                    break;
+                }
+                case planar_gate::MAJ:
+                {
+                    s = ntk.create_maj(read(n, 0), read(n, 1), read(n, 2));
+                    break;
+                }
             }
         }
         signals.push_back(s);
@@ -172,7 +218,7 @@ insert_planar_cell(Ntk& ntk, const planar_cell_database& db, const kitty::dynami
     }
 
     inst.output = signals.back();
-    if (inst.cell.output_inverted)
+    if (inst.cell.output_inverted && !absorb)
     {
         inst.output = ntk.create_not(inst.output);
         if (ntk.get_node(inst.output) != ntk.get_node(signals.back()))
@@ -191,11 +237,13 @@ insert_planar_cell(Ntk& ntk, const planar_cell_database& db, const kitty::dynami
  * @tparam Ntk Network type, see `insert_planar_cell`.
  * @param db The cell database.
  * @param f The function.
+ * @param ps Parameters of the insertion.
  * @return The network, or `std::nullopt` if the database has no cell for the function's class.
  */
 template <typename Ntk>
-[[nodiscard]] std::optional<Ntk> planar_cell_network(const planar_cell_database&       db,
-                                                     const kitty::dynamic_truth_table& f)
+[[nodiscard]] std::optional<Ntk> planar_cell_network(const planar_cell_database&         db,
+                                                     const kitty::dynamic_truth_table&   f,
+                                                     const planar_cell_insertion_params& ps = {})
 {
     static_assert(mockturtle::has_create_pi_v<Ntk>, "Ntk does not implement the create_pi function");
     static_assert(mockturtle::has_create_po_v<Ntk>, "Ntk does not implement the create_po function");
@@ -208,7 +256,7 @@ template <typename Ntk>
         pis.push_back(ntk.create_pi());
     }
 
-    const auto inst = insert_planar_cell(ntk, db, f, pis);
+    const auto inst = insert_planar_cell(ntk, db, f, pis, ps);
     if (!inst.has_value())
     {
         return std::nullopt;

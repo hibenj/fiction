@@ -186,4 +186,98 @@ TEST_CASE("Cells from a JSON database insert into an XAG with complemented signa
     REQUIRE(inst.has_value());
     CHECK(inst->inverters.empty());
     CHECK(xag.num_gates() == inst->cell.num_gates());
+
+    // absorbing inversions changes nothing in a network without arbitrary node functions
+    planar_cell_insertion_params ips{};
+    ips.absorb_inversions = true;
+    mockturtle::xag_network other{};
+    const auto              x        = other.create_pi();
+    const auto              y        = other.create_pi();
+    const auto              z        = other.create_pi();
+    const auto              absorbed = insert_planar_cell(other, db, ~(ta & tb) ^ tc, {x, y, z}, ips);
+    REQUIRE(absorbed.has_value());
+    CHECK(absorbed->inverters.empty());
+    CHECK(other.num_gates() == inst->cell.num_gates());
+}
+
+TEST_CASE("Inversions are absorbed into the gates", "[planar-cell-insertion]")
+{
+    planar_cell_database_params ps{};
+    ps.num_inputs = 3;
+    const auto db = generate_planar_cells(ps);
+
+    planar_cell_insertion_params ips{};
+    ips.absorb_inversions = true;
+
+    kitty::dynamic_truth_table ta{3};
+    kitty::dynamic_truth_table tb{3};
+    kitty::dynamic_truth_table tc{3};
+    kitty::create_nth_var(ta, 0);
+    kitty::create_nth_var(tb, 1);
+    kitty::create_nth_var(tc, 2);
+
+    // ~(a & b) ^ c: the same two gates as with inverter nodes, but no inverter
+    technology_network ntk{};
+    const auto         a    = ntk.create_pi();
+    const auto         b    = ntk.create_pi();
+    const auto         c    = ntk.create_pi();
+    const auto         f    = ~(ta & tb) ^ tc;
+    const auto         inst = insert_planar_cell(ntk, db, f, {a, b, c}, ips);
+    REQUIRE(inst.has_value());
+    ntk.create_po(inst->output);
+    CHECK(simulate(ntk, 3) == f);
+    CHECK(inst->cell.num_gates() == 2);
+    CHECK(inst->inverters.empty());
+    CHECK(ntk.num_gates() == 2);
+    ntk.foreach_gate([&ntk](const auto& n) { CHECK(!ntk.is_inv(n)); });
+
+    // a single gate with its negations becomes the two-input function the library has
+    kitty::dynamic_truth_table tx{2};
+    kitty::dynamic_truth_table ty{2};
+    kitty::create_nth_var(tx, 0);
+    kitty::create_nth_var(ty, 1);
+    technology_network two{};
+    const auto         x    = two.create_pi();
+    const auto         y    = two.create_pi();
+    const auto         nand = insert_planar_cell(two, db, ~(tx & ty), {x, y}, ips);
+    REQUIRE(nand.has_value());
+    CHECK(two.num_gates() == 1);
+    CHECK(two.is_nand(two.get_node(nand->output)));
+    // mockturtle's naming: `lt` is a & ~b, `gt` is ~a & b, `le` is a | ~b, `ge` is ~a | b
+    const auto gt = insert_planar_cell(two, db, ~tx & ty, {x, y}, ips);
+    REQUIRE(gt.has_value());
+    CHECK(two.is_gt(two.get_node(gt->output)));
+    const auto le = insert_planar_cell(two, db, tx | ~ty, {x, y}, ips);
+    REQUIRE(le.has_value());
+    CHECK(two.is_le(two.get_node(le->output)));
+    const auto xnor = insert_planar_cell(two, db, ~(tx ^ ty), {x, y}, ips);
+    REQUIRE(xnor.has_value());
+    CHECK(two.is_xnor(two.get_node(xnor->output)));
+    CHECK(two.num_gates() == 4);
+
+    // the NOT of one variable has no gate to absorb into
+    const auto not_x = insert_planar_cell(two, db, ~tx, {x, y}, ips);
+    REQUIRE(not_x.has_value());
+    CHECK(not_x->inverters.size() == 1);
+    CHECK(two.is_inv(two.get_node(not_x->output)));
+
+    // every function of three inputs: the right table, and inverters only for the three negated variables
+    uint64_t                   inverters = 0;
+    kitty::dynamic_truth_table g{3};
+    do  // NOLINT(cppcoreguidelines-avoid-do-while): kitty enumerates functions until the table wraps to zero
+    {
+        const auto cell = planar_cell_network<technology_network>(db, g, ips);
+        REQUIRE(cell.has_value());
+        CHECK(simulate(*cell, 3) == g);
+        cell->foreach_gate(
+            [&cell, &inverters](const auto& n)
+            {
+                if (cell->is_inv(n))
+                {
+                    ++inverters;
+                }
+            });
+        kitty::next_inplace(g);
+    } while (!kitty::is_const0(g));
+    CHECK(inverters == 3);
 }

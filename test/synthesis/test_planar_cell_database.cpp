@@ -360,3 +360,84 @@ TEST_CASE("Extending a database fills only its gaps", "[planar-cell-database]")
     CHECK(extend_planar_cells(db, three_levels, &again) == 0);
     CHECK(again.tables[1].evaluations == 0);
 }
+
+TEST_CASE("A node function folds its negations", "[planar-cell-database]")
+{
+    kitty::dynamic_truth_table expected{2};
+
+    kitty::create_from_binary_string(expected, "0111");  // nand
+    CHECK(detail::planar_cell_node_function(planar_gate::AND, 2, 0b00, true) == expected);
+    kitty::create_from_binary_string(expected, "0100");  // ~a & b = a < b
+    CHECK(detail::planar_cell_node_function(planar_gate::AND, 2, 0b01, false) == expected);
+    kitty::create_from_binary_string(expected, "0010");  // a & ~b = a > b
+    CHECK(detail::planar_cell_node_function(planar_gate::AND, 2, 0b10, false) == expected);
+    kitty::create_from_binary_string(expected, "0001");  // nor
+    CHECK(detail::planar_cell_node_function(planar_gate::AND, 2, 0b11, false) == expected);
+    kitty::create_from_binary_string(expected, "1101");  // ~(a & ~b) = a <= b
+    CHECK(detail::planar_cell_node_function(planar_gate::AND, 2, 0b10, true) == expected);
+    kitty::create_from_binary_string(expected, "1011");  // a | ~b = a >= b
+    CHECK(detail::planar_cell_node_function(planar_gate::OR, 2, 0b10, false) == expected);
+    kitty::create_from_binary_string(expected, "1001");  // xnor
+    CHECK(detail::planar_cell_node_function(planar_gate::XOR, 2, 0b01, false) == expected);
+    CHECK(detail::planar_cell_node_function(planar_gate::XOR, 2, 0b00, true) == expected);
+    kitty::create_from_binary_string(expected, "0110");  // two negations cancel in an xor
+    CHECK(detail::planar_cell_node_function(planar_gate::XOR, 2, 0b11, false) == expected);
+
+    kitty::dynamic_truth_table a{3};
+    kitty::dynamic_truth_table b{3};
+    kitty::dynamic_truth_table c{3};
+    kitty::create_nth_var(a, 0);
+    kitty::create_nth_var(b, 1);
+    kitty::create_nth_var(c, 2);
+    const auto maj = ~((~a & b) | (~a & c) | (b & c));
+    CHECK(detail::planar_cell_node_function(planar_gate::MAJ, 3, 0b001, true) == maj);
+}
+
+TEST_CASE("Free inversions select cells by gates alone", "[planar-cell-database]")
+{
+    planar_cell_database_params ps{};
+    ps.num_inputs = 3;
+    ps.max_levels = 3;
+    ps.gate_set   = {planar_gate::AND, planar_gate::OR, planar_gate::XOR};
+
+    planar_cell_database_stats counted_st{};
+    const auto                 counted = generate_planar_cells(ps, &counted_st);
+    ps.free_inversions                 = true;
+    planar_cell_database_stats free_st{};
+    const auto                 free = generate_planar_cells(ps, &free_st);
+
+    CHECK(!counted.free_inversions());
+    CHECK(free.free_inversions());
+
+    // the same classes are covered, and every function is still served
+    CHECK(free_st.tables[1].covered == counted_st.tables[1].covered);
+    CHECK(free.num_cells() == counted.num_cells());
+    check_all_functions(free, 3);
+
+    // per class the free cell has the same depth and at most as many gates, and its class cost counts gates alone
+    uint64_t gates_free    = 0;
+    uint64_t gates_counted = 0;
+    for (uint32_t k = 2; k <= 3; ++k)
+    {
+        free.foreach_cell(k,
+                          [&counted, &free, &gates_free, &gates_counted, k](const uint64_t rep, const planar_cell& cell)
+                          {
+                              const auto* other = counted.cell_of(rep, k);
+                              REQUIRE(other != nullptr);
+                              CHECK(cell.depth() == other->depth());
+                              CHECK(cell.num_gates() <= other->num_gates());
+                              const auto* e = free.entry_of(rep, k);
+                              REQUIRE(e != nullptr);
+                              CHECK(e->class_cost == static_cast<uint64_t>(e->members) * cell.num_gates());
+                              gates_free += cell.num_gates();
+                              gates_counted += other->num_gates();
+                          });
+    }
+    CHECK(gates_free <= gates_counted);
+
+    // the flag of an extended database is its own
+    auto extended = generate_planar_cells(ps);
+    ps.max_levels = 4;
+    extend_planar_cells(extended, ps);
+    CHECK(extended.free_inversions());
+}

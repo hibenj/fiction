@@ -112,10 +112,11 @@ technology_network lut_mapped(const Ntk& ntk)
  */
 template <typename Spec>
 void check_substitution(const Spec& spec, const mutable_rank_view<technology_network>& ranked,
-                        const planar_cell_database& db, planar_cell_substitution_stats& st)
+                        const planar_cell_database& db, planar_cell_substitution_stats& st,
+                        const planar_cell_substitution_params& ps = {})
 {
     const auto before = count_crossings(ranked);
-    const auto result = planar_cell_substitution(ranked, db, {}, &st);
+    const auto result = planar_cell_substitution(ranked, db, ps, &st);
 
     CHECK(is_balanced(result));
     CHECK(count_crossings(result) == before);
@@ -125,12 +126,17 @@ void check_substitution(const Spec& spec, const mutable_rank_view<technology_net
     CHECK(result.num_pos() == ranked.num_pos());
     check_equivalent(spec, result);
 
-    // every result node is a gate of the gate set, an inverter or a buffer
+    // every result node is a gate of the gate set, an inverter or a buffer; with absorbed inversions also one of
+    // the other two-input functions
     result.foreach_gate(
-        [&result](const auto& n)
+        [&result, &ps](const auto& n)
         {
-            CHECK((result.is_and(n) || result.is_or(n) || result.is_xor(n) || result.is_maj(n) || result.is_inv(n) ||
-                   result.is_buf(n)));
+            const bool plain = result.is_and(n) || result.is_or(n) || result.is_xor(n) || result.is_maj(n) ||
+                               result.is_inv(n) || result.is_buf(n);
+            const bool absorbed =
+                ps.absorb_inversions && (result.is_nand(n) || result.is_nor(n) || result.is_xnor(n) ||
+                                         result.is_lt(n) || result.is_gt(n) || result.is_le(n) || result.is_ge(n));
+            CHECK((plain || absorbed));
         });
 }
 
@@ -232,4 +238,80 @@ TEST_CASE("A LUT without a cell is kept", "[planar-cell-substitution]")
     CHECK(st.luts == 2);
     CHECK(st.luts_kept == 1);
     CHECK(st.luts_with_cell == 1);
+}
+
+TEST_CASE("Absorbed inversions take no level", "[planar-cell-substitution]")
+{
+    planar_cell_database_params ps{};
+    ps.num_inputs = 4;
+    ps.max_levels = 3;
+    const auto db = generate_planar_cells(ps);
+
+    planar_cell_substitution_params absorb{};
+    absorb.absorb_inversions = true;
+
+    // the crossing network of the first test, now with an inverter of the input in front of one LUT
+    technology_network ntk{};
+    const auto         a = ntk.create_pi();
+    const auto         b = ntk.create_pi();
+    const auto         c = ntk.create_pi();
+    const auto         d = ntk.create_pi();
+
+    kitty::dynamic_truth_table and2{2};
+    kitty::dynamic_truth_table xnor2{2};
+    kitty::dynamic_truth_table maj3{3};
+    kitty::create_from_binary_string(and2, "1000");
+    kitty::create_from_binary_string(xnor2, "1001");
+    kitty::create_majority(maj3);
+
+    const auto nd = ntk.create_not(d);
+    const auto l1 = ntk.create_node({a, c}, and2);
+    const auto l2 = ntk.create_node({b, nd}, xnor2);
+    const auto l3 = ntk.create_node({l1, l2, a}, maj3);
+    ntk.create_po(l3);
+    ntk.create_po(l2);
+
+    const auto              balanced = network_balancing<technology_network>(ntk, {.share_buffers = true});
+    const mutable_rank_view ranked{balanced};
+
+    planar_cell_substitution_stats with_inverters{};
+    check_substitution(ntk, ranked, db, with_inverters);
+    CHECK(with_inverters.inverters >= 1);  // the xnor needs an inversion
+    CHECK(with_inverters.inversions_absorbed == 0);
+    CHECK(with_inverters.input_inverters == 1);
+
+    planar_cell_substitution_stats absorbed{};
+    check_substitution(ntk, ranked, db, absorbed, absorb);
+    CHECK(absorbed.luts == 3);
+    CHECK(absorbed.luts_with_cell == 3);
+    CHECK(absorbed.gates == with_inverters.gates);
+    CHECK(absorbed.inverters == 0);
+    CHECK(absorbed.inversions_absorbed == with_inverters.inverters);
+    CHECK(absorbed.input_inverters == 1);
+    CHECK(absorbed.levels_after < with_inverters.levels_after);
+    CHECK(absorbed.levels_before == 3);  // the inverter of the input is a level of its own
+    CHECK(absorbed.levels_after == 3);   // the cells add none
+
+    std::ostringstream out{};
+    absorbed.report(out);
+    CHECK(out.str().find("1 of the input") != std::string::npos);
+
+    // mapped blueprints under absorption: equivalent, no inverters inside cells
+    const auto check = [&db, &absorb](const auto& aig)
+    {
+        const auto              mapped = lut_mapped(aig);
+        const auto              bal    = network_balancing<technology_network>(mapped, {.share_buffers = true});
+        const mutable_rank_view r{bal};
+
+        planar_cell_substitution_stats st{};
+        check_substitution(aig, r, db, st, absorb);
+        CHECK(st.luts_with_cell == st.luts);
+        CHECK(st.inverters == 0);
+    };
+
+    check(blueprints::maj4_network<mockturtle::aig_network>());
+    check(blueprints::full_adder_network<mockturtle::aig_network>());
+    check(blueprints::mux21_network<mockturtle::aig_network>());
+    check(blueprints::parity_network<mockturtle::aig_network>());
+    check(blueprints::nand_xnor_network<mockturtle::aig_network>());
 }

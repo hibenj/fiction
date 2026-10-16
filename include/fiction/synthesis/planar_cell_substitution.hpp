@@ -50,6 +50,14 @@ namespace fiction::synthesis
 struct planar_cell_substitution_params
 {
     /**
+     * Whether an inverted edge of a cell is folded into the gate that reads it instead of becoming an inverter node
+     * on its own level, see `planar_cell_insertion_params::absorb_inversions`. The gate is created with the
+     * function that includes its negations, one of the two-input functions a `technology_network` has natively,
+     * and the output inversion of a cell goes into its last gate, so a cell occupies exactly its own levels. The
+     * inverters of the input network and the NOT of one variable stay inverter nodes.
+     */
+    bool absorb_inversions = false;
+    /**
      * Reports completed work per level.
      */
     utils::progress_callback on_progress{};
@@ -80,6 +88,14 @@ struct planar_cell_substitution_stats
      * Inverter nodes created for inverted cell edges.
      */
     uint64_t inverters{0};
+    /**
+     * Inverted cell edges and cell outputs folded into gates (`absorb_inversions`).
+     */
+    uint64_t inversions_absorbed{0};
+    /**
+     * Inverter nodes of the input network, passed through.
+     */
+    uint64_t input_inverters{0};
     /**
      * Buffers created inside cells for edges that span more than one level, inverters included.
      */
@@ -112,8 +128,9 @@ struct planar_cell_substitution_stats
     void report(std::ostream& out = std::cout) const
     {
         out << "[i] LUTs = " << luts << " (" << luts_with_cell << " replaced, " << luts_kept << " kept)\n";
-        out << "[i] gates = " << gates << ", inverters = " << inverters << ", cell buffers = " << cell_buffers
-            << ", padding = " << padding << ", chain buffers = " << chain_buffers << '\n';
+        out << "[i] gates = " << gates << ", inverters = " << inverters << " (" << inversions_absorbed << " absorbed, "
+            << input_inverters << " of the input), cell buffers = " << cell_buffers << ", padding = " << padding
+            << ", chain buffers = " << chain_buffers << '\n';
         out << "[i] levels = " << levels_before << " -> " << levels_after << '\n';
         out << "[i] total time = " << mockturtle::to_seconds(time_total) << " s\n";
     }
@@ -328,6 +345,10 @@ class planar_cell_substitution_impl
         // buffers (fanouts included) and inverters pass through with depth 1
         if (p.fanins.size() < 2)
         {
+            if (ntk.is_inv(n))
+            {
+                ++pst.input_inverters;
+            }
             return p;
         }
 
@@ -387,7 +408,8 @@ class planar_cell_substitution_impl
 
         // the cell's levels are stretched, never reordered: every node of a cell level sits on the same column
         // level, which is one above the highest arrival among the level's fanin edges (an inverted edge arrives one
-        // level later, because its inverter is a node), so that the planar drawing of the enumeration survives
+        // level later, because its inverter is a node, unless the inversions are absorbed), so that the planar
+        // drawing of the enumeration survives
         const auto cell_depth = cell.depth();
         p.level_of.assign(cell_depth + 1, 0);
         for (uint32_t lvl = 1; lvl <= cell_depth; ++lvl)
@@ -402,8 +424,9 @@ class planar_cell_substitution_impl
                 }
                 for (std::size_t i = 0; i < cn.fanins.size(); ++i)
                 {
-                    const bool inverted = ((static_cast<uint32_t>(cn.inverted_fanins) >> i) & 1u) != 0u;
-                    p.level_of[lvl]     = std::max(p.level_of[lvl], p.rel[cn.fanins[i]] + 1u + (inverted ? 1u : 0u));
+                    const bool inverted =
+                        ((static_cast<uint32_t>(cn.inverted_fanins) >> i) & 1u) != 0u && !ps.absorb_inversions;
+                    p.level_of[lvl] = std::max(p.level_of[lvl], p.rel[cn.fanins[i]] + 1u + (inverted ? 1u : 0u));
                 }
             }
             for (std::size_t j = 0; j < cell.nodes.size(); ++j)
@@ -433,7 +456,7 @@ class planar_cell_substitution_impl
             p.x[order_of_signals[i]] = i;
         }
 
-        p.depth = cell.nodes.empty() ? 1u : p.rel.back() + (cell.output_inverted ? 1u : 0u);
+        p.depth = cell.nodes.empty() ? 1u : p.rel.back() + (cell.output_inverted && !ps.absorb_inversions ? 1u : 0u);
         p.depth = std::max(p.depth, 1u);
 
         return p;
@@ -539,7 +562,11 @@ class planar_cell_substitution_impl
                     const bool inverted = ((static_cast<uint32_t>(cn.inverted_fanins) >> i) & 1u) != 0u;
                     auto       s        = sig[src];
                     auto       r        = p.rel[src];
-                    if (inverted)
+                    if (inverted && ps.absorb_inversions)
+                    {
+                        ++pst.inversions_absorbed;
+                    }
+                    else if (inverted)
                     {
                         s = out.create_not(s);
                         ++r;
@@ -556,27 +583,42 @@ class planar_cell_substitution_impl
                     fanins.push_back(s);
                 }
                 out_sg s{};
-                switch (cn.gate)
+                if (ps.absorb_inversions)
                 {
-                    case planar_gate::AND:
+                    // the gate computes its negations itself; the cell's output inversion goes into its last gate
+                    const bool last = j + 1 == cell.nodes.size();
+                    s = out.create_node(fanins,
+                                        planar_cell_node_function(cn.gate, static_cast<uint32_t>(fanins.size()),
+                                                                  cn.inverted_fanins, last && cell.output_inverted));
+                    if (last && cell.output_inverted)
                     {
-                        s = out.create_and(fanins[0], fanins[1]);
-                        break;
+                        ++pst.inversions_absorbed;
                     }
-                    case planar_gate::OR:
+                }
+                else
+                {
+                    switch (cn.gate)
                     {
-                        s = out.create_or(fanins[0], fanins[1]);
-                        break;
-                    }
-                    case planar_gate::XOR:
-                    {
-                        s = out.create_xor(fanins[0], fanins[1]);
-                        break;
-                    }
-                    case planar_gate::MAJ:
-                    {
-                        s = out.create_maj(fanins[0], fanins[1], fanins[2]);
-                        break;
+                        case planar_gate::AND:
+                        {
+                            s = out.create_and(fanins[0], fanins[1]);
+                            break;
+                        }
+                        case planar_gate::OR:
+                        {
+                            s = out.create_or(fanins[0], fanins[1]);
+                            break;
+                        }
+                        case planar_gate::XOR:
+                        {
+                            s = out.create_xor(fanins[0], fanins[1]);
+                            break;
+                        }
+                        case planar_gate::MAJ:
+                        {
+                            s = out.create_maj(fanins[0], fanins[1], fanins[2]);
+                            break;
+                        }
                     }
                 }
                 ++pst.gates;
@@ -605,7 +647,7 @@ class planar_cell_substitution_impl
                 result     = sig.back();
                 result_rel = p.rel.back();
                 xr         = p.x.back();
-                if (cell.output_inverted)
+                if (cell.output_inverted && !ps.absorb_inversions)
                 {
                     result = out.create_not(result);
                     ++result_rel;
@@ -654,8 +696,9 @@ class planar_cell_substitution_impl
  * Replaces every LUT of a ranked, balanced network by its planar cell. Every level of the input becomes a column
  * of as many levels as its deepest cell needs; a cell is built from its LUT's fanins in the rank order of the level
  * below (the database holds cells per negation class in a fixed input order), its gates sit on the column's levels,
- * every inverted edge is an inverter node on its own level, an input the cell reads twice enters through one fanout
- * node, edges that span levels get buffers, and shallower
+ * every inverted edge is an inverter node on its own level (or, with `absorb_inversions`, folded into the gate that
+ * reads it), an input the cell reads twice enters through one fanout node, edges that span levels get buffers, and
+ * shallower
  * cells, kept LUTs, inverters and buffer chains of the input are lifted to the top of the column with buffers. The
  * rank order of every result level follows the input's rank order and, inside a cell, the left-to-right order of
  * the cell's enumeration, so the result has exactly the crossings of the input: the cells add none. A LUT whose

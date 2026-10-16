@@ -20,6 +20,7 @@
 #include "fiction/utils/progress.hpp"
 
 #include <kitty/bit_operations.hpp>
+#include <kitty/constructors.hpp>
 #include <kitty/dynamic_truth_table.hpp>
 #include <kitty/operations.hpp>
 #include <mockturtle/utils/stopwatch.hpp>
@@ -84,6 +85,14 @@ struct planar_cell_database_params
      * Gates a cell may consist of. Three-input nodes exist only when `planar_gate::MAJ` is in the set.
      */
     std::vector<planar_gate> gate_set{planar_gate::AND, planar_gate::OR, planar_gate::XOR, planar_gate::MAJ};
+    /**
+     * Whether an inverted edge costs nothing. A gate library that realizes every two-input function as one gate
+     * (NAND, NOR, XNOR, LT, GT, LE and GE next to AND, OR and XOR, as the Bestagon skeleton library does) reads an
+     * inverted signal in the gate itself, so the cells of such a target are compared by their gates alone and the
+     * database keeps the structure with the fewest gates where it would otherwise keep one with fewer inversions.
+     * The flag is recorded in the database; `planar_cell::cost` keeps counting the inversions.
+     */
+    bool free_inversions = false;
     /** @brief Reports the structures evaluated per support size. */
     utils::progress_callback on_progress{};
 };
@@ -466,9 +475,11 @@ inline void apply_negations(planar_cell& cell, const uint32_t mask, const bool o
  * the distinct functions of the class, of the gates plus the inversions of the cell instantiated for that function
  * with the cheapest choice of input and output negations. A cell with an input read twice pays twice for negating
  * it, so this prefers cells whose members need few inverted edges on average, not cells that happen to be cheap for
- * the representative alone. Returns the cost and the number of distinct members.
+ * the representative alone. With `free_inversions` every member costs the gates alone. Returns the cost and the
+ * number of distinct members.
  */
-[[nodiscard]] inline std::pair<uint64_t, uint32_t> class_cost(const planar_cell& cell) noexcept
+[[nodiscard]] inline std::pair<uint64_t, uint32_t> class_cost(const planar_cell& cell,
+                                                              const bool         free_inversions = false) noexcept
 {
     const auto k         = static_cast<uint32_t>(cell.num_inputs);
     const auto full      = tt_word::full(k);
@@ -505,9 +516,64 @@ inline void apply_negations(planar_cell& cell, const uint32_t mask, const bool o
     uint64_t cost = 0;
     for (const auto& [m, inv] : members)
     {
-        cost += num_gates + inv;
+        cost += num_gates + (free_inversions ? 0u : inv);
     }
     return {cost, static_cast<uint32_t>(members.size())};
+}
+
+/**
+ * The function of one cell node with its negations folded in: the gate over its fanins in fanin order, the fanins
+ * of `inverted_fanins` complemented, and the result complemented if `output_inverted`. A gate library that has every
+ * two-input function creates the node with this table instead of inverter nodes.
+ *
+ * @param gate The gate.
+ * @param num_fanins Number of fanins, two, or three for a majority.
+ * @param inverted_fanins Bit `i` set means fanin `i` is read inverted.
+ * @param output_inverted Whether the output is complemented.
+ * @return Truth table over `num_fanins` variables, variable `i` being fanin `i`.
+ */
+[[nodiscard]] inline kitty::dynamic_truth_table planar_cell_node_function(const planar_gate gate,
+                                                                          const uint32_t    num_fanins,
+                                                                          const uint8_t     inverted_fanins,
+                                                                          const bool        output_inverted)
+{
+    assert(num_fanins == 2 || num_fanins == 3);
+
+    std::vector<kitty::dynamic_truth_table> in{};
+    in.reserve(num_fanins);
+    for (uint32_t i = 0; i < num_fanins; ++i)
+    {
+        kitty::dynamic_truth_table v{num_fanins};
+        kitty::create_nth_var(v, static_cast<uint8_t>(i));
+        in.push_back(((inverted_fanins >> i) & 1u) != 0u ? ~v : v);
+    }
+
+    kitty::dynamic_truth_table f{num_fanins};
+    switch (gate)
+    {
+        case planar_gate::AND:
+        {
+            f = in[0] & in[1];
+            break;
+        }
+        case planar_gate::OR:
+        {
+            f = in[0] | in[1];
+            break;
+        }
+        case planar_gate::XOR:
+        {
+            f = in[0] ^ in[1];
+            break;
+        }
+        case planar_gate::MAJ:
+        {
+            assert(num_fanins == 3);
+            f = (in[0] & in[1]) | (in[0] & in[2]) | (in[1] & in[2]);
+            break;
+        }
+    }
+    return output_inverted ? ~f : f;
 }
 
 }  // namespace detail
@@ -568,7 +634,8 @@ inline uint64_t planar_cell::function() const
  * A database of planar cells: for every negation class (functions that differ only by negating inputs or the
  * output) of every support size up to `num_inputs`, the cheapest planar cell found, computing the class
  * representative. A concrete function is served by the cell of its class with the negations realized as inverted
- * edges, see `lookup`.
+ * edges, see `lookup`. A database with `free_inversions` compares its cells by gates alone, for a gate library that
+ * reads inverted signals in the gates themselves.
  */
 class planar_cell_database
 {
@@ -610,8 +677,13 @@ class planar_cell_database
      * Creates an empty database with tables for support sizes `2` to `num_inputs`.
      *
      * @param num_inputs Largest support size; at most 6.
+     * @param free_inversions Whether cells are compared by gates alone, see
+     * `planar_cell_database_params::free_inversions`.
      */
-    explicit planar_cell_database(const uint32_t num_inputs = 4) : k{num_inputs}, tables(num_inputs + 1)
+    explicit planar_cell_database(const uint32_t num_inputs = 4, const bool free_inversions = false) :
+            k{num_inputs},
+            free{free_inversions},
+            tables(num_inputs + 1)
     {
         assert(num_inputs >= 2 && num_inputs <= 6);
     }
@@ -625,11 +697,21 @@ class planar_cell_database
         return k;
     }
     /**
+     * Whether the database compares its cells by gates alone, because its target reads inverted signals in the
+     * gates.
+     *
+     * @return The flag the database was created with.
+     */
+    [[nodiscard]] bool free_inversions() const noexcept
+    {
+        return free;
+    }
+    /**
      * Offers a cell. Its function is canonized; if the function does not depend on all inputs of the cell, the cell
      * is dropped (the smaller support has its own table). Otherwise the cell, normalized to compute the class
      * representative, is stored if its class had no cell yet or the cell serves the class cheaper than the stored
      * one: fewer levels first, because every level of a cell is a rank of the layout, then the smaller
-     * `detail::class_cost`, then fewer edges.
+     * `detail::class_cost` (gates alone under `free_inversions`), then fewer edges.
      *
      * @param cell Cell to offer. Its `num_inputs` selects the table.
      * @return `true` iff the cell was stored.
@@ -652,7 +734,7 @@ class planar_cell_database
         auto& table = tables[n];
         if (const auto it = table.find(cls.representative); it != table.end())
         {
-            const auto [cost, members] = detail::class_cost(cell);
+            const auto [cost, members] = detail::class_cost(cell, free);
             if (std::make_tuple(cell.depth(), cost, cell.num_edges()) >=
                 std::make_tuple(it->second.cell.depth(), it->second.class_cost, it->second.cell.num_edges()))
             {
@@ -661,7 +743,7 @@ class planar_cell_database
             it->second = {std::move(cell), cost, members};
             return true;
         }
-        const auto [cost, members] = detail::class_cost(cell);
+        const auto [cost, members] = detail::class_cost(cell, free);
         table.emplace(cls.representative, entry{std::move(cell), cost, members});
         return true;
     }
@@ -813,6 +895,10 @@ class planar_cell_database
      * Largest support size.
      */
     uint32_t k;
+    /**
+     * Whether cells are compared by gates alone.
+     */
+    bool free;
     /**
      * Per support size, the cells keyed by class representative.
      */
@@ -1401,7 +1487,7 @@ class planar_cell_enumerator
  * by the negation classes. Shallow and small structures come first, and a function whose class already has a cell
  * with fewer levels or with as many levels and fewer gates is skipped, so only improving assignments are turned
  * into concrete gates and edge inversions. Per class the cell with the fewest levels is kept, then the one that
- * serves the class cheapest.
+ * serves the class cheapest: gates plus inversions, or gates alone with `ps.free_inversions`.
  *
  * @param ps Parameters.
  * @param pst Statistics.
@@ -1413,7 +1499,7 @@ class planar_cell_enumerator
     assert(ps.num_inputs >= 2 && ps.num_inputs <= 6);
 
     planar_cell_database_stats stats{};
-    planar_cell_database       db{ps.num_inputs};
+    planar_cell_database       db{ps.num_inputs, ps.free_inversions};
     {
         const mockturtle::stopwatch stop{stats.time_total};
         for (uint32_t n = 2; n <= ps.num_inputs; ++n)
@@ -1435,7 +1521,8 @@ class planar_cell_enumerator
  * and stops a support size as soon as all its classes are covered. This adds, e.g., the few deep cells that a
  * deeper level bound reaches to a database of shallow cells without replacing the shallow ones.
  *
- * @param db The database to extend; its `num_inputs` must be at least `ps.num_inputs`.
+ * @param db The database to extend; its `num_inputs` must be at least `ps.num_inputs`. Its own `free_inversions`
+ * decides how the added cells are compared; `ps.free_inversions` is not consulted.
  * @param ps Parameters of the enumeration that fills the gaps.
  * @param pst Statistics.
  * @return The number of cells added.

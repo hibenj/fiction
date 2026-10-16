@@ -106,7 +106,8 @@ namespace detail
 
 /**
  * Writes a planar cell database as JSON. The document holds the format name and version, the largest support size,
- * the enumeration parameters if given (`max_levels`, `gate_set`), and one object per cell with its support size,
+ * whether the database compares cells by gates alone (`free_inversions`), the enumeration parameters if given
+ * (`max_levels`, `gate_set`), and one object per cell with its support size,
  * its function (the class representative as a hexadecimal truth table over the cell's inputs), its cost and depth,
  * its nodes (gate, fanins, which fanins are inverted, level) and whether its output is inverted.
  *
@@ -121,6 +122,10 @@ inline void write_planar_cell_database(const planar_cell_database& db, std::ostr
     doc["format"]     = "fiction planar cell database";
     doc["version"]    = 1;
     doc["num_inputs"] = db.num_inputs();
+    if (db.free_inversions())
+    {
+        doc["free_inversions"] = true;
+    }
     if (ps != nullptr)
     {
         doc["max_levels"] = ps->max_levels;
@@ -196,7 +201,8 @@ inline void write_planar_cell_database(const planar_cell_database& db, const std
 }
 /**
  * Reads a planar cell database written by `write_planar_cell_database`. Every cell is checked to compute the
- * function it claims before it is stored.
+ * function it claims before it is stored. A document without `free_inversions` describes a database that counts
+ * inversions.
  *
  * @param is Input stream.
  * @return The database.
@@ -230,7 +236,7 @@ inline void write_planar_cell_database(const planar_cell_database& db, const std
         {
             throw planar_cell_database_parsing_error{"num_inputs must be between 2 and 6"};
         }
-        planar_cell_database db{num_inputs};
+        planar_cell_database db{num_inputs, doc.value("free_inversions", false)};
 
         for (const auto& c : doc.at("cells"))
         {

@@ -63,7 +63,20 @@ TEST_CASE("Planar cell databases survive a round trip through JSON", "[planar-ce
     std::stringstream bare{};
     write_planar_cell_database(db, bare);
     CHECK(bare.str().find("max_levels") == std::string::npos);
-    CHECK(read_planar_cell_database(bare).num_cells() == db.num_cells());
+    CHECK(bare.str().find("free_inversions") == std::string::npos);
+    const auto bare_copy = read_planar_cell_database(bare);
+    CHECK(bare_copy.num_cells() == db.num_cells());
+    CHECK(!bare_copy.free_inversions());
+
+    // a database with free inversions keeps the flag
+    ps.free_inversions        = true;
+    const auto        free_db = generate_planar_cells(ps);
+    std::stringstream free_stream{};
+    write_planar_cell_database(free_db, free_stream, &ps);
+    CHECK(free_stream.str().find("\"free_inversions\": true") != std::string::npos);
+    const auto free_copy = read_planar_cell_database(free_stream);
+    CHECK(free_copy.free_inversions());
+    CHECK(free_copy.num_cells() == free_db.num_cells());
 }
 
 TEST_CASE("Malformed planar cell databases are rejected", "[planar-cell-database-json]")
