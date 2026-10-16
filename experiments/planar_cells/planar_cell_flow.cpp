@@ -21,15 +21,18 @@
  *
  * Options: `--input-dir <dir>` reads AIGER files `<dir>/<set>/<name>.aig` or `<dir>/<set>__<name>.aig` instead of
  * the shipped optimized AIGs (`benchmarks/optimized`, which replace the Verilog benchmarks where they exist); `--cells
- * <file>` loads a cell database instead of generating the default one ({AND, OR, XOR, MAJ}, four levels, the one
- * five-level class filled in); `--max-nodes <n>` skips the planarization of networks with more nodes (default 14000);
+ * <file>` loads a cell database instead of generating the default one ({AND, OR, XOR}, four levels, the 529 remaining
+ * classes filled in at five), `--maj` generates the {AND, OR, XOR, MAJ} database instead (four levels, one class at
+ * five); `--max-nodes <n>` skips the planarization of networks with more nodes (default 14000);
  * `--private-chains` balances the control with one chain per edge, as the planarization experiment does, instead of
  * shared chains; `--no-schedule` leaves the scheduler out; `--exact-padding` lets the hybrid strategy charge a
  * crossing level by the passes its gadgets need, `--greedy` schedules the gadgets greedily instead of by odd-even
  * transposition rounds, `--best-schedule` takes the fewer passes of both per rank and `--crossing-cost-scale <x>`
- * scales the cost of keeping a level's crossings in the hybrid decision; `--absorb-inversions` folds the inverted
- * edges of the cells into the gates that read them (the Bestagon skeleton library's two-input functions) instead of
- * inverter nodes, and `--cells-only` skips the control flow (its columns stay zero); benchmark names restrict the run.
+ * scales the cost of keeping a level's crossings in the hybrid decision; the inverted edges of the cells are folded
+ * into the gates that read them (the Bestagon skeleton library's two-input functions), `--inverter-nodes` keeps them
+ * as inverter nodes instead; `--cells-only` skips the control flow (its columns stay zero); benchmark names restrict
+ * the run. The defaults are the best variant measured (project 6, M3): the {AND, OR, XOR} database with absorbed
+ * inversions.
  */
 
 #include "fiction_experiments.hpp"
@@ -105,7 +108,8 @@ constexpr std::string_view EXACT_PADDING_OPTION  = "--exact-padding";
 constexpr std::string_view GREEDY_OPTION         = "--greedy";
 constexpr std::string_view BEST_OPTION           = "--best-schedule";
 constexpr std::string_view COST_SCALE_OPTION     = "--crossing-cost-scale";
-constexpr std::string_view ABSORB_OPTION         = "--absorb-inversions";
+constexpr std::string_view INVERTER_NODES_OPTION = "--inverter-nodes";
+constexpr std::string_view MAJ_OPTION            = "--maj";
 constexpr std::string_view CELLS_ONLY_OPTION     = "--cells-only";
 
 aig_nt read_aig(const std::string& name)
@@ -380,7 +384,8 @@ int main(const int argc, const char** argv)  // NOLINT
         std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == GREEDY_OPTION; });
     options.best = std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == BEST_OPTION; });
     const bool absorb_inversions =
-        std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == ABSORB_OPTION; });
+        !std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == INVERTER_NODES_OPTION; });
+    const bool maj = std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == MAJ_OPTION; });
     const bool cells_only =
         std::ranges::any_of(all_args, [](const char* arg) { return std::string_view{arg} == CELLS_ONLY_OPTION; });
     for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
@@ -414,7 +419,8 @@ int main(const int argc, const char** argv)  // NOLINT
         std::erase(benchmarks, EXACT_PADDING_OPTION);
         std::erase(benchmarks, GREEDY_OPTION);
         std::erase(benchmarks, BEST_OPTION);
-        std::erase(benchmarks, ABSORB_OPTION);
+        std::erase(benchmarks, INVERTER_NODES_OPTION);
+        std::erase(benchmarks, MAJ_OPTION);
         std::erase(benchmarks, CELLS_ONLY_OPTION);
         for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
         {
@@ -432,17 +438,22 @@ int main(const int argc, const char** argv)  // NOLINT
     }
 
     // the cell database
-    const auto db = [&cells]()
+    const auto db = [&cells, maj]()
     {
         if (!cells.empty())
         {
             fmt::print("[i] reading cells from {}\n", cells);
             return fiction::synthesis::io::read_planar_cell_database(cells);
         }
-        fmt::print("[i] generating cells: {{AND, OR, XOR, MAJ}}, four levels, five for the rest\n");
+        fmt::print("[i] generating cells: {}, four levels, five for the rest\n",
+                   maj ? "{AND, OR, XOR, MAJ}" : "{AND, OR, XOR}");
         planar_cell_database_params ps{};
-        ps.num_inputs  = LUT_SIZE;
-        ps.max_levels  = 4;
+        ps.num_inputs = LUT_SIZE;
+        ps.max_levels = 4;
+        if (!maj)
+        {
+            ps.gate_set = {planar_gate::AND, planar_gate::OR, planar_gate::XOR};
+        }
         auto generated = generate_planar_cells(ps);
         ps.max_levels  = 5;
         extend_planar_cells(generated, ps);
@@ -453,13 +464,13 @@ int main(const int argc, const char** argv)  // NOLINT
                             uint64_t, uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, double, bool, std::string,
                             uint64_t, uint64_t, uint64_t, uint32_t, uint64_t, uint64_t, uint64_t, uint64_t, uint64_t,
                             uint64_t, uint64_t, uint64_t, uint64_t, uint32_t, double, bool, std::string>
-        exp{fmt::format("planar_cell_flow{}{}{}{}{}{}{}", private_chains ? "_private_chains" : "",
+        exp{fmt::format("planar_cell_flow{}{}{}{}{}{}{}{}", private_chains ? "_private_chains" : "",
                         schedule ? "" : "_no_schedule", options.exact_padding ? "_exact_padding" : "",
                         options.best ? "_best_schedule" : (options.greedy ? "_greedy" : ""),
                         options.crossing_cost_scale == 1.0 ?
                             "" :
                             fmt::format("_crossing_cost_scale_{:g}", options.crossing_cost_scale),
-                        absorb_inversions ? "_absorb_inversions" : "", cells_only ? "_cells_only" : ""),
+                        absorb_inversions ? "" : "_inverter_nodes", maj ? "_maj" : "", cells_only ? "_cells_only" : ""),
             "benchmark",
             "inputs",
             "outputs",
