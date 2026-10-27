@@ -111,6 +111,12 @@ constexpr std::string_view COST_SCALE_OPTION     = "--crossing-cost-scale";
 constexpr std::string_view INVERTER_NODES_OPTION = "--inverter-nodes";
 constexpr std::string_view MAJ_OPTION            = "--maj";
 constexpr std::string_view CELLS_ONLY_OPTION     = "--cells-only";
+/**
+ * Command-line option that names a directory of BLIF files (`<set>__<name>.blif`) already mapped to LUTs of at most
+ * LUT_SIZE inputs, e.g., by ABC. The cell flow then starts from that network instead of mapping the AIG itself; the
+ * control flow and the equivalence checks still use the benchmark's AIG.
+ */
+constexpr std::string_view BLIF_DIR_OPTION       = "--blif-dir";
 
 aig_nt read_aig(const std::string& name)
 {
@@ -163,6 +169,27 @@ aig_nt read_benchmark_aig(const std::string& dir, const std::string& benchmark)
         return read_aig_file(fmt::format("{}../benchmarks/optimized", EXPERIMENTS_PATH), benchmark);
     }
     return read_aig(benchmark);
+}
+
+/**
+ * Reads a BLIF file `<dir>/<set>__<name>.blif` of a benchmark as an already mapped LUT network.
+ */
+technology_network read_blif_file(const std::string& dir, const std::string& benchmark)
+{
+    auto file = benchmark;
+    std::replace(file.begin(), file.end(), '/', '_');
+    file.insert(file.find('_'), "_");
+
+    const auto              path = fmt::format("{}/{}.blif", dir, file);
+    std::ostringstream      os{};
+    network_reader<tec_ptr> reader{path, os};
+
+    if (reader.get_networks().empty())
+    {
+        throw std::runtime_error{fmt::format("could not read {}: {}", path, os.str())};
+    }
+
+    return *reader.get_networks().front();
 }
 
 /**
@@ -371,6 +398,7 @@ int main(const int argc, const char** argv)  // NOLINT
     const std::span<const char*> all_args{argv, static_cast<std::size_t>(argc)};
 
     std::string input_dir{};
+    std::string blif_dir{};
     std::string cells{};
     uint64_t    max_nodes = 14000;
     const bool  private_chains =
@@ -391,7 +419,11 @@ int main(const int argc, const char** argv)  // NOLINT
     for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
     {
         const std::string_view arg{all_args[i]};
-        if (arg == INPUT_DIR_OPTION)
+        if (arg == BLIF_DIR_OPTION)
+        {
+            blif_dir = all_args[i + 1];
+        }
+        else if (arg == INPUT_DIR_OPTION)
         {
             input_dir = all_args[i + 1];
         }
@@ -425,7 +457,8 @@ int main(const int argc, const char** argv)  // NOLINT
         for (std::size_t i = 1; i + 1 < all_args.size(); ++i)
         {
             const std::string_view arg{all_args[i]};
-            if (arg == INPUT_DIR_OPTION || arg == CELLS_OPTION || arg == MAX_NODES_OPTION || arg == COST_SCALE_OPTION)
+            if (arg == INPUT_DIR_OPTION || arg == BLIF_DIR_OPTION || arg == CELLS_OPTION || arg == MAX_NODES_OPTION ||
+                arg == COST_SCALE_OPTION)
             {
                 std::erase(benchmarks, std::string{arg});
                 std::erase(benchmarks, std::string{all_args[i + 1]});
@@ -540,7 +573,14 @@ int main(const int argc, const char** argv)  // NOLINT
             fmt::print("[i]   cell flow\n");
             mockturtle::lut_map_params map_ps{};
             map_ps.cut_enumeration_ps.cut_size = LUT_SIZE;
-            const auto mapped = convert_network<technology_network>(normalize(mockturtle::lut_map(aig, map_ps)));
+            const auto mapped = [&aig, &map_ps, &blif_dir, &benchmark]()
+            {
+                if (!blif_dir.empty())
+                {
+                    return read_blif_file(blif_dir, benchmark);
+                }
+                return convert_network<technology_network>(normalize(mockturtle::lut_map(aig, map_ps)));
+            }();
             network_balancing_params lps       = bps;
             lps.share_buffers                  = true;
             const auto                    lbal = network_balancing<technology_network>(mapped, lps);
