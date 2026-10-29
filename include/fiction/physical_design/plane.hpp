@@ -1226,6 +1226,228 @@ connect_and_place_planar(Lyt& lyt, const layouts::layout_base::coordinate& t, co
 }
 
 /**
+ * @brief Checks the preconditions shared by the planar placement algorithms.
+ *
+ * The network must have a primary input; every node has at most two non-constant fanins and at most two fanouts; a
+ * gate never keeps a single non-constant fanin next to a constant one; every fanin sits on the level above its node;
+ * the rank order is crossing-free.
+ *
+ * @tparam Ntk Ranked network type.
+ * @param ntk Network.
+ * @throws std::invalid_argument If a precondition is violated.
+ * @throws networks::high_degree_fanin_exception If a node has more than two non-constant fanins.
+ */
+template <typename Ntk>
+void check_placement_preconditions(const Ntk& ntk)
+{
+    if (ntk.num_pis() == 0)
+    {
+        throw std::invalid_argument("The network has no primary inputs");
+    }
+
+    if (networks::has_high_degree_fanin_nodes(ntk, detail::MAX_DEGREE))
+    {
+        throw networks::high_degree_fanin_exception();
+    }
+
+    // the lookup tables and the output rows are made for fanout nodes with two consumers
+    bool high_degree_fanout = false;
+    ntk.foreach_node(
+        [&ntk, &high_degree_fanout](const auto& n)
+        {
+            if (!ntk.is_constant(n) && ntk.fanout_size(n) > detail::MAX_DEGREE)
+            {
+                high_degree_fanout = true;
+            }
+        });
+
+    if (high_degree_fanout)
+    {
+        throw std::invalid_argument("A node drives more than two fanouts; substitute fanouts before placement");
+    }
+
+    // a gate that keeps a single non-constant fanin next to a constant one has no placement; propagate constants first.
+    // A fanin below the previous level has no wire on the previous diagonal: the placement reads every predecessor
+    // from the diagonal before the gate's own.
+    bool constant_gate = false;
+    bool unbalanced    = false;
+    ntk.foreach_gate(
+        [&ntk, &constant_gate, &unbalanced](const auto& n)
+        {
+            const auto fc = networks::fanins(ntk, n);
+
+            if (fc.constant_fanin.has_value() && fc.fanin_nodes.size() == 1)
+            {
+                constant_gate = true;
+            }
+
+            for (const auto& fi : fc.fanin_nodes)
+            {
+                if (ntk.level(fi) + 1 != ntk.level(n))
+                {
+                    unbalanced = true;
+                }
+            }
+        });
+
+    if (constant_gate)
+    {
+        throw std::invalid_argument(
+            "A gate has a constant fanin besides a single non-constant one; propagate constants "
+            "before placement");
+    }
+
+    if (unbalanced)
+    {
+        throw std::invalid_argument("The network is not balanced; every fanin must sit on the previous level");
+    }
+
+    if (const auto crossings = utils::graph::count_crossings(ntk); crossings != 0)
+    {
+        throw std::invalid_argument(fmt::format("The rank order of the network has {} crossings", crossings));
+    }
+}
+/**
+ * @brief Primary output waiting for its row, keyed by the rank position of its driver.
+ *
+ * @tparam Ntk Ranked network type.
+ */
+template <typename Ntk>
+struct output_slot
+{
+    /**
+     * @brief Rank position of the driver on the output level.
+     */
+    uint32_t rank;
+    /**
+     * @brief Index of the output.
+     */
+    uint32_t index;
+    /**
+     * @brief Driver of the output.
+     */
+    mockturtle::node<Ntk> driver;
+};
+/**
+ * @brief Name of a primary output, the network's name if it has one and `po<index>` otherwise.
+ *
+ * @tparam Ntk Network type.
+ * @param ntk Network.
+ * @param po_index Index of the output.
+ * @return Name.
+ */
+template <typename Ntk>
+[[nodiscard]] std::string output_name(const Ntk& ntk, const uint32_t po_index)
+{
+    if constexpr (mockturtle::has_has_output_name_v<Ntk>)
+    {
+        if (ntk.has_output_name(po_index))
+        {
+            return ntk.get_output_name(po_index);
+        }
+    }
+
+    return fmt::format("po{}", po_index);
+}
+/**
+ * @brief Routes every primary output to the right border.
+ *
+ * The nodes of the output level sit on one diagonal, so each node owns the row of its tile. A node with two outputs
+ * takes the row below as well, which pushes the rows of every following node down by one until a gap between two
+ * nodes absorbs the shift; a pushed node first runs south to its row, then east. Rows are assigned in rank order. A
+ * constant output takes a row of its own below the others, driven by a constant gate next to the border. The outputs
+ * of the layout keep the order of the network.
+ *
+ * @tparam Lyt Gate-level layout type.
+ * @tparam Ntk Ranked network type.
+ * @param layout Layout with every node placed.
+ * @param ntk Network.
+ * @param node2pos Signal in the layout of every placed node.
+ * @param first_pos Tile of the first node of the output level, the top right end of the last diagonal.
+ * @param place_t Tile of the last placed node, the bottom of the last diagonal.
+ * @return `1` plus the number of rows the shifts add below the last diagonal, `0` if none were needed.
+ */
+template <typename Lyt, typename Ntk>
+[[nodiscard]] uint64_t
+route_outputs(Lyt& layout, const Ntk& ntk, const mockturtle::node_map<typename Lyt::object_id, Ntk>& node2pos,
+              const layouts::layout_base::coordinate& first_pos, const layouts::layout_base::coordinate& place_t)
+{
+    // the non-constant outputs by the rank position of their driver, then by output index
+    std::vector<output_slot<Ntk>> outputs{};
+    outputs.reserve(ntk.num_pos());
+    ntk.foreach_po(
+        [&ntk, &outputs](const auto& po, const auto i)
+        {
+            if (const auto drv = ntk.get_node(po); !ntk.is_constant(drv))
+            {
+                outputs.push_back({.rank = ntk.rank_position(drv), .index = static_cast<uint32_t>(i), .driver = drv});
+            }
+        });
+    std::ranges::sort(outputs, {}, [](const output_slot<Ntk>& slot) { return std::pair{slot.rank, slot.index}; });
+
+    // row of every output: the driver's row, pushed down below the rows already taken
+    std::vector<uint64_t> row_of(ntk.num_pos(), 0);
+    uint64_t              next_free_row = 0;
+
+    for (const auto& slot : outputs)
+    {
+        const auto row = std::max(static_cast<uint64_t>(layout.get_tile(node2pos[slot.driver]).y), next_free_row);
+
+        row_of[slot.index] = row;
+        next_free_row      = row + 1;
+    }
+
+    uint64_t last_row = 0;
+
+    std::vector<typename Lyt::object_id> output_order(ntk.num_pos());
+
+    ntk.foreach_po(
+        [&layout, &ntk, &node2pos, &first_pos, &row_of, &last_row, &next_free_row, &output_order](const auto& po,
+                                                                                                  const auto  i)
+        {
+            const auto drv      = ntk.get_node(po);
+            const auto po_index = static_cast<uint32_t>(i);
+
+            if (ntk.is_constant(drv))
+            {
+                const auto row = next_free_row++;
+
+                kitty::dynamic_truth_table function{0};
+                if (ntk.constant_value(drv))
+                {
+                    kitty::set_bit(function, 0);
+                }
+
+                const auto constant    = layout.create_gate({}, function, {first_pos.x, row});
+                output_order[po_index] = layout.create_po(constant, output_name(ntk, po_index), {first_pos.x + 1, row});
+                last_row               = std::max(last_row, row);
+
+                return;
+            }
+
+            auto anchor = layout.get_tile(node2pos[drv]);
+
+            // down to the output's row, sharing the south run with the node's other output
+            if (row_of[po_index] > static_cast<uint64_t>(anchor.y))
+            {
+                anchor = layout.get_tile(wire_straight(layout, anchor, {anchor.x, row_of[po_index] + 1}));
+            }
+
+            const layouts::layout_base::coordinate border{first_pos.x + 1, anchor.y};
+
+            output_order[po_index] =
+                layout.create_po(wire_straight(layout, anchor, border), output_name(ntk, po_index), border);
+
+            last_row = std::max(last_row, static_cast<uint64_t>(anchor.y));
+        });
+
+    layout.set_output_order(output_order);
+
+    const auto bottom = static_cast<uint64_t>(place_t.y);
+
+    return last_row > bottom ? last_row - bottom : 0;
+}
+/**
  * @brief Implementation of PLANE.
  *
  * Every level of the ranked network is placed on one anti-diagonal of a 2DDWave-clocked layout, the ranks running
@@ -1244,24 +1466,6 @@ class plane_impl
      * @brief Input network wrapped in a fanout view.
      */
     using fanout_ntk = mockturtle::fanout_view<Ntk>;
-    /**
-     * @brief Primary output waiting for its row, keyed by the rank position of its driver.
-     */
-    struct output_slot
-    {
-        /**
-         * @brief Rank position of the driver on the output level.
-         */
-        uint32_t rank;
-        /**
-         * @brief Index of the output.
-         */
-        uint32_t index;
-        /**
-         * @brief Driver of the output.
-         */
-        mockturtle::node<fanout_ntk> driver;
-    };
     /**
      * @brief Creates the implementation.
      *
@@ -1303,7 +1507,7 @@ class plane_impl
             progress.advance();
         }
 
-        const auto extra_rows = route_outputs();
+        const auto extra_rows = route_outputs(layout, ntk, node2pos, first_pos, place_t);
         progress.advance();
 
         layout.resize({static_cast<uint64_t>(first_pos.x) + 2, static_cast<uint64_t>(place_t.y) + extra_rows + 1, 1});
@@ -1498,112 +1702,6 @@ class plane_impl
                 fmt::format("node {} of level {} sits on diagonal {} instead of {}", n, lvl, sum, *diagonal));
         }
     }
-    /**
-     * @brief Routes every primary output to the right border.
-     *
-     * The nodes of the output level sit on one diagonal, so each node owns the row of its tile. A node with two outputs
-     * takes the row below as well, which pushes the rows of every following node down by one until a gap between two
-     * nodes absorbs the shift; a pushed node first runs south to its row, then east. Rows are assigned in rank order. A
-     * constant output takes a row of its own below the others, driven by a constant gate next to the border. The
-     * outputs of the layout keep the order of the network.
-     *
-     * @return `1` plus the number of rows the shifts add below the last diagonal, `0` if none were needed.
-     */
-    [[nodiscard]] uint64_t route_outputs()
-    {
-        // the non-constant outputs by the rank position of their driver, then by output index
-        std::vector<output_slot> outputs{};
-        outputs.reserve(ntk.num_pos());
-        ntk.foreach_po(
-            [this, &outputs](const auto& po, const auto i)
-            {
-                if (const auto drv = ntk.get_node(po); !ntk.is_constant(drv))
-                {
-                    outputs.push_back(
-                        {.rank = ntk.rank_position(drv), .index = static_cast<uint32_t>(i), .driver = drv});
-                }
-            });
-        std::ranges::sort(outputs, {}, [](const output_slot& slot) { return std::pair{slot.rank, slot.index}; });
-
-        // row of every output: the driver's row, pushed down below the rows already taken
-        std::vector<uint64_t> row_of(ntk.num_pos(), 0);
-        uint64_t              next_free_row = 0;
-
-        for (const auto& slot : outputs)
-        {
-            const auto row = std::max(static_cast<uint64_t>(layout.get_tile(node2pos[slot.driver]).y), next_free_row);
-
-            row_of[slot.index] = row;
-            next_free_row      = row + 1;
-        }
-
-        uint64_t last_row = 0;
-
-        std::vector<typename Lyt::object_id> output_order(ntk.num_pos());
-
-        ntk.foreach_po(
-            [this, &row_of, &last_row, &next_free_row, &output_order](const auto& po, const auto i)
-            {
-                const auto drv      = ntk.get_node(po);
-                const auto po_index = static_cast<uint32_t>(i);
-
-                if (ntk.is_constant(drv))
-                {
-                    const auto row = next_free_row++;
-
-                    kitty::dynamic_truth_table function{0};
-                    if (ntk.constant_value(drv))
-                    {
-                        kitty::set_bit(function, 0);
-                    }
-
-                    const auto constant    = layout.create_gate({}, function, {first_pos.x, row});
-                    output_order[po_index] = layout.create_po(constant, output_name(po_index), {first_pos.x + 1, row});
-                    last_row               = std::max(last_row, row);
-
-                    return;
-                }
-
-                auto anchor = layout.get_tile(node2pos[drv]);
-
-                // down to the output's row, sharing the south run with the node's other output
-                if (row_of[po_index] > static_cast<uint64_t>(anchor.y))
-                {
-                    anchor = layout.get_tile(wire_straight(layout, anchor, {anchor.x, row_of[po_index] + 1}));
-                }
-
-                const layouts::layout_base::coordinate border{first_pos.x + 1, anchor.y};
-
-                output_order[po_index] =
-                    layout.create_po(wire_straight(layout, anchor, border), output_name(po_index), border);
-
-                last_row = std::max(last_row, static_cast<uint64_t>(anchor.y));
-            });
-
-        layout.set_output_order(output_order);
-
-        const auto bottom = static_cast<uint64_t>(place_t.y);
-
-        return last_row > bottom ? last_row - bottom : 0;
-    }
-    /**
-     * @brief Name of a primary output, the network's name if it has one and `po<index>` otherwise.
-     *
-     * @param po_index Index of the output.
-     * @return Name.
-     */
-    [[nodiscard]] std::string output_name(const uint32_t po_index) const
-    {
-        if constexpr (mockturtle::has_has_output_name_v<Ntk>)
-        {
-            if (ntk.has_output_name(po_index))
-            {
-                return ntk.get_output_name(po_index);
-            }
-        }
-
-        return fmt::format("po{}", po_index);
-    }
 
     /**
      * @brief The network.
@@ -1682,72 +1780,7 @@ template <typename Lyt, typename Ntk>
              mockturtle::has_at_rank_position_v<Ntk> && mockturtle::has_foreach_node_in_rank_v<Ntk>
 [[nodiscard]] Lyt plane(const Ntk& ntk, const plane_params& ps = {}, plane_stats* pst = nullptr)
 {
-    if (ntk.num_pis() == 0)
-    {
-        throw std::invalid_argument("The network has no primary inputs");
-    }
-
-    if (networks::has_high_degree_fanin_nodes(ntk, detail::MAX_DEGREE))
-    {
-        throw networks::high_degree_fanin_exception();
-    }
-
-    // the lookup tables and the output rows are made for fanout nodes with two consumers
-    bool high_degree_fanout = false;
-    ntk.foreach_node(
-        [&ntk, &high_degree_fanout](const auto& n)
-        {
-            if (!ntk.is_constant(n) && ntk.fanout_size(n) > detail::MAX_DEGREE)
-            {
-                high_degree_fanout = true;
-            }
-        });
-
-    if (high_degree_fanout)
-    {
-        throw std::invalid_argument("A node drives more than two fanouts; substitute fanouts before placement");
-    }
-
-    // a gate that keeps a single non-constant fanin next to a constant one has no placement; propagate constants first.
-    // A fanin below the previous level has no wire on the previous diagonal: the placement reads every predecessor
-    // from the diagonal before the gate's own.
-    bool constant_gate = false;
-    bool unbalanced    = false;
-    ntk.foreach_gate(
-        [&ntk, &constant_gate, &unbalanced](const auto& n)
-        {
-            const auto fc = networks::fanins(ntk, n);
-
-            if (fc.constant_fanin.has_value() && fc.fanin_nodes.size() == 1)
-            {
-                constant_gate = true;
-            }
-
-            for (const auto& fi : fc.fanin_nodes)
-            {
-                if (ntk.level(fi) + 1 != ntk.level(n))
-                {
-                    unbalanced = true;
-                }
-            }
-        });
-
-    if (constant_gate)
-    {
-        throw std::invalid_argument(
-            "A gate has a constant fanin besides a single non-constant one; propagate constants "
-            "before placement");
-    }
-
-    if (unbalanced)
-    {
-        throw std::invalid_argument("The network is not balanced; every fanin must sit on the previous level");
-    }
-
-    if (const auto crossings = utils::graph::count_crossings(ntk); crossings != 0)
-    {
-        throw std::invalid_argument(fmt::format("The rank order of the network has {} crossings", crossings));
-    }
+    detail::check_placement_preconditions(ntk);
 
     plane_stats st{};
 
